@@ -36,6 +36,7 @@ func TestSubmitHandler(t *testing.T) {
 	router := setupRouter()
 
 	// Define test cases
+	const senderAddress = "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b"
 	testCases := []struct {
 		description string
 		payload     Body
@@ -44,14 +45,16 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Valid Request",
 			payload: Body{
-				Sender: "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+				Sender: senderAddress,
 				Intents: []Intent{
 					{
+						Sender:     senderAddress,
 						Kind:       "buy",
 						SellToken:  "TokenA",
 						BuyToken:   "TokenB",
 						SellAmount: 10.0,
 						BuyAmount:  5.0,
+						Status:     "Received",
 					},
 				},
 			},
@@ -60,7 +63,7 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Invalid Request (missing fields)",
 			payload: Body{
-				Sender: "0xValidEthAddress",
+				Sender: "0xInValidEthAddress",
 			},
 			expectCode: http.StatusBadRequest,
 		},
