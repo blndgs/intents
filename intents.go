@@ -60,8 +60,9 @@ func validKind(fl validator.FieldLevel) bool {
 }
 
 func validTokenName(fl validator.FieldLevel) bool {
-	tokenName := fl.Field().String()
-	return tokenName != ""
+	return fl.Field().Len() >= 3
+}
+
 func validOptionalTokenName(fl validator.FieldLevel) bool {
 	length := fl.Field().Len()
 
