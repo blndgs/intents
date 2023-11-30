@@ -36,7 +36,7 @@ type Intent struct {
 	SellAmount        float64          `json:"sellAmount"`                         // optional for limit orders, ui
 	BuyAmount         float64          `json:"buyAmount"`                          // ui
 	PartiallyFillable bool             `json:"partiallyFillable"`                  // ui
-	CallData          string           `json:"callData" binding:"required"`        // UI, Bundler, Solver
+	CallData          string           `json:"callData"`                           // UI, Bundler, Solver
 	Status            ProcessingStatus `json:"status" binding:"status"`            // ui or bundler
 	CreatedAt         int64            `json:"createdAt" binding:"opt_int"`        // ui or bundler
 	ExpirationAt      int64            `json:"expirationAt" binding:"opt_int"`     // ui or bundler for default expiration (TTL: 100 seconds)
