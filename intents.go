@@ -20,7 +20,7 @@ const (
 	Received     ProcessingStatus = "Received"
 	SentToSolver ProcessingStatus = "SentToSolver"
 	Solved       ProcessingStatus = "Solved"
-	UnSolved     ProcessingStatus = "Solved"
+	Unsolved     ProcessingStatus = "Unsolved"
 	Expired      ProcessingStatus = "Expired"
 	OnChain      ProcessingStatus = "OnChain"
 	Invalid      ProcessingStatus = "Invalid"
@@ -124,7 +124,7 @@ func validStatus(fl validator.FieldLevel) bool {
 		return true
 	}
 
-	return status == string(Received) || status == string(SentToSolver) || status == string(Solved) || status == string(UnSolved) || status == string(Expired) || status == string(OnChain) || status == string(Invalid)
+	return status == string(Received) || status == string(SentToSolver) || status == string(Solved) || status == string(Unsolved) || status == string(Expired) || status == string(OnChain) || status == string(Invalid)
 }
 
 func NewValidator() error {
