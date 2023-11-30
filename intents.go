@@ -10,11 +10,10 @@ import (
 
 type Address string
 
-type Kind string
-
 const (
-	Buy  Kind = "buy"
-	Sell      = "sell"
+	Swap = "swap"
+	Buy  = "buy"
+	Sell = "sell"
 )
 
 type ProcessingStatus string
@@ -32,7 +31,7 @@ const (
 
 type Intent struct {
 	Sender            Address          `json:"sender" binding:"required,eth_addr"`     // filled by ui
-	Kind              Kind             `json:"kind" binding:"required"`                // ui
+	Kind              string           `json:"kind" binding:"required"`            // ui
 	Hash              string           `json:"hash"`                                   // ui or bundler
 	SellToken         string           `json:"sellToken" binding:"opt_token_name"`     // optional for limit orders, ui
 	BuyToken          string           `json:"buyToken" binding:"required,token_name"` // ui
