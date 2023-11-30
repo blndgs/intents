@@ -8,8 +8,6 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-type Address string
-
 const (
 	Swap = "swap"
 	Buy  = "buy"
@@ -30,7 +28,7 @@ const (
 )
 
 type Intent struct {
-	Sender            Address          `json:"sender" binding:"required,eth_addr"` // filled by ui
+	Sender            string           `json:"sender" binding:"required,eth_addr"` // filled by ui
 	Kind              string           `json:"kind" binding:"required"`            // ui
 	Hash              string           `json:"hash"`                               // ui or bundler
 	SellToken         string           `json:"sellToken"`                          // optional for limit orders, ui
@@ -45,8 +43,8 @@ type Intent struct {
 }
 
 type Body struct {
-	Sender  Address  `json:"sender" binding:"required,eth_addr,valid_senders"`
-	Intents []Intent `json:"intents" binding:"required,dive"`
+	Sender  string    `json:"sender" binding:"required,eth_addr,valid_senders"`
+	Intents []*Intent `json:"intents" binding:"required,dive"`
 }
 
 func validEthAddress(fl validator.FieldLevel) bool {

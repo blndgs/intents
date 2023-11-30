@@ -54,7 +54,7 @@ func TestSubmitHandler(t *testing.T) {
 			description: "Valid Swap Request",
 			payload: Body{
 				Sender: senderAddress,
-				Intents: []Intent{
+				Intents: []*Intent{
 					{
 						Sender:     senderAddress,
 						Kind:       Swap,
@@ -73,7 +73,7 @@ func TestSubmitHandler(t *testing.T) {
 			description: "Valid Minimal Limit Request",
 			payload: Body{
 				Sender: senderAddress,
-				Intents: []Intent{
+				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
 						Kind:      Buy,
@@ -89,7 +89,7 @@ func TestSubmitHandler(t *testing.T) {
 			description: "Valid Limit Request with lengthy (understatement) float",
 			payload: Body{
 				Sender: senderAddress,
-				Intents: []Intent{
+				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
 						Kind:      Buy,
@@ -105,7 +105,7 @@ func TestSubmitHandler(t *testing.T) {
 			description: "Invalid Request with bad float",
 			payload: Body{
 				Sender: senderAddress,
-				Intents: []Intent{
+				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
 						Kind:      Buy,
@@ -121,7 +121,7 @@ func TestSubmitHandler(t *testing.T) {
 			description: "Invalid Request with negative float",
 			payload: Body{
 				Sender: senderAddress,
-				Intents: []Intent{
+				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
 						Kind:      Buy,
@@ -137,7 +137,7 @@ func TestSubmitHandler(t *testing.T) {
 			description: "Invalid Request with bad status",
 			payload: Body{
 				Sender: senderAddress,
-				Intents: []Intent{
+				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
 						Kind:      Buy,
@@ -154,7 +154,7 @@ func TestSubmitHandler(t *testing.T) {
 			description: "Invalid Request with negative float",
 			payload: Body{
 				Sender: senderAddress,
-				Intents: []Intent{
+				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
 						Kind:      Buy,
@@ -170,7 +170,7 @@ func TestSubmitHandler(t *testing.T) {
 			description: "Invalid Request with different sender",
 			payload: Body{
 				Sender: "0xd7b21a844f3a41c91a73d3F87B83fA93bb6cb518",
-				Intents: []Intent{
+				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
 						Kind:      Buy,
