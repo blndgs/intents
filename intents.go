@@ -30,18 +30,18 @@ const (
 )
 
 type Intent struct {
-	Sender            Address          `json:"sender" binding:"required,eth_addr"`      // ui
-	Kind              Kind             `json:"kind" binding:"required"`                 // ui
+	Sender            Address          `json:"sender" binding:"required,eth_addr"`     // filled by ui
+	Kind              Kind             `json:"kind" binding:"required"`                // ui
 	Hash              string           `json:"hash"`                                   // ui or bundler
 	SellToken         string           `json:"sellToken" binding:"opt_token_name"`     // optional for limit orders, ui
-	BuyToken          string           `json:"buyToken" binding:"required,token_name"`  // ui
+	BuyToken          string           `json:"buyToken" binding:"required,token_name"` // ui
 	SellAmount        float64          `json:"sellAmount" binding:"opt_float"`         // optional for limit orders, ui
-	BuyAmount         float64          `json:"buyAmount" binding:"required,float"`      // ui
-	PartiallyFillable bool             `json:"partiallyFillable"`                       // ui
-	CallData          string           `json:"callData"`                                // Solver
+	BuyAmount         float64          `json:"buyAmount" binding:"required,float"`     // ui
+	PartiallyFillable bool             `json:"partiallyFillable"`                      // ui
+	CallData          string           `json:"callData"`                               // Solver
 	Status            ProcessingStatus `json:"status" binding:"status"`                // ui or bundler
-	CreatedAt         uint64           `json:"createdAt"`                               // ui
-	ExpirationAt      uint64           `json:"expirationAt"`                            // ui or bundler for default expiration
+	CreatedAt         uint64           `json:"createdAt"`                              // ui or bundler
+	ExpirationAt      uint64           `json:"expirationAt"`                           // ui or bundler for default expiration (TTL: 100 seconds)
 }
 
 type Body struct {
@@ -79,10 +79,11 @@ func validOptionalFloat(fl validator.FieldLevel) bool {
 }
 
 func validFloat(fl validator.FieldLevel) bool {
-	float := fl.Field().String()
-	return float != ""
+	return fl.Field().CanFloat() && fl.Field().Float() >= 0
 }
 
+// validSenders checks if the Sender in the Body is non-empty and if any Sender
+// in the Intents differs from the Body Sender
 func validSenders(fl validator.FieldLevel) bool {
 	body, ok := fl.Top().Interface().(Body)
 	if !ok {

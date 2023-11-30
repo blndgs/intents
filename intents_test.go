@@ -43,7 +43,7 @@ func TestSubmitHandler(t *testing.T) {
 		expectCode  int
 	}{
 		{
-			description: "Valid Request",
+			description: "Valid Swap Request",
 			payload: Body{
 				Sender: senderAddress,
 				Intents: []Intent{
@@ -59,6 +59,112 @@ func TestSubmitHandler(t *testing.T) {
 				},
 			},
 			expectCode: http.StatusOK,
+		},
+		{
+			description: "Valid Minimal Limit Request",
+			payload: Body{
+				Sender: senderAddress,
+				Intents: []Intent{
+					{
+						Sender:    senderAddress,
+						Kind:      "buy",
+						BuyToken:  "TokenA",
+						BuyAmount: 5.0,
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Valid Limit Request with lengthy (understatement) float",
+			payload: Body{
+				Sender: senderAddress,
+				Intents: []Intent{
+					{
+						Sender:    senderAddress,
+						Kind:      "buy",
+						BuyToken:  "TokenA",
+						BuyAmount: 999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Invalid Request with bad float",
+			payload: Body{
+				Sender: senderAddress,
+				Intents: []Intent{
+					{
+						Sender:    senderAddress,
+						Kind:      "buy",
+						BuyToken:  "TokenA",
+						BuyAmount: -0.,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Invalid Request with negative float",
+			payload: Body{
+				Sender: senderAddress,
+				Intents: []Intent{
+					{
+						Sender:    senderAddress,
+						Kind:      "buy",
+						BuyToken:  "TokenA",
+						BuyAmount: -0.5,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Invalid Request with bad status",
+			payload: Body{
+				Sender: senderAddress,
+				Intents: []Intent{
+					{
+						Sender:    senderAddress,
+						Kind:      "buy",
+						BuyToken:  "TokenA",
+						BuyAmount: 0.5,
+						Status:    "Feeling Lucky",
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Invalid Request with negative float",
+			payload: Body{
+				Sender: senderAddress,
+				Intents: []Intent{
+					{
+						Sender:    senderAddress,
+						Kind:      "buy",
+						BuyToken:  "TokenA",
+						BuyAmount: -99999999999999999999999999999999999999999999999999999999999999,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Invalid Request with different sender",
+			payload: Body{
+				Sender: "0xd7b21a844f3a41c91a73d3F87B83fA93bb6cb518",
+				Intents: []Intent{
+					{
+						Sender:    senderAddress,
+						Kind:      "buy",
+						BuyToken:  "TokenA",
+						BuyAmount: 0.5,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
 		},
 		{
 			description: "Invalid Request (missing fields)",
@@ -80,7 +186,7 @@ func TestSubmitHandler(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if w.Code != tc.expectCode {
-				t.Errorf("Expected status code %d, got %d", tc.expectCode, w.Code)
+				t.Errorf("Expected status code %d, got %d, %v", tc.expectCode, w.Code, w.Body)
 			}
 		})
 	}
