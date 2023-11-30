@@ -32,14 +32,14 @@ const (
 type Intent struct {
 	Sender            Address          `json:"sender" binding:"required,eth_addr"`      // ui
 	Kind              Kind             `json:"kind" binding:"required"`                 // ui
-	Hash              string           `json:"hash binding:"required"`                  // ui or bundler
-	SellToken         string           `json:"sellToken" binding:"required,token_name"` // ui
+	Hash              string           `json:"hash"`                                   // ui or bundler
+	SellToken         string           `json:"sellToken" binding:"opt_token_name"`     // optional for limit orders, ui
 	BuyToken          string           `json:"buyToken" binding:"required,token_name"`  // ui
-	SellAmount        float64          `json:"sellAmount" binding:"required,float"`     // ui
+	SellAmount        float64          `json:"sellAmount" binding:"opt_float"`         // optional for limit orders, ui
 	BuyAmount         float64          `json:"buyAmount" binding:"required,float"`      // ui
 	PartiallyFillable bool             `json:"partiallyFillable"`                       // ui
 	CallData          string           `json:"callData"`                                // Solver
-	Status            ProcessingStatus `json:"status" binding:"required,status"`        // ui or bundler
+	Status            ProcessingStatus `json:"status" binding:"status"`                // ui or bundler
 	CreatedAt         uint64           `json:"createdAt"`                               // ui
 	ExpirationAt      uint64           `json:"expirationAt"`                            // ui or bundler for default expiration
 }
@@ -62,6 +62,19 @@ func validKind(fl validator.FieldLevel) bool {
 func validTokenName(fl validator.FieldLevel) bool {
 	tokenName := fl.Field().String()
 	return tokenName != ""
+func validOptionalTokenName(fl validator.FieldLevel) bool {
+	length := fl.Field().Len()
+
+	// optional 0 is acceptable
+	return length == 0 || length >= 3
+}
+
+func validOptionalFloat(fl validator.FieldLevel) bool {
+	if len(fl.Field().String()) == 0 {
+		return true // optional field
+	}
+
+	return fl.Field().CanFloat() && fl.Field().Float() >= 0
 }
 
 func validFloat(fl validator.FieldLevel) bool {
@@ -94,6 +107,10 @@ func validSenders(fl validator.FieldLevel) bool {
 
 func validStatus(fl validator.FieldLevel) bool {
 	status := fl.Field().String()
+	if status == "" {
+		return true
+	}
+
 	return status == string(Received) || status == string(SentToSolver) || status == string(Solved) || status == string(Expired) || status == string(OnChain) || status == string(Invalid)
 }
 
@@ -114,8 +131,14 @@ func NewValidator() error {
 		if err := v.RegisterValidation("token_name", validTokenName); err != nil {
 			return fmt.Errorf("validator %s failed", "token_name")
 		}
+		if err := v.RegisterValidation("opt_token_name", validOptionalTokenName); err != nil {
+			return fmt.Errorf("validator %s failed", "opt_token_name")
+		}
 		if err := v.RegisterValidation("float", validFloat); err != nil {
 			return fmt.Errorf("validator %s failed", "float")
+		}
+		if err := v.RegisterValidation("opt_float", validOptionalFloat); err != nil {
+			return fmt.Errorf("validator %s failed", "opt_float")
 		}
 	}
 
