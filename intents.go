@@ -30,18 +30,18 @@ const (
 )
 
 type Intent struct {
-	Sender            Address          `json:"sender" binding:"required,eth_addr"`     // filled by ui
+	Sender            Address          `json:"sender" binding:"required,eth_addr"` // filled by ui
 	Kind              string           `json:"kind" binding:"required"`            // ui
-	Hash              string           `json:"hash"`                                   // ui or bundler
-	SellToken         string           `json:"sellToken" binding:"opt_token_name"`     // optional for limit orders, ui
-	BuyToken          string           `json:"buyToken" binding:"required,token_name"` // ui
-	SellAmount        float64          `json:"sellAmount" binding:"opt_float"`         // optional for limit orders, ui
-	BuyAmount         float64          `json:"buyAmount" binding:"required,float"`     // ui
-	PartiallyFillable bool             `json:"partiallyFillable"`                      // ui
-	CallData          string           `json:"callData"`                               // Solver
-	Status            ProcessingStatus `json:"status" binding:"status"`                // ui or bundler
-	CreatedAt         uint64           `json:"createdAt"`                              // ui or bundler
-	ExpirationAt      uint64           `json:"expirationAt"`                           // ui or bundler for default expiration (TTL: 100 seconds)
+	Hash              string           `json:"hash"`                               // ui or bundler
+	SellToken         string           `json:"sellToken"`                          // optional for limit orders, ui
+	BuyToken          string           `json:"buyToken"`                           // ui
+	SellAmount        float64          `json:"sellAmount"`                         // optional for limit orders, ui
+	BuyAmount         float64          `json:"buyAmount"`                          // ui
+	PartiallyFillable bool             `json:"partiallyFillable"`                  // ui
+	CallData          string           `json:"callData" binding:"required"`        // UI, Bundler, Solver
+	Status            ProcessingStatus `json:"status" binding:"status"`            // ui or bundler
+	CreatedAt         int64            `json:"createdAt" binding:"opt_int"`        // ui or bundler
+	ExpirationAt      int64            `json:"expirationAt" binding:"opt_int"`     // ui or bundler for default expiration (TTL: 100 seconds)
 }
 
 type Body struct {
@@ -54,32 +54,45 @@ func validEthAddress(fl validator.FieldLevel) bool {
 	return common.IsHexAddress(addressHex)
 }
 
-func validKind(fl validator.FieldLevel) bool {
-	kind := fl.Field().String()
-	return kind == string(Buy) || kind == Sell
+// ValidateKind this function is manually called after Gin's binding
+func (i *Intent) ValidateKind() bool {
+	switch i.Kind {
+	case Swap:
+		return isValidToken(i.SellToken) && isValidToken(i.BuyToken) &&
+			isPositive(i.SellAmount) && isPositive(i.BuyAmount)
+	case Buy:
+		return isValidToken(i.BuyToken) && isPositive(i.BuyAmount) &&
+			isEmptyToken(i.SellToken) && isZero(i.SellAmount)
+	case Sell:
+		return isValidToken(i.SellToken) && isPositive(i.SellAmount) &&
+			isEmptyToken(i.BuyToken) && isZero(i.BuyAmount)
+	default:
+		return false
+	}
 }
 
-func validTokenName(fl validator.FieldLevel) bool {
-	return fl.Field().Len() >= 3
+func isValidToken(token string) bool {
+	return len(token) >= 3
 }
 
-func validOptionalTokenName(fl validator.FieldLevel) bool {
-	length := fl.Field().Len()
-
-	// optional 0 is acceptable
-	return length == 0 || length >= 3
+func isEmptyToken(token string) bool {
+	return token == ""
 }
 
-func validOptionalFloat(fl validator.FieldLevel) bool {
+func isPositive(amount float64) bool {
+	return amount > 0
+}
+
+func isZero(amount float64) bool {
+	return amount == 0
+}
+
+func validOptionalInt(fl validator.FieldLevel) bool {
 	if len(fl.Field().String()) == 0 {
 		return true // optional field
 	}
 
-	return fl.Field().CanFloat() && fl.Field().Float() >= 0
-}
-
-func validFloat(fl validator.FieldLevel) bool {
-	return fl.Field().CanFloat() && fl.Field().Float() >= 0
+	return fl.Field().CanInt() && fl.Field().Int() >= 0
 }
 
 // validSenders checks if the Sender in the Body is non-empty and if any Sender
@@ -127,20 +140,8 @@ func NewValidator() error {
 		if err := v.RegisterValidation("eth_addr", validEthAddress); err != nil {
 			return fmt.Errorf("validator %s failed", "eth_addr")
 		}
-		if err := v.RegisterValidation("kind", validKind); err != nil {
-			return fmt.Errorf("validator %s failed", "kind")
-		}
-		if err := v.RegisterValidation("token_name", validTokenName); err != nil {
-			return fmt.Errorf("validator %s failed", "token_name")
-		}
-		if err := v.RegisterValidation("opt_token_name", validOptionalTokenName); err != nil {
-			return fmt.Errorf("validator %s failed", "opt_token_name")
-		}
-		if err := v.RegisterValidation("float", validFloat); err != nil {
-			return fmt.Errorf("validator %s failed", "float")
-		}
-		if err := v.RegisterValidation("opt_float", validOptionalFloat); err != nil {
-			return fmt.Errorf("validator %s failed", "opt_float")
+		if err := v.RegisterValidation("opt_int", validOptionalInt); err != nil {
+			return fmt.Errorf("validator %s failed", "opt_int")
 		}
 	}
 

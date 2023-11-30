@@ -16,6 +16,14 @@ func submitHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// Validate the kind-specific fields
+	for _, intent := range body.Intents {
+		if !intent.ValidateKind() {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "The Intent's kind does not validate"})
+			return
+		}
+	}
+
 	// Process the valid request
 	c.JSON(http.StatusOK, gin.H{"message": "Received successfully"})
 }
@@ -49,12 +57,13 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []Intent{
 					{
 						Sender:     senderAddress,
-						Kind:       "buy",
+						Kind:       Swap,
 						SellToken:  "TokenA",
 						BuyToken:   "TokenB",
 						SellAmount: 10.0,
 						BuyAmount:  5.0,
 						Status:     "Received",
+						CallData:   "<intent>",
 					},
 				},
 			},
@@ -67,9 +76,10 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []Intent{
 					{
 						Sender:    senderAddress,
-						Kind:      "buy",
+						Kind:      Buy,
 						BuyToken:  "TokenA",
 						BuyAmount: 5.0,
+						CallData:  "<intent>",
 					},
 				},
 			},
@@ -82,9 +92,10 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []Intent{
 					{
 						Sender:    senderAddress,
-						Kind:      "buy",
+						Kind:      Buy,
 						BuyToken:  "TokenA",
 						BuyAmount: 999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+						CallData:  "<intent>",
 					},
 				},
 			},
@@ -97,9 +108,10 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []Intent{
 					{
 						Sender:    senderAddress,
-						Kind:      "buy",
+						Kind:      Buy,
 						BuyToken:  "TokenA",
 						BuyAmount: -0.,
+						CallData:  "<intent>",
 					},
 				},
 			},
@@ -112,9 +124,10 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []Intent{
 					{
 						Sender:    senderAddress,
-						Kind:      "buy",
+						Kind:      Buy,
 						BuyToken:  "TokenA",
 						BuyAmount: -0.5,
+						CallData:  "<intent>",
 					},
 				},
 			},
@@ -127,10 +140,11 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []Intent{
 					{
 						Sender:    senderAddress,
-						Kind:      "buy",
+						Kind:      Buy,
 						BuyToken:  "TokenA",
 						BuyAmount: 0.5,
 						Status:    "Feeling Lucky",
+						CallData:  "<intent>",
 					},
 				},
 			},
@@ -143,9 +157,10 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []Intent{
 					{
 						Sender:    senderAddress,
-						Kind:      "buy",
+						Kind:      Buy,
 						BuyToken:  "TokenA",
 						BuyAmount: -99999999999999999999999999999999999999999999999999999999999999,
+						CallData:  "<intent>",
 					},
 				},
 			},
@@ -158,9 +173,10 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []Intent{
 					{
 						Sender:    senderAddress,
-						Kind:      "buy",
+						Kind:      Buy,
 						BuyToken:  "TokenA",
 						BuyAmount: 0.5,
+						CallData:  "<intent>",
 					},
 				},
 			},
