@@ -1,2 +1,2 @@
-# intents
-Anything related to Intent data type applicable to multiple services
+# Model
+Reusing data types, domain model or `Shared Kernel` in DDD parlance.

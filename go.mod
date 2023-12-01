@@ -1,4 +1,4 @@
-module github.com/blndgs/intents
+module github.com/blndgs/model
 
 go 1.21.3
 
