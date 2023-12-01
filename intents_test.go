@@ -53,7 +53,6 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Valid Swap Request",
 			payload: Body{
-				Sender: senderAddress,
 				Intents: []*Intent{
 					{
 						Sender:     senderAddress,
@@ -72,7 +71,6 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Valid Minimal Limit Request",
 			payload: Body{
-				Sender: senderAddress,
 				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
@@ -88,7 +86,6 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Valid Limit Request with lengthy (understatement) float",
 			payload: Body{
-				Sender: senderAddress,
 				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
@@ -104,7 +101,6 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Invalid Request with bad float",
 			payload: Body{
-				Sender: senderAddress,
 				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
@@ -120,7 +116,6 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Invalid Request with negative float",
 			payload: Body{
-				Sender: senderAddress,
 				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
@@ -136,7 +131,6 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Invalid Request with bad status",
 			payload: Body{
-				Sender: senderAddress,
 				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
@@ -153,7 +147,6 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Invalid Request with negative float",
 			payload: Body{
-				Sender: senderAddress,
 				Intents: []*Intent{
 					{
 						Sender:    senderAddress,
@@ -167,16 +160,17 @@ func TestSubmitHandler(t *testing.T) {
 			expectCode: http.StatusBadRequest,
 		},
 		{
-			description: "Invalid Request with different sender",
+			description: "Invalid Request with missing Kind",
 			payload: Body{
-				Sender: "0xd7b21a844f3a41c91a73d3F87B83fA93bb6cb518",
 				Intents: []*Intent{
 					{
-						Sender:    senderAddress,
-						Kind:      Buy,
-						BuyToken:  "TokenA",
-						BuyAmount: 0.5,
-						CallData:  "<intent>",
+						Sender:     senderAddress,
+						BuyToken:   "TokenA",
+						BuyAmount:  0.5,
+						SellToken:  "TokenB",
+						SellAmount: 0.5,
+						CallData:   "<intent>",
+						Status:     "Received",
 					},
 				},
 			},
@@ -185,7 +179,12 @@ func TestSubmitHandler(t *testing.T) {
 		{
 			description: "Invalid Request (missing fields)",
 			payload: Body{
-				Sender: "0xInValidEthAddress",
+				Intents: []*Intent{
+					{
+						Sender:   senderAddress,
+						CallData: "<intent>",
+					},
+				},
 			},
 			expectCode: http.StatusBadRequest,
 		},

@@ -43,7 +43,6 @@ type Intent struct {
 }
 
 type Body struct {
-	Sender  string    `json:"sender" binding:"required,eth_addr,valid_senders"`
 	Intents []*Intent `json:"intents" binding:"required,dive"`
 }
 
@@ -95,31 +94,6 @@ func validOptionalInt(fl validator.FieldLevel) bool {
 	return fl.Field().CanInt() && fl.Field().Int() >= 0
 }
 
-// validSenders checks if the Sender in the Body is non-empty and if any Sender
-// in the Intents differs from the Body Sender
-func validSenders(fl validator.FieldLevel) bool {
-	body, ok := fl.Top().Interface().(Body)
-	if !ok {
-		return false
-	}
-
-	// Check if the Sender in the Body is non-empty
-	if body.Sender == "" {
-		return false
-	}
-
-	senderAddress := body.Sender
-
-	// Check if any Sender in the Intents is non-empty
-	for _, intent := range body.Intents {
-		if intent.Sender != senderAddress {
-			return false
-		}
-	}
-
-	return true
-}
-
 func validStatus(fl validator.FieldLevel) bool {
 	status := fl.Field().String()
 	if status == "" {
@@ -133,9 +107,6 @@ func NewValidator() error {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		if err := v.RegisterValidation("status", validStatus); err != nil {
 			return fmt.Errorf("validator %s failed", "status")
-		}
-		if err := v.RegisterValidation("valid_senders", validSenders); err != nil {
-			return fmt.Errorf("validator %s failed", "valid_senders")
 		}
 		if err := v.RegisterValidation("eth_addr", validEthAddress); err != nil {
 			return fmt.Errorf("validator %s failed", "eth_addr")
