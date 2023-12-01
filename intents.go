@@ -52,7 +52,9 @@ func validEthAddress(fl validator.FieldLevel) bool {
 	return common.IsHexAddress(addressHex)
 }
 
-// ValidateKind this function is manually called after Gin's binding
+// ValidateKind this function is manually, and it's not bound to Gin's validation.
+// Should be called before posting or responding to a request. Investigate if it
+// can be bound to Gin's validation.
 func (i *Intent) ValidateKind() bool {
 	switch i.Kind {
 	case Swap:
