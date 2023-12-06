@@ -1,8 +1,9 @@
 package model
 
 import (
-	"encoding/json"
 	"fmt"
+
+	"github.com/goccy/go-json"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin/binding"
