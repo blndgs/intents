@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    # for test singh/release-pipeline
+    branches: [ singh/release-pipeline, main ]
+
+jobs:
+  build-test-and-release:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.19'
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # fetch tags
+
+    - name: Get dependencies
+      run: go get -v -t -d ./...
+
+    - name: Run tests
+      run: go test ./...
+
+    - name: Calculate next version tag
+      id: nextver
+      uses: mathieudutour/github-tag-action@v5.6
+      with:
+        github_token: ${{ secrets.SECRET_TOKEN }}
+        default_bump: patch
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.SECRET_TOKEN }}
+      with:
+          tag_name: ${{ steps.nextver.outputs.new_tag }}
+          release_name: Release ${{ steps.nextver.outputs.new_tag }}
