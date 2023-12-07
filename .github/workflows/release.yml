@@ -2,8 +2,7 @@ name: Release
 
 on:
   push:
-    # for test singh/release-pipeline
-    branches: [ singh/release-pipeline, main ]
+    branches: [ main ]
 
 jobs:
   build-test-and-release:
@@ -31,7 +30,7 @@ jobs:
       uses: mathieudutour/github-tag-action@v5.6
       with:
         github_token: ${{ secrets.SECRET_TOKEN }}
-        default_bump: patch
+        default_bump: minor
 
     - name: Create Release
       id: create_release
