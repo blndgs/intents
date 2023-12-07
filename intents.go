@@ -3,6 +3,8 @@ package model
 import (
 	"fmt"
 
+	"github.com/goccy/go-json"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -117,4 +119,19 @@ func NewValidator() error {
 	}
 
 	return nil
+}
+
+// ToJSON serializes the Intent into a JSON string
+func (i *Intent) ToJSON() (string, error) {
+	jsonData, err := json.Marshal(i)
+	if err != nil {
+		return "", err
+	}
+	return string(jsonData), nil
+}
+
+// ToString provides a string representation of the Intent
+func (i *Intent) ToString() string {
+	return fmt.Sprintf("Intent(Sender: %s, Kind: %s, Hash: %s, SellToken: %s, BuyToken: %s, SellAmount: %.2f, BuyAmount: %.2f, PartiallyFillable: %v, CallData: %s, Status: %s, CreatedAt: %d, ExpirationAt: %d)",
+		i.Sender, i.Kind, i.Hash, i.SellToken, i.BuyToken, i.SellAmount, i.BuyAmount, i.PartiallyFillable, i.CallData, i.Status, i.CreatedAt, i.ExpirationAt)
 }
