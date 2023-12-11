@@ -33,7 +33,19 @@ import (
 )
 
 type BodyOfUserOps struct {
-	UserOps []*UserOperation `json:"user_ops" binding:"required,dive"`
+	UserOps    []*UserOperation   `json:"user_ops" binding:"required,dive"`
+	UserOpsExt []UserOperationExt `json:"user_ops_ext" binding:"required,dive"`
+}
+
+// UserOperationExt represents additional extended information about a UserOperation that will be communicated from the
+// Bundler to the Solver.
+// The Solver may change the sequence of UserOperations in the UserOperationExt slice to match the sequence of
+// UserOperations in the UserOps slice.
+// The `OriginalHashValue` field is the hash value of the UserOperation as it was calculated for the userOp submitted
+// by the wallet before the UserOperation is solved and it is a Read-Only field.
+type UserOperationExt struct {
+	OriginalHashValue string `json:"original_hash_value" mapstructure:"original_hash_value" validate:"required"`
+	ProcessingStatus  string `json:"processing_status" mapstructure:"processing_status" validate:"required"`
 }
 
 const IntentEndToken = "<intent-end>"
