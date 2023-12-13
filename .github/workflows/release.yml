@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ test ]
 
 jobs:
   build-test-and-release:
@@ -25,18 +25,24 @@ jobs:
     - name: Run tests
       run: go test ./...
 
+    - uses: actions/create-github-app-token@v1
+      id: app-token
+      with:
+        app-id: ${{ vars.APP_ID }}
+        private-key: ${{ secrets.PRIVATE_KEY }}
+
     - name: Calculate next version tag
       id: nextver
       uses: mathieudutour/github-tag-action@v5.6
       with:
-        github_token: ${{ secrets.SECRET_TOKEN }}
+        github_token: ${{ steps.app-token.outputs.token }}
         default_bump: minor
 
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
       env:
-        GITHUB_TOKEN: ${{ secrets.SECRET_TOKEN }}
+        GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
       with:
           tag_name: ${{ steps.nextver.outputs.new_tag }}
           release_name: Release ${{ steps.nextver.outputs.new_tag }}
