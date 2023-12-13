@@ -44,8 +44,8 @@ type BodyOfUserOps struct {
 // The `OriginalHashValue` field is the hash value of the UserOperation as it was calculated for the userOp submitted
 // by the wallet before the UserOperation is solved and it is a Read-Only field.
 type UserOperationExt struct {
-	OriginalHashValue string `json:"original_hash_value" mapstructure:"original_hash_value" validate:"required"`
-	ProcessingStatus  string `json:"processing_status" mapstructure:"processing_status" validate:"required"`
+	OriginalHashValue string           `json:"original_hash_value" mapstructure:"original_hash_value" validate:"required"`
+	ProcessingStatus  ProcessingStatus `json:"processing_status" mapstructure:"processing_status" validate:"required"`
 }
 
 const IntentEndToken = "<intent-end>"
