@@ -27,6 +27,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -258,4 +259,33 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+func (op *UserOperation) String() string {
+	return fmt.Sprintf(
+		"UserOperation{\n"+
+			"  Sender: %s\n"+
+			"  Nonce: %s\n"+
+			"  InitCode: %x\n"+
+			"  CallData: %s\n"+
+			"  CallGasLimit: %s\n"+
+			"  VerificationGasLimit: %s\n"+
+			"  PreVerificationGas: %s\n"+
+			"  MaxFeePerGas: %s\n"+
+			"  MaxPriorityFeePerGas: %s\n"+
+			"  PaymasterAndData: %x\n"+
+			"  Signature: %x\n"+
+			"}",
+		op.Sender.String(),
+		op.Nonce.Text(10),
+		op.InitCode,
+		string(op.CallData),
+		op.CallGasLimit.Text(10),
+		op.VerificationGasLimit.Text(10),
+		op.PreVerificationGas.Text(10),
+		op.MaxFeePerGas.Text(10),
+		op.MaxPriorityFeePerGas.Text(10),
+		op.PaymasterAndData,
+		op.Signature,
+	)
 }
