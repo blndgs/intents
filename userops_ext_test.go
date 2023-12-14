@@ -2,7 +2,11 @@ package model
 
 import (
 	"encoding/json"
+	"math/big"
+	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func mockIntent() Intent {
@@ -79,55 +83,19 @@ func TestUserOperation_GetIntent(t *testing.T) {
 	}
 }
 
-// TestUserOperation_GetCallData tests the GetCallData method.
+// TestUserOperation_GetCallData tests the GetEVMInstructions method.
 func TestUserOperation_GetCallData(t *testing.T) {
 	uoWithIntent := mockUserOperation(true)
 	uoWithoutIntent := mockUserOperation(false)
 
-	calldata, err := uoWithIntent.GetCallData()
+	calldata, err := uoWithIntent.GetEVMInstructions()
 	if err != nil || string(calldata) != callDataValue {
-		t.Errorf("GetCallData() with intent did not return expected calldata")
+		t.Errorf("GetEVMInstructions() with intent did not return expected calldata")
 	}
 
-	calldata, err = uoWithoutIntent.GetCallData()
+	calldata, err = uoWithoutIntent.GetEVMInstructions()
 	if err != nil || string(calldata) != callDataValue {
-		t.Errorf("GetCallData() without intent did not return expected calldata")
-	}
-}
-
-// TestUserOperation_RemoveIntent tests the RemoveIntent method.
-func TestUserOperation_RemoveIntent(t *testing.T) {
-	uoWithIntent := mockUserOperation(true)
-	uoWithoutIntent := mockUserOperation(false)
-
-	_, err := uoWithIntent.RemoveIntent()
-	if err != nil {
-		t.Errorf("RemoveIntent() with intent returned error: %v", err)
-	}
-	if uoWithIntent.HasIntent() {
-		t.Errorf("RemoveIntent() did not remove intent")
-	}
-
-	_, err = uoWithoutIntent.RemoveIntent()
-	if err == nil {
-		t.Errorf("RemoveIntent() without intent did not return error")
-	}
-}
-
-// TestUserOperation_RemoveCalldata tests the RemoveCalldata method.
-func TestUserOperation_RemoveCalldata(t *testing.T) {
-	uoWithIntent := mockUserOperation(true)
-
-	calldata, err := uoWithIntent.RemoveCallData()
-	if err != nil || string(calldata) != callDataValue {
-		t.Errorf("RemoveCalldata() did not return expected calldata")
-	}
-	if !uoWithIntent.HasIntent() {
-		t.Errorf("RemoveCalldata() removed the intent")
-	}
-
-	if uoWithIntent.HasCallData() {
-		t.Errorf("RemoveIntent() did not remove the CallData value")
+		t.Errorf("GetEVMInstructions() without intent did not return expected calldata")
 	}
 }
 
@@ -148,27 +116,48 @@ func TestUserOperation_SetIntent(t *testing.T) {
 	}
 }
 
-// TestUserOperation_SetCallData tests the SetCallData method.
+// TestUserOperation_SetCallData tests the SetEVMInstructions method.
 func TestUserOperation_SetCallData(t *testing.T) {
 	uo := &UserOperation{}
 
 	// Test setting valid CallData
 	validCallData := []byte("0x123")
-	uo.SetCallData(validCallData)
+	uo.SetEVMInstructions(validCallData)
 	if string(uo.CallData) != string(validCallData) {
-		t.Errorf("SetCallData() did not set CallData correctly")
+		t.Errorf("SetEVMInstructions() did not set CallData correctly")
 	}
 }
 
-// TestUserOperation_SetIntentAndCallData tests the SetIntentAndCallData method.
-func TestUserOperation_SetIntentAndCallData(t *testing.T) {
-	uo := &UserOperation{}
+func TestUserOperation_UnmarshalJSON(t *testing.T) {
+	// Create a UserOperation instance with some test data
+	originalOp := &UserOperation{
+		Sender:               common.HexToAddress("0x3068c2408c01bECde4BcCB9f246b56651BE1d12D"),
+		Nonce:                big.NewInt(15),
+		InitCode:             []byte("init code"),
+		CallData:             []byte("call data"),
+		CallGasLimit:         big.NewInt(12068),
+		VerificationGasLimit: big.NewInt(58592),
+		PreVerificationGas:   big.NewInt(47996),
+		MaxFeePerGas:         big.NewInt(77052194170),
+		MaxPriorityFeePerGas: big.NewInt(77052194106),
+		PaymasterAndData:     []byte("paymaster data"),
+		Signature:            []byte("signature"),
+	}
 
-	// Test setting both valid intent and CallData
-	validIntentJSON := mockValidIntentJSON()
-	validCallData := []byte("0x123")
-	err := uo.SetIntentAndCallData(validIntentJSON, validCallData)
+	// Marshal the original UserOperation to JSON
+	marshalledJSON, err := originalOp.MarshalJSON()
 	if err != nil {
-		t.Errorf("SetIntentAndCallData() with valid intent and CallData returned error: %v", err)
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+
+	// Unmarshal the JSON back into a new UserOperation instance
+	var unmarshalledOp UserOperation
+	if err := unmarshalledOp.UnmarshalJSON(marshalledJSON); err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+
+	// Compare the original and unmarshalled instances
+	if !reflect.DeepEqual(originalOp, &unmarshalledOp) {
+		t.Errorf("Unmarshalled UserOperation does not match the original.\nOriginal: %+v\nUnmarshalled: %+v", originalOp, unmarshalledOp)
 	}
 }

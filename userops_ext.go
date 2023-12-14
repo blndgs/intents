@@ -4,34 +4,37 @@
 // extracting data from the CallData field.
 //
 // The Calldata field in a userOperation is expected to contain the intent json
-// value and or the calldata value for solved userOps or conventional userOps
-// respectively. The separator token is required when both intent json and
-// CallData values are present. The separator token is not required when either
-// the Intent or calldata value is present.
+// value and or the Intent execution EVM instructions value for solved userOps
+// or conventional userOps respectively.
+// The separator token is required when both intent json and EVM instructions
+// values are present.
+// The separator token is not required when either the Intent or EVM
+// instructions are present.
 //
 // The separator token is defined as "<intent-end>".
 //
-// <intent json><intent-end><calldata>
+// <intent json><intent-end><Intent Execution:EVM instructions>
 //
 // 1. <Intent json>: The Intent JSON definition.
 //
-// 2. <intent-end>: A separator token to separate the Intent JSON from the CallData
-// value.
+// 2. <intent-end>: A separator token to separate the Intent JSON from the EVM
+// instructions value.
 //
-// 3. Ethereum Transaction CallData: a hexadecimal 0x prefixed value.
-//
-// The methods in this file provide functionalities to:
-//   - Check for the presence of Intent and/or Ethereum Transaction CallData.
-//   - Extract and separate the Intent and Ethereum Transaction CallData.
+// 3. Execution EVM instructions: a hexadecimal 0x prefixed value.
+// Execution EVM instructions are the EVM instructions that
+// will be executed on chain.
 package model
 
 import (
 	"errors"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/goccy/go-json"
 )
 
+// BodyOfUserOps represents the body of an HTTP request to the Solver.
 type BodyOfUserOps struct {
 	UserOps    []*UserOperation   `json:"user_ops" binding:"required,dive"`
 	UserOpsExt []UserOperationExt `json:"user_ops_ext" binding:"required,dive"`
@@ -66,8 +69,8 @@ const (
 
 // extractIntentJSON attempts to extract the Intent JSON from the CallData field.
 // It returns the JSON as a string and a boolean indicating whether a valid JSON was found.
-func (u *UserOperation) extractIntentJSON() (string, bool) {
-	parts := strings.Split(string(u.CallData), IntentEndToken)
+func (op *UserOperation) extractIntentJSON() (string, bool) {
+	parts := strings.Split(string(op.CallData), IntentEndToken)
 	if len(parts) >= 1 {
 		var intent Intent
 		if err := json.Unmarshal([]byte(parts[0]), &intent); err == nil {
@@ -79,14 +82,14 @@ func (u *UserOperation) extractIntentJSON() (string, bool) {
 
 // HasIntent checks if the CallData field contains a valid Intent JSON that
 // decodes successfully into an Intent struct.
-func (u *UserOperation) HasIntent() bool {
-	_, hasIntent := u.extractIntentJSON()
+func (op *UserOperation) HasIntent() bool {
+	_, hasIntent := op.extractIntentJSON()
 	return hasIntent
 }
 
 // GetIntentJSON returns the Intent JSON from the CallData field, if present.
-func (u *UserOperation) GetIntentJSON() (string, error) {
-	intentJSON, hasIntent := u.extractIntentJSON()
+func (op *UserOperation) GetIntentJSON() (string, error) {
+	intentJSON, hasIntent := op.extractIntentJSON()
 	if !hasIntent {
 		return "", ErrNoIntentFound
 	}
@@ -95,8 +98,8 @@ func (u *UserOperation) GetIntentJSON() (string, error) {
 
 // GetIntent takes the Intent JSON from the CallData field, decodes it into
 // an Intent struct, and returns the struct.
-func (u *UserOperation) GetIntent() (*Intent, error) {
-	intentJSON, hasIntent := u.extractIntentJSON()
+func (op *UserOperation) GetIntent() (*Intent, error) {
+	intentJSON, hasIntent := op.extractIntentJSON()
 	if !hasIntent {
 		return nil, ErrNoIntentFound
 	}
@@ -108,10 +111,11 @@ func (u *UserOperation) GetIntent() (*Intent, error) {
 	return &intent, nil
 }
 
-// HasCallData returns true if the CallData field starts with "0x"
-// either directly or after the intent and separator token.
-func (u *UserOperation) HasCallData() bool {
-	parts := strings.Split(string(u.CallData), IntentEndToken)
+// HasEVMInstructions returns true if the Intent Execution EVM instructions field
+// starts with "0x" either directly or after the intent JSON and separator
+// token.
+func (op *UserOperation) HasEVMInstructions() bool {
+	parts := strings.Split(string(op.CallData), IntentEndToken)
 
 	// Check for CallData after the separator token
 	const hexPrefix = "0x"
@@ -123,10 +127,12 @@ func (u *UserOperation) HasCallData() bool {
 	return strings.HasPrefix(parts[0], hexPrefix)
 }
 
-// GetCallData extracts and returns the Ethereum transaction CallData from the CallData field.
-// It returns an error if the CallData value does not exist or does not start with "0x".
-func (u *UserOperation) GetCallData() ([]byte, error) {
-	parts := strings.Split(string(u.CallData), IntentEndToken)
+// GetEVMInstructions extracts and returns the Ethereum EVM
+// instructions from the CallData field.
+// It returns an error if the EVM instructions value does not
+// exist or does not start with "0x".
+func (op *UserOperation) GetEVMInstructions() ([]byte, error) {
+	parts := strings.Split(string(op.CallData), IntentEndToken)
 
 	var calldata string
 	if len(parts) >= 2 {
@@ -144,76 +150,112 @@ func (u *UserOperation) GetCallData() ([]byte, error) {
 	return []byte(calldata), nil
 }
 
-// RemoveIntent removes the Intent JSON and the separator token from the
-// CallData field and returns the Intent JSON.
-func (u *UserOperation) RemoveIntent() (string, error) {
-	intentJSON, err := u.GetIntentJSON()
-	if err != nil {
-		return "", err
-	}
-
-	parts := strings.Split(string(u.CallData), IntentEndToken)
-	u.CallData = []byte(parts[1])
-
-	return intentJSON, nil
-}
-
-// RemoveCallData removes the CallData value from the CallData field and
-// returns its value.
-func (u *UserOperation) RemoveCallData() ([]byte, error) {
-	CallData, err := u.GetCallData()
-	if err != nil {
-		return nil, err
-	}
-	parts := strings.Split(string(u.CallData), IntentEndToken)
-	if len(parts) >= 2 {
-		u.CallData = []byte(parts[0] + IntentEndToken)
-	} else {
-		u.CallData = []byte{}
-	}
-	return CallData, nil
-}
-
 // SetIntent sets the Intent JSON part of the CallData field.
-func (u *UserOperation) SetIntent(intentJSON string) error {
+func (op *UserOperation) SetIntent(intentJSON string) error {
 	if err := json.Unmarshal([]byte(intentJSON), new(Intent)); err != nil {
 		return ErrIntentInvalidJSON
 	}
 
-	callData, err := u.GetCallData()
+	callData, err := op.GetEVMInstructions()
 	if err != nil && !errors.Is(err, ErrNoCalldata) {
 		return err
 	}
 
 	if len(callData) > 0 {
-		u.CallData = []byte(intentJSON + IntentEndToken + string(callData))
+		op.CallData = []byte(intentJSON + IntentEndToken + string(callData))
 	} else {
 		// Don't add the separator token if there's no CallData
-		u.CallData = []byte(intentJSON)
+		op.CallData = []byte(intentJSON)
 	}
 
 	return nil
 }
 
-// SetCallData sets the Ethereum transaction CallData part of the CallData field.
-func (u *UserOperation) SetCallData(callDataValue []byte) {
-	intentJSON, _ := u.GetIntentJSON()
+// SetEVMInstructions sets the Intent Execution Ethereum EVM instructions of the
+// CallData field.
+func (op *UserOperation) SetEVMInstructions(callDataValue []byte) {
+	intentJSON, _ := op.GetIntentJSON()
 
 	if intentJSON != "" {
-		u.CallData = []byte(intentJSON + IntentEndToken + string(callDataValue))
+		op.CallData = []byte(intentJSON + IntentEndToken + string(callDataValue))
 	} else {
-		u.CallData = callDataValue
+		op.CallData = callDataValue
 	}
 }
 
-// SetIntentAndCallData sets both the Intent JSON and the Ethereum transaction CallData
-// parts of the CallData field.
-func (u *UserOperation) SetIntentAndCallData(intentJSON string, callData []byte) error {
-	if err := json.Unmarshal([]byte(intentJSON), new(Intent)); err != nil {
-		return ErrIntentInvalidJSON
+// UnmarshalJSON does the reverse of the provided bundler custom
+// JSON marshaller for a UserOperation.
+func (op *UserOperation) UnmarshalJSON(data []byte) error {
+	aux := struct {
+		Sender               string `json:"sender"`
+		Nonce                string `json:"nonce"`
+		InitCode             string `json:"initCode"`
+		CallData             string `json:"callData"`
+		CallGasLimit         string `json:"callGasLimit"`
+		VerificationGasLimit string `json:"verificationGasLimit"`
+		PreVerificationGas   string `json:"preVerificationGas"`
+		MaxFeePerGas         string `json:"maxFeePerGas"`
+		MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas"`
+		PaymasterAndData     string `json:"paymasterAndData"`
+		Signature            string `json:"signature"`
+	}{}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
 	}
 
-	u.CallData = []byte(intentJSON + IntentEndToken + string(callData))
+	var err error
+	op.Sender = common.HexToAddress(aux.Sender)
+
+	op.Nonce, err = hexutil.DecodeBig(aux.Nonce)
+	if err != nil {
+		return err
+	}
+
+	op.InitCode, err = hexutil.Decode(aux.InitCode)
+	if err != nil {
+		return err
+	}
+
+	op.CallData, err = hexutil.Decode(aux.CallData)
+	if err != nil {
+		return err
+	}
+
+	op.CallGasLimit, err = hexutil.DecodeBig(aux.CallGasLimit)
+	if err != nil {
+		return err
+	}
+
+	op.VerificationGasLimit, err = hexutil.DecodeBig(aux.VerificationGasLimit)
+	if err != nil {
+		return err
+	}
+
+	op.PreVerificationGas, err = hexutil.DecodeBig(aux.PreVerificationGas)
+	if err != nil {
+		return err
+	}
+
+	op.MaxFeePerGas, err = hexutil.DecodeBig(aux.MaxFeePerGas)
+	if err != nil {
+		return err
+	}
+
+	op.MaxPriorityFeePerGas, err = hexutil.DecodeBig(aux.MaxPriorityFeePerGas)
+	if err != nil {
+		return err
+	}
+
+	op.PaymasterAndData, err = hexutil.Decode(aux.PaymasterAndData)
+	if err != nil {
+		return err
+	}
+
+	op.Signature, err = hexutil.Decode(aux.Signature)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
