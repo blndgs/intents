@@ -1,0 +1,24 @@
+name: PR-Test
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test-and-release:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # fetch tags
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+        check-latest: true
+
+    - name: Run tests
+      run: go test ./...
