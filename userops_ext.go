@@ -29,6 +29,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/goccy/go-json"
 )
 
@@ -179,4 +181,81 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) {
 	} else {
 		op.CallData = callDataValue
 	}
+}
+
+// UnmarshalJSON does the reverse of the provided bundler custom
+// JSON marshaller for a UserOperation.
+func (op *UserOperation) UnmarshalJSON(data []byte) error {
+	aux := struct {
+		Sender               string `json:"sender"`
+		Nonce                string `json:"nonce"`
+		InitCode             string `json:"initCode"`
+		CallData             string `json:"callData"`
+		CallGasLimit         string `json:"callGasLimit"`
+		VerificationGasLimit string `json:"verificationGasLimit"`
+		PreVerificationGas   string `json:"preVerificationGas"`
+		MaxFeePerGas         string `json:"maxFeePerGas"`
+		MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas"`
+		PaymasterAndData     string `json:"paymasterAndData"`
+		Signature            string `json:"signature"`
+	}{}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	var err error
+	op.Sender = common.HexToAddress(aux.Sender)
+
+	op.Nonce, err = hexutil.DecodeBig(aux.Nonce)
+	if err != nil {
+		return err
+	}
+
+	op.InitCode, err = hexutil.Decode(aux.InitCode)
+	if err != nil {
+		return err
+	}
+
+	op.CallData, err = hexutil.Decode(aux.CallData)
+	if err != nil {
+		return err
+	}
+
+	op.CallGasLimit, err = hexutil.DecodeBig(aux.CallGasLimit)
+	if err != nil {
+		return err
+	}
+
+	op.VerificationGasLimit, err = hexutil.DecodeBig(aux.VerificationGasLimit)
+	if err != nil {
+		return err
+	}
+
+	op.PreVerificationGas, err = hexutil.DecodeBig(aux.PreVerificationGas)
+	if err != nil {
+		return err
+	}
+
+	op.MaxFeePerGas, err = hexutil.DecodeBig(aux.MaxFeePerGas)
+	if err != nil {
+		return err
+	}
+
+	op.MaxPriorityFeePerGas, err = hexutil.DecodeBig(aux.MaxPriorityFeePerGas)
+	if err != nil {
+		return err
+	}
+
+	op.PaymasterAndData, err = hexutil.Decode(aux.PaymasterAndData)
+	if err != nil {
+		return err
+	}
+
+	op.Signature, err = hexutil.Decode(aux.Signature)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
