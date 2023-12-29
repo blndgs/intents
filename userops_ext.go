@@ -28,6 +28,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -262,30 +263,44 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 }
 
 func (op *UserOperation) String() string {
+	formatBytes := func(b []byte) string {
+		if len(b) == 0 {
+			return "0x" // default for empty byte slice
+		}
+		return fmt.Sprintf("0x%x", b)
+	}
+
+	formatBigInt := func(b *big.Int) string {
+		if b == nil {
+			return "0x, 0" // Default for nil big.Int
+		}
+		return fmt.Sprintf("0x%x, %s", b, b.Text(10))
+	}
+
 	return fmt.Sprintf(
 		"UserOperation{\n"+
 			"  Sender: %s\n"+
 			"  Nonce: %s\n"+
-			"  InitCode: %x\n"+
+			"  InitCode: %s\n"+
 			"  CallData: %s\n"+
 			"  CallGasLimit: %s\n"+
 			"  VerificationGasLimit: %s\n"+
 			"  PreVerificationGas: %s\n"+
 			"  MaxFeePerGas: %s\n"+
 			"  MaxPriorityFeePerGas: %s\n"+
-			"  PaymasterAndData: %x\n"+
-			"  Signature: %x\n"+
+			"  PaymasterAndData: %s\n"+
+			"  Signature: %s\n"+
 			"}",
 		op.Sender.String(),
-		op.Nonce.Text(10),
-		op.InitCode,
-		string(op.CallData),
-		op.CallGasLimit.Text(10),
-		op.VerificationGasLimit.Text(10),
-		op.PreVerificationGas.Text(10),
-		op.MaxFeePerGas.Text(10),
-		op.MaxPriorityFeePerGas.Text(10),
-		op.PaymasterAndData,
-		op.Signature,
+		formatBigInt(op.Nonce),
+		formatBytes(op.InitCode),
+		formatBytes(op.CallData),
+		formatBigInt(op.CallGasLimit),
+		formatBigInt(op.VerificationGasLimit),
+		formatBigInt(op.PreVerificationGas),
+		formatBigInt(op.MaxFeePerGas),
+		formatBigInt(op.MaxPriorityFeePerGas),
+		formatBytes(op.PaymasterAndData),
+		formatBytes(op.Signature),
 	)
 }
