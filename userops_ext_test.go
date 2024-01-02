@@ -143,6 +143,7 @@ func TestUserOperation_UnmarshalJSON(t *testing.T) {
 		MaxPriorityFeePerGas: big.NewInt(77052194106),
 		PaymasterAndData:     []byte("paymaster data"),
 		Signature:            []byte("signature"),
+		ChainID:              big.NewInt(1),
 	}
 
 	// Marshal the original UserOperation to JSON
@@ -176,6 +177,7 @@ func TestUserOperationString(t *testing.T) {
 		MaxPriorityFeePerGas: big.NewInt(0x7e498f300),
 		PaymasterAndData:     []byte{},
 		Signature:            []byte{0xbd, 0xa2, 0x86, 0x5b, 0x91, 0xc9, 0x2e, 0xf7, 0xf8, 0xa4, 0x3a, 0xdc, 0x03, 0x9b, 0x8a, 0x3f, 0x43, 0x01, 0x1a, 0x20, 0xcf, 0xc8, 0x18, 0xd0, 0x78, 0x84, 0x7e, 0xf2, 0xff, 0xd9, 0x16, 0xec, 0x23, 0x6a, 0x1c, 0xc9, 0x21, 0x8b, 0x16, 0x4f, 0xe2, 0xf5, 0xa7, 0x08, 0x8b, 0x70, 0x10, 0xc9, 0x0a, 0xd0, 0xf9, 0xa9, 0xdc, 0xf3, 0xa2, 0x11, 0x68, 0xd4, 0x33, 0xe7, 0x84, 0x58, 0x2a, 0xfb, 0x1c},
+		ChainID:              big.NewInt(0x1),
 	}
 
 	// Define the expected string with new formatting.
@@ -192,6 +194,7 @@ func TestUserOperationString(t *testing.T) {
   MaxPriorityFeePerGas: %s
   PaymasterAndData: %s
   Signature: %s
+  ChainID: %s
 }`,
 		userOp.Sender.String(),
 		"0x7, 7",
@@ -204,6 +207,7 @@ func TestUserOperationString(t *testing.T) {
 		"0x7e498f300, 33900000000",
 		"0x",
 		"0xbda2865b91c92ef7f8a43adc039b8a3f43011a20cfc818d078847ef2ffd916ec236a1cc9218b164fe2f5a7088b7010c90ad0f9a9dcf3a21168d433e784582afb1c", // Signature as hex
+		"0x1, 1",
 	)
 
 	// Call the String method.
