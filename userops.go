@@ -35,7 +35,6 @@ var (
 		{Name: "maxPriorityFeePerGas", InternalType: "MaxPriorityFeePerGas", Type: "uint256"},
 		{Name: "paymasterAndData", InternalType: "PaymasterAndData", Type: "bytes"},
 		{Name: "signature", InternalType: "Signature", Type: "bytes"},
-		{Name: "chainId", InternalType: "ChainID", Type: "uint256"},
 	}
 
 	// UserOpType is the ABI type of a UserOperation.
@@ -58,7 +57,6 @@ type UserOperation struct {
 	MaxPriorityFeePerGas *big.Int       `json:"maxPriorityFeePerGas" mapstructure:"maxPriorityFeePerGas" validate:"required"`
 	PaymasterAndData     []byte         `json:"paymasterAndData"     mapstructure:"paymasterAndData"     validate:"required"`
 	Signature            []byte         `json:"signature"            mapstructure:"signature"            validate:"required"`
-	ChainID              *big.Int       `json:"chainId" mapstructure:"chainId" validate:"required"`
 }
 
 // GetPaymaster returns the address portion of PaymasterAndData if applicable. Otherwise it returns the zero
@@ -133,7 +131,6 @@ func (op *UserOperation) Pack() []byte {
 		MaxPriorityFeePerGas *big.Int
 		PaymasterAndData     []byte
 		Signature            []byte
-		ChainID              *big.Int
 	}{
 		op.Sender,
 		op.Nonce,
@@ -146,7 +143,6 @@ func (op *UserOperation) Pack() []byte {
 		op.MaxPriorityFeePerGas,
 		op.PaymasterAndData,
 		op.Signature,
-		op.ChainID,
 	})
 
 	enc := hexutil.Encode(packed)
@@ -167,7 +163,6 @@ func (op *UserOperation) PackForSignature() []byte {
 		{Name: "maxFeePerGas", Type: uint256},
 		{Name: "maxPriorityFeePerGas", Type: uint256},
 		{Name: "hashPaymasterAndData", Type: bytes32},
-		{Name: "chainId", Type: uint256},
 	}
 	packed, _ := args.Pack(
 		op.Sender,
@@ -180,7 +175,6 @@ func (op *UserOperation) PackForSignature() []byte {
 		op.MaxFeePerGas,
 		op.MaxPriorityFeePerGas,
 		crypto.Keccak256Hash(op.PaymasterAndData),
-		op.ChainID,
 	)
 
 	return packed
@@ -209,7 +203,6 @@ func (op *UserOperation) MarshalJSON() ([]byte, error) {
 		MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas"`
 		PaymasterAndData     string `json:"paymasterAndData"`
 		Signature            string `json:"signature"`
-		ChainID              string `json:"chainId"`
 	}{
 		Sender:               op.Sender.String(),
 		Nonce:                hexutil.EncodeBig(op.Nonce),
@@ -222,7 +215,6 @@ func (op *UserOperation) MarshalJSON() ([]byte, error) {
 		MaxPriorityFeePerGas: hexutil.EncodeBig(op.MaxPriorityFeePerGas),
 		PaymasterAndData:     hexutil.Encode(op.PaymasterAndData),
 		Signature:            hexutil.Encode(op.Signature),
-		ChainID:              hexutil.EncodeBig(op.ChainID),
 	})
 }
 

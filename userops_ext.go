@@ -200,7 +200,6 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas"`
 		PaymasterAndData     string `json:"paymasterAndData"`
 		Signature            string `json:"signature"`
-		ChainID              string `json:"chainId"`
 	}{}
 
 	if err := json.Unmarshal(data, &aux); err != nil {
@@ -260,10 +259,6 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	op.ChainID, err = hexutil.DecodeBig(aux.ChainID)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -295,7 +290,6 @@ func (op *UserOperation) String() string {
 			"  MaxPriorityFeePerGas: %s\n"+
 			"  PaymasterAndData: %s\n"+
 			"  Signature: %s\n"+
-			"  ChainID: %s\n"+
 			"}",
 		op.Sender.String(),
 		formatBigInt(op.Nonce),
@@ -308,6 +302,5 @@ func (op *UserOperation) String() string {
 		formatBigInt(op.MaxPriorityFeePerGas),
 		formatBytes(op.PaymasterAndData),
 		formatBytes(op.Signature),
-		formatBigInt(op.ChainID),
 	)
 }
