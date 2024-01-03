@@ -146,20 +146,20 @@ func TestUserOperation_UnmarshalJSON(t *testing.T) {
 	}
 
 	// Marshal the original UserOperation to JSON
-	marshalledJSON, err := originalOp.MarshalJSON()
+	marshaledJSON, err := originalOp.MarshalJSON()
 	if err != nil {
 		t.Fatalf("MarshalJSON failed: %v", err)
 	}
 
 	// Unmarshal the JSON back into a new UserOperation instance
-	var unmarshalledOp UserOperation
-	if err := unmarshalledOp.UnmarshalJSON(marshalledJSON); err != nil {
+	var unmarshaledOp UserOperation
+	if err := unmarshaledOp.UnmarshalJSON(marshaledJSON); err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
 
-	// Compare the original and unmarshalled instances
-	if !reflect.DeepEqual(originalOp, &unmarshalledOp) {
-		t.Errorf("Unmarshalled UserOperation does not match the original.\nOriginal: %+v\nUnmarshalled: %+v", originalOp, unmarshalledOp)
+	// Compare the original and unmarshaled instances
+	if !reflect.DeepEqual(originalOp, &unmarshaledOp) {
+		t.Errorf("Unmarshaled UserOperation does not match the original.\nOriginal: %+v\nUnmarshaled: %+v", originalOp, unmarshaledOp)
 	}
 }
 

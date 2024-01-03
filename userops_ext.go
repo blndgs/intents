@@ -186,7 +186,7 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) {
 }
 
 // UnmarshalJSON does the reverse of the provided bundler custom
-// JSON marshaller for a UserOperation.
+// JSON marshaler for a UserOperation.
 func (op *UserOperation) UnmarshalJSON(data []byte) error {
 	aux := struct {
 		Sender               string `json:"sender"`
