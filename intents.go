@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/goccy/go-json"
 
@@ -42,6 +43,7 @@ type Intent struct {
 	Status            ProcessingStatus `json:"status" binding:"status"`            // ui or bundler
 	CreatedAt         int64            `json:"createdAt" binding:"opt_int"`        // ui or bundler
 	ExpirationAt      int64            `json:"expirationAt" binding:"opt_int"`     // ui or bundler for default expiration (TTL: 100 seconds)
+	ChainID           *big.Int         `json:"chainId" binding:"required,chain_id"`
 }
 
 type Body struct {
@@ -105,6 +107,11 @@ func validStatus(fl validator.FieldLevel) bool {
 	return status == string(Received) || status == string(SentToSolver) || status == string(Solved) || status == string(Unsolved) || status == string(Expired) || status == string(OnChain) || status == string(Invalid)
 }
 
+func validChainID(fl validator.FieldLevel) bool {
+	chainID, ok := fl.Field().Interface().(*big.Int)
+	return ok && chainID != nil && chainID.Sign() > 0
+}
+
 func NewValidator() error {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		if err := v.RegisterValidation("status", validStatus); err != nil {
@@ -115,6 +122,9 @@ func NewValidator() error {
 		}
 		if err := v.RegisterValidation("opt_int", validOptionalInt); err != nil {
 			return fmt.Errorf("validator %s failed", "opt_int")
+		}
+		if err := v.RegisterValidation("chain_id", validChainID); err != nil {
+			return fmt.Errorf("validator %s failed", "chain_id")
 		}
 	}
 
@@ -132,6 +142,6 @@ func (i *Intent) ToJSON() (string, error) {
 
 // ToString provides a string representation of the Intent
 func (i *Intent) ToString() string {
-	return fmt.Sprintf("Intent(Sender: %s, Kind: %s, Hash: %s, SellToken: %s, BuyToken: %s, SellAmount: %.2f, BuyAmount: %.2f, PartiallyFillable: %v, CallData: %s, Status: %s, CreatedAt: %d, ExpirationAt: %d)",
-		i.Sender, i.Kind, i.Hash, i.SellToken, i.BuyToken, i.SellAmount, i.BuyAmount, i.PartiallyFillable, i.CallData, i.Status, i.CreatedAt, i.ExpirationAt)
+	return fmt.Sprintf("Intent(Sender: %s, Kind: %s, Hash: %s, SellToken: %s, BuyToken: %s, SellAmount: %.2f, BuyAmount: %.2f, PartiallyFillable: %v, CallData: %s, Status: %s, CreatedAt: %d, ExpirationAt: %d, ChainID: %s)",
+		i.Sender, i.Kind, i.Hash, i.SellToken, i.BuyToken, i.SellAmount, i.BuyAmount, i.PartiallyFillable, i.CallData, i.Status, i.CreatedAt, i.ExpirationAt, i.ChainID.String())
 }

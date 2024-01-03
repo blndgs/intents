@@ -3,6 +3,7 @@ package model
 import (
 	"bytes"
 	"encoding/json"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -63,6 +64,7 @@ func TestSubmitHandler(t *testing.T) {
 						BuyAmount:  5.0,
 						Status:     "Received",
 						CallData:   "<intent>",
+						ChainID:    big.NewInt(1),
 					},
 				},
 			},
@@ -78,6 +80,7 @@ func TestSubmitHandler(t *testing.T) {
 						BuyToken:  "TokenA",
 						BuyAmount: 5.0,
 						CallData:  "<intent>",
+						ChainID:   big.NewInt(1),
 					},
 				},
 			},
@@ -93,6 +96,7 @@ func TestSubmitHandler(t *testing.T) {
 						BuyToken:  "TokenA",
 						BuyAmount: 999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
 						CallData:  "<intent>",
+						ChainID:   big.NewInt(1),
 					},
 				},
 			},
@@ -108,6 +112,7 @@ func TestSubmitHandler(t *testing.T) {
 						BuyToken:  "TokenA",
 						BuyAmount: -0.,
 						CallData:  "<intent>",
+						ChainID:   big.NewInt(1),
 					},
 				},
 			},
@@ -123,6 +128,7 @@ func TestSubmitHandler(t *testing.T) {
 						BuyToken:  "TokenA",
 						BuyAmount: -0.5,
 						CallData:  "<intent>",
+						ChainID:   big.NewInt(1),
 					},
 				},
 			},
@@ -139,6 +145,7 @@ func TestSubmitHandler(t *testing.T) {
 						BuyAmount: 0.5,
 						Status:    "Feeling Lucky",
 						CallData:  "<intent>",
+						ChainID:   big.NewInt(1),
 					},
 				},
 			},
@@ -154,6 +161,7 @@ func TestSubmitHandler(t *testing.T) {
 						BuyToken:  "TokenA",
 						BuyAmount: -99999999999999999999999999999999999999999999999999999999999999,
 						CallData:  "<intent>",
+						ChainID:   big.NewInt(1),
 					},
 				},
 			},
@@ -171,6 +179,7 @@ func TestSubmitHandler(t *testing.T) {
 						SellAmount: 0.5,
 						CallData:   "<intent>",
 						Status:     "Received",
+						ChainID:    big.NewInt(1),
 					},
 				},
 			},
