@@ -186,7 +186,7 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) {
 }
 
 // UnmarshalJSON does the reverse of the provided bundler custom
-// JSON marshaller for a UserOperation.
+// JSON marshaler for a UserOperation.
 func (op *UserOperation) UnmarshalJSON(data []byte) error {
 	aux := struct {
 		Sender               string `json:"sender"`
@@ -219,9 +219,19 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	op.CallData, err = hexutil.Decode(aux.CallData)
-	if err != nil {
-		return err
+	// If the CallData is not prefixed with "0x", it's likely an Intent JSON
+	if strings.HasPrefix(aux.CallData, "0x") {
+		op.CallData, err = hexutil.Decode(aux.CallData)
+		if err != nil {
+			return err
+		}
+	} else {
+		// test Intent JSON validity
+		if err := json.Unmarshal([]byte(aux.CallData), new(Intent)); err != nil {
+			return fmt.Errorf("%w: %s", ErrIntentInvalidJSON, err)
+		}
+
+		op.CallData = []byte(aux.CallData)
 	}
 
 	op.CallGasLimit, err = hexutil.DecodeBig(aux.CallGasLimit)
