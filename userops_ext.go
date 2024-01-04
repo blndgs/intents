@@ -270,6 +270,10 @@ func (op *UserOperation) String() string {
 		if len(b) == 0 {
 			return "0x" // default for empty byte slice
 		}
+		if b[0] == '0' && b[1] == 'x' {
+			return string(b)
+		}
+
 		return fmt.Sprintf("0x%x", b)
 	}
 
@@ -280,12 +284,11 @@ func (op *UserOperation) String() string {
 		return fmt.Sprintf("0x%x, %s", b, b.Text(10))
 	}
 	formatCallData := func(callDataBytes []byte) string {
-		// nil and hex encoded strings are treated as typical `calldata`
-		if len(callDataBytes) == 0 || (len(callDataBytes) >= 2 && callDataBytes[0] == '0' && callDataBytes[1] == 'x') {
-			return formatBytes(callDataBytes)
+		if op.HasIntent() {
+			return string(callDataBytes)
 		}
 
-		return string(callDataBytes)
+		return formatBytes(callDataBytes)
 	}
 
 	return fmt.Sprintf(
