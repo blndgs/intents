@@ -219,19 +219,12 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// If the CallData is not prefixed with "0x", it's likely an Intent JSON
-	if strings.HasPrefix(aux.CallData, "0x") {
+	op.CallData = []byte(aux.CallData)
+	if !op.HasIntent() {
 		op.CallData, err = hexutil.Decode(aux.CallData)
 		if err != nil {
 			return err
 		}
-	} else {
-		// test Intent JSON validity
-		if err := json.Unmarshal([]byte(aux.CallData), new(Intent)); err != nil {
-			return fmt.Errorf("%w: %s", ErrIntentInvalidJSON, err)
-		}
-
-		op.CallData = []byte(aux.CallData)
 	}
 
 	op.CallGasLimit, err = hexutil.DecodeBig(aux.CallGasLimit)
