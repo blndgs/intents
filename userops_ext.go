@@ -219,19 +219,12 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// If the CallData is not prefixed with "0x", it's likely an Intent JSON
-	if strings.HasPrefix(aux.CallData, "0x") {
+	op.CallData = []byte(aux.CallData)
+	if !op.HasIntent() {
 		op.CallData, err = hexutil.Decode(aux.CallData)
 		if err != nil {
 			return err
 		}
-	} else {
-		// test Intent JSON validity
-		if err := json.Unmarshal([]byte(aux.CallData), new(Intent)); err != nil {
-			return fmt.Errorf("%w: %s", ErrIntentInvalidJSON, err)
-		}
-
-		op.CallData = []byte(aux.CallData)
 	}
 
 	op.CallGasLimit, err = hexutil.DecodeBig(aux.CallGasLimit)
@@ -277,6 +270,10 @@ func (op *UserOperation) String() string {
 		if len(b) == 0 {
 			return "0x" // default for empty byte slice
 		}
+		if b[0] == '0' && b[1] == 'x' {
+			return string(b)
+		}
+
 		return fmt.Sprintf("0x%x", b)
 	}
 
@@ -287,12 +284,11 @@ func (op *UserOperation) String() string {
 		return fmt.Sprintf("0x%x, %s", b, b.Text(10))
 	}
 	formatCallData := func(callDataBytes []byte) string {
-		// nil and hex encoded strings are treated as typical `calldata`
-		if len(callDataBytes) == 0 || (len(callDataBytes) >= 2 && callDataBytes[0] == '0' && callDataBytes[1] == 'x') {
-			return formatBytes(callDataBytes)
+		if op.HasIntent() {
+			return string(callDataBytes)
 		}
 
-		return string(callDataBytes)
+		return formatBytes(callDataBytes)
 	}
 
 	return fmt.Sprintf(
