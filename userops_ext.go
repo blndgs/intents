@@ -286,6 +286,14 @@ func (op *UserOperation) String() string {
 		}
 		return fmt.Sprintf("0x%x, %s", b, b.Text(10))
 	}
+	formatCallData := func(callDataBytes []byte) string {
+		// nil and hex encoded strings are treated as typical `calldata`
+		if len(callDataBytes) == 0 || (len(callDataBytes) >= 2 && callDataBytes[0] == '0' && callDataBytes[1] == 'x') {
+			return formatBytes(callDataBytes)
+		}
+
+		return string(callDataBytes)
+	}
 
 	return fmt.Sprintf(
 		"UserOperation{\n"+
@@ -304,7 +312,7 @@ func (op *UserOperation) String() string {
 		op.Sender.String(),
 		formatBigInt(op.Nonce),
 		formatBytes(op.InitCode),
-		formatBytes(op.CallData),
+		formatCallData(op.CallData),
 		formatBigInt(op.CallGasLimit),
 		formatBigInt(op.VerificationGasLimit),
 		formatBigInt(op.PreVerificationGas),

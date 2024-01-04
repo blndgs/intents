@@ -357,3 +357,56 @@ func TestUserOperationString(t *testing.T) {
 		t.Errorf("String() = %v, want %v", result, expected)
 	}
 }
+
+func Test_Intent_UserOperationString(t *testing.T) {
+	userOp := UserOperation{
+		Sender:               common.HexToAddress("0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47"),
+		Nonce:                big.NewInt(0x7),
+		InitCode:             []byte{},
+		CallData:             []byte("{\"sender\":\"0x89f5CFE852a6a04A56b1972A25C318f36C5a8192\",\"nonce\":\"0x0\",\"initCode\":\"0xd49a72cb78c44c6bfbf0d471581b7635cf62e81e5fbfb9cf000000000000000000000000a4bfe126d3ad137f972695dddb1780a29065e5560000000000000000000000000000000000000000000000000000000000000000\",\"callData\":\"0x\",\"callGasLimit\":\"0x2dc6c0\",\"verificationGasLimit\":\"0x2dc6c0\",\"preVerificationGas\":\"0xbf7b\",\"maxFeePerGas\":\"0x150c428804\",\"maxPriorityFeePerGas\":\"0x150c4287e4\",\"paymasterAndData\":\"0x\",\"signature\":\"0x00000000e760b3f885a0af751295bd7f0b69029e72026199fcffb766edb3db9d45dd102e21920f52d2bec67120988e8cfb178ea74e34e1eb7aec86dc24d815a01ff952fe1c\"}"),
+		CallGasLimit:         big.NewInt(0x2dc6c0),
+		VerificationGasLimit: big.NewInt(0x2dc6c0),
+		PreVerificationGas:   big.NewInt(0xbb70),
+		MaxFeePerGas:         big.NewInt(0x7e498f31e),
+		MaxPriorityFeePerGas: big.NewInt(0x7e498f300),
+		PaymasterAndData:     []byte{},
+		Signature:            []byte{0xbd, 0xa2, 0x86, 0x5b, 0x91, 0xc9, 0x2e, 0xf7, 0xf8, 0xa4, 0x3a, 0xdc, 0x03, 0x9b, 0x8a, 0x3f, 0x43, 0x01, 0x1a, 0x20, 0xcf, 0xc8, 0x18, 0xd0, 0x78, 0x84, 0x7e, 0xf2, 0xff, 0xd9, 0x16, 0xec, 0x23, 0x6a, 0x1c, 0xc9, 0x21, 0x8b, 0x16, 0x4f, 0xe2, 0xf5, 0xa7, 0x08, 0x8b, 0x70, 0x10, 0xc9, 0x0a, 0xd0, 0xf9, 0xa9, 0xdc, 0xf3, 0xa2, 0x11, 0x68, 0xd4, 0x33, 0xe7, 0x84, 0x58, 0x2a, 0xfb, 0x1c},
+	}
+
+	// Define the expected string with new formatting.
+	expected := fmt.Sprintf(
+		`UserOperation{
+  Sender: %s
+  Nonce: %s
+  InitCode: %s
+  CallData: %s
+  CallGasLimit: %s
+  VerificationGasLimit: %s
+  PreVerificationGas: %s
+  MaxFeePerGas: %s
+  MaxPriorityFeePerGas: %s
+  PaymasterAndData: %s
+  Signature: %s
+}`,
+		userOp.Sender.String(),
+		"0x7, 7",
+		"0x",
+		`{"sender":"0x89f5CFE852a6a04A56b1972A25C318f36C5a8192","nonce":"0x0","initCode":"0xd49a72cb78c44c6bfbf0d471581b7635cf62e81e5fbfb9cf000000000000000000000000a4bfe126d3ad137f972695dddb1780a29065e5560000000000000000000000000000000000000000000000000000000000000000","callData":"0x","callGasLimit":"0x2dc6c0","verificationGasLimit":"0x2dc6c0","preVerificationGas":"0xbf7b","maxFeePerGas":"0x150c428804","maxPriorityFeePerGas":"0x150c4287e4","paymasterAndData":"0x","signature":"0x00000000e760b3f885a0af751295bd7f0b69029e72026199fcffb766edb3db9d45dd102e21920f52d2bec67120988e8cfb178ea74e34e1eb7aec86dc24d815a01ff952fe1c"}`,
+		"0x2dc6c0, 3000000",
+		"0x2dc6c0, 3000000",
+		"0xbb70, 47984",
+		"0x7e498f31e, 33900000030",
+		"0x7e498f300, 33900000000",
+		"0x",
+		"0xbda2865b91c92ef7f8a43adc039b8a3f43011a20cfc818d078847ef2ffd916ec236a1cc9218b164fe2f5a7088b7010c90ad0f9a9dcf3a21168d433e784582afb1c", // Signature as hex
+	)
+
+	// Call the String method.
+	result := userOp.String()
+	t.Log(result)
+
+	// Compare the result with the expected string.
+	if result != expected {
+		t.Errorf("String() = %v, want %v", result, expected)
+	}
+}
