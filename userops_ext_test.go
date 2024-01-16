@@ -115,6 +115,34 @@ func TestUserOperation_SetIntent(t *testing.T) {
 	invalidIntentJSON := "invalid json"
 	if err := uo.SetIntent(invalidIntentJSON); err == nil {
 		t.Errorf("SetIntent() with invalid intent did not return error")
+// Helper function to create a hex-encoded signature of a specific length
+func makeHexEncodedSignature(length int) []byte {
+	sig := mockSignature()
+	if length <= signatureLength {
+		return sig[:length]
+	}
+
+	plus := length - signatureLength
+	sigExtra := make([]byte, plus)
+	for i := range sigExtra {
+		sigExtra[i] = byte(i % 16)
+	}
+
+	return append(sig, sigExtra...)
+}
+
+func TestValidateUserOperation_Conventional(t *testing.T) {
+	userOp := &UserOperation{}                                                                 // Empty CallData and no Signature
+	userOpWithSignature := &UserOperation{Signature: makeHexEncodedSignature(signatureLength)} // Empty CallData and valid Signature
+
+	status, err := userOp.validateUserOperation()
+	if status != conventionalUserOp || err != nil {
+		t.Errorf("validateUserOperation() = %v, %v; want %v, nil", status, err, conventionalUserOp)
+	}
+
+	status, err = userOpWithSignature.validateUserOperation()
+	if status != conventionalUserOp || err != nil {
+		t.Errorf("validateUserOperation() = %v, %v; want %v, nil", status, err, conventionalUserOp)
 	}
 }
 
@@ -123,8 +151,10 @@ func TestUserOperation_SetCallData(t *testing.T) {
 	uo := &UserOperation{}
 
 	// Test setting valid CallData
-	validCallData := []byte("0x123")
-	uo.SetEVMInstructions(validCallData)
+	validCallData := mockCallData()
+	if err := uo.SetEVMInstructions(validCallData); err != nil {
+		t.Errorf("SetEVMInstructions() returned error: %v", err)
+	}
 	if string(uo.CallData) != string(validCallData) {
 		t.Errorf("SetEVMInstructions() did not set CallData correctly")
 	}

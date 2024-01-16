@@ -65,18 +65,104 @@ func (e userOperationError) Error() string {
 const (
 	ErrNoIntentFound     userOperationError = "no Intent found"
 	ErrIntentInvalidJSON userOperationError = "invalid Intent JSON"
-	ErrNoSeparator       userOperationError = "separator token not found"
-	ErrNoCalldata        userOperationError = "no CallData found"
+	ErrNoSignatureValue  userOperationError = "signature value is not found"
+	ErrNoCallData        userOperationError = "no CallData found"
+	ErrInvalidCallData   userOperationError = "invalid hex-encoded CallData"
+	ErrInvalidSignature  userOperationError = "invalid hex-encoded signature"
+	ErrInvalidUserOp     userOperationError = "ambiguous UserOperation solved state"
+	ErrDoubleIntentDef   userOperationError = "intent JSON is set in both calldata and signature fields"
 )
 
-// extractIntentJSON attempts to extract the Intent JSON from the CallData field.
-// It returns the JSON as a string and a boolean indicating whether a valid JSON was found.
+func has0xPrefix(input []byte) bool {
+	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
+}
+
+const signatureLength = 132
+
+// validateUserOperation checks the status of the UserOperation and returns
+// its userOpSolvedStatus. It determines if the operation is conventional,
+// unsolved, or solved based on the presence and content of CallData and Signature.
+//
+// Returns:
+//   - userOpSolvedStatus: The solved status of the UserOperation.
+//   - error: An error if there's an issue with the operation's state, contents.
+func (op *UserOperation) validateUserOperation() (userOpSolvedStatus, error) {
+	// Conventional userOp? empty CallData without signature value.
+	if len(op.CallData) == 0 && len(op.Signature) == 0 {
+		return conventionalUserOp, nil
+	}
+
+	// Conventional userOp? empty CallData without signature value.
+	if len(op.CallData) == 0 && op.HasSignature() && len(op.Signature) == signatureLength {
+		return conventionalUserOp, nil
+	}
+
+	// Unsolved userOp? Check if CallData is a non-hex-encoded string
+	if _, callDataErr := hexutil.Decode(string(op.CallData)); callDataErr != nil {
+		// not solved, check if there is a valid Intent JSON
+		_, validIntent := extractJSONFromField(string(op.CallData))
+		if validIntent && ((op.HasSignature() && len(op.Signature) == signatureLength) || len(op.Signature) == 0) {
+			// valid intent json in calldata (Unsolved) and not defined again in signature
+			return unsolvedUserOp, nil
+		}
+		if validIntent && len(op.Signature) > signatureLength {
+			// both unsolved (No calldata value) status and likely intent json in the signature
+			return unknownUserOp, ErrDoubleIntentDef
+		}
+	}
+
+	if !op.HasSignature() {
+		// need a signature value for solved userOps
+		return solvedUserOp, ErrNoSignatureValue
+	}
+
+	// Solved userOp: Intent Json values may or may not be present
+	// in signature field
+	return solvedUserOp, nil
+}
+
+// extractIntentJSON attempts to extract the Intent JSON from either the CallData
+// or Signature field of a UserOperation. It first checks the CallData field. If
+// the CallData field does not contain a valid JSON, the function then checks
+// the Signature field. The Intent JSON is expected to be appended to the
+// signature value within the Signature field. The signature has a fixed length
+// of 132 characters with '0x' prefix.
+//
+// Returns:
+//   - string: The extracted JSON string.
+//   - bool: A boolean indicating if a valid JSON was found.
 func (op *UserOperation) extractIntentJSON() (string, bool) {
-	parts := strings.Split(string(op.CallData), IntentEndToken)
-	if len(parts) >= 1 {
+	// Try to extract Intent JSON from CallData field
+	if intentJSON, ok := extractJSONFromField(string(op.CallData)); ok {
+		return intentJSON, true
+	}
+
+	if !has0xPrefix(op.Signature) {
+		return "", false
+	}
+
+	if len(op.Signature) > signatureLength {
+		jsonData := op.Signature[signatureLength:]
+		if intentJSON, ok := extractJSONFromField(string(jsonData)); ok {
+			return intentJSON, true
+		}
+	}
+
+	return "", false
+}
+
+// extractJSONFromField tries to unmarshal the provided field data into an Intent
+// struct. If successful, it assumes the field data is a valid JSON string of
+// the Intent.
+//
+// Returns:
+//   - string: The JSON data if unmarshalling is successful.
+//   - bool: A boolean indicating if the unmarshalling was successful.
+func extractJSONFromField(fieldData string) (string, bool) {
+	if fieldData != "" {
 		var intent Intent
-		if err := json.Unmarshal([]byte(parts[0]), &intent); err == nil {
-			return parts[0], true
+		if err := json.Unmarshal([]byte(fieldData), &intent); err == nil {
+			return fieldData, true
 		}
 	}
 	return "", false
@@ -87,6 +173,19 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 func (op *UserOperation) HasIntent() bool {
 	_, hasIntent := op.extractIntentJSON()
 	return hasIntent
+}
+
+// HasSignature checks if the signature field contains a fixed length hex-encoded
+// signature value that is hex-encoded.
+func (op *UserOperation) HasSignature() bool {
+	if len(op.Signature) >= signatureLength {
+		sigValue := op.Signature[:signatureLength]
+		if _, err := hexutil.Decode(string(sigValue)); err == nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 // GetIntentJSON returns the Intent JSON from the CallData field, if present.
