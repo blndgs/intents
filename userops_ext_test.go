@@ -32,7 +32,6 @@ func mockIntentJSON() string {
 	return intentJSON
 }
 
-// mockUserOperationWoutCallData creates a UserOperation with the Intent JSON in the CallData field for testing.
 func mockUserOperationWoutCallData() *UserOperation {
 	userOp := new(UserOperation)
 	intentJSON := mockIntentJSON()
@@ -42,7 +41,6 @@ func mockUserOperationWoutCallData() *UserOperation {
 	return userOp
 }
 
-// mockUserOperationWoutCallData creates a UserOperation with the Intent JSON in the CallData field for testing.
 func mockUserOperationWithCallData(withIntent bool) *UserOperation {
 	userOp := new(UserOperation)
 	intentJSON := mockIntentJSON()
@@ -59,8 +57,6 @@ func mockUserOperationWithCallData(withIntent bool) *UserOperation {
 	return userOp
 }
 
-// mockUserOperationWithIntentInSignature creates a UserOperation with the
-// Intent JSON in the Signature field for testing.
 func mockUserOperationWithIntentInSignature(withIntent bool) *UserOperation {
 	userOp := &UserOperation{
 		CallData:  mockCallData(),
