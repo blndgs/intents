@@ -1,28 +1,13 @@
 // Package model provides structures and methods for the communication between
 // the Bundler and Solver.
 // This file defines extensions to the UserOperation struct and methods for
-// extracting data from the CallData field.
+// extracting and inserting Intent JSON from/to the CallData and Signature fields.
 //
-// The Calldata field in a userOperation is expected to contain the intent json
-// value and or the Intent execution EVM instructions value for solved userOps
-// or conventional userOps respectively.
-// The separator token is required when both intent json and EVM instructions
-// values are present.
-// The separator token is not required when either the Intent or EVM
-// instructions are present.
-//
-// The separator token is defined as "<intent-end>".
-//
-// <intent json><intent-end><Intent Execution:EVM instructions>
-//
-// 1. <Intent json>: The Intent JSON definition.
-//
-// 2. <intent-end>: A separator token to separate the Intent JSON from the EVM
-// instructions value.
-//
-// 3. Execution EVM instructions: a hexadecimal 0x prefixed value.
-// Execution EVM instructions are the EVM instructions that
-// will be executed on chain.
+// The CallData field in a userOperation is expected to contain either the Intent JSON or
+// the EVM instructions but not both.
+// The Intent JSON is expected to be appended to the signature value within the Signature field
+// when the Calldata field contains the EVM instructions.
+// The Signature field is expected to contain only the signature when the userOperation is unsolved.
 package model
 
 import (
@@ -34,32 +19,39 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// BodyOfUserOps represents the body of an HTTP request to the Solver.
+// BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
+// It contains slices of UserOperation and UserOperationExt, representing the primary
+// data and its extended information required for processing by the Solver.
 type BodyOfUserOps struct {
 	UserOps    []*UserOperation   `json:"user_ops" binding:"required,dive"`
 	UserOpsExt []UserOperationExt `json:"user_ops_ext" binding:"required,dive"`
 }
 
-// UserOperationExt represents additional extended information about a UserOperation that will be communicated from the
-// Bundler to the Solver.
-// The Solver may change the sequence of UserOperations in the UserOperationExt slice to match the sequence of
-// UserOperations in the UserOps slice.
-// The `OriginalHashValue` field is the hash value of the UserOperation as it was calculated for the userOp submitted
-// by the wallet before the UserOperation is solved and it is a Read-Only field.
+// UserOperationExt extends the UserOperation with additional information necessary for
+// processing by the Solver.This includes the original hash value of the UserOperation
+// and its processing status.The sequence of UserOperationExt instances must correspond
+// to the sequence in the UserOps slice.
 type UserOperationExt struct {
 	OriginalHashValue string           `json:"original_hash_value" mapstructure:"original_hash_value" validate:"required"`
 	ProcessingStatus  ProcessingStatus `json:"processing_status" mapstructure:"processing_status" validate:"required"`
 }
 
+// userOpSolvedStatus defines the possible states of a UserOperation's resolution.
+// It indicates whether an operation is unsolved, solved, conventional, or in an unknown state.
 type userOpSolvedStatus int
 
 const (
 	unsolvedUserOp userOpSolvedStatus = iota
 	solvedUserOp
+	// conventionalUserOp indicates that the UserOperation does not contain Intent JSON and follows conventional
+	// processing without Intent handling.
 	conventionalUserOp
+	// unknownUserOp indicates that the UserOperation's state is unknown or ambiguous.
 	unknownUserOp
 )
 
+// userOperationError represents custom error types related to processing UserOperations.
+// These errors include issues such as missing Intent, invalid JSON, or invalid CallData.
 type userOperationError string
 
 func (e userOperationError) Error() string {
@@ -173,7 +165,7 @@ func extractJSONFromField(fieldData string) (string, bool) {
 	return "", false
 }
 
-// HasIntent checks if the CallData field contains a valid Intent JSON that
+// HasIntent checks if the CallData or signature field contains a valid Intent JSON that
 // decodes successfully into an Intent struct.
 func (op *UserOperation) HasIntent() bool {
 	_, hasIntent := op.extractIntentJSON()
@@ -193,7 +185,7 @@ func (op *UserOperation) HasSignature() bool {
 	return false
 }
 
-// GetIntentJSON returns the Intent JSON from the CallData field, if present.
+// GetIntentJSON returns the Intent JSON from the CallData or signature fields, if present.
 func (op *UserOperation) GetIntentJSON() (string, error) {
 	intentJSON, hasIntent := op.extractIntentJSON()
 	if !hasIntent {
@@ -202,7 +194,7 @@ func (op *UserOperation) GetIntentJSON() (string, error) {
 	return intentJSON, nil
 }
 
-// GetIntent takes the Intent JSON from the CallData field, decodes it into
+// GetIntent takes the Intent Type from the CallData or Signature field, decodes it into
 // an Intent struct, and returns the struct.
 func (op *UserOperation) GetIntent() (*Intent, error) {
 	intentJSON, hasIntent := op.extractIntentJSON()
@@ -217,8 +209,7 @@ func (op *UserOperation) GetIntent() (*Intent, error) {
 	return &intent, nil
 }
 
-// GetEVMInstructions returns the Ethereum EVM
-// instructions from the CallData field.
+// GetEVMInstructions returns the Ethereum EVM instructions from the CallData field.
 // It returns an error if the EVM instructions value does not
 // exist or is not a valid hex encoded string.
 func (op *UserOperation) GetEVMInstructions() ([]byte, error) {
