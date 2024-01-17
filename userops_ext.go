@@ -1,60 +1,57 @@
 // Package model provides structures and methods for the communication between
 // the Bundler and Solver.
 // This file defines extensions to the UserOperation struct and methods for
-// extracting data from the CallData field.
+// extracting and inserting Intent JSON from/to the CallData and Signature fields.
 //
-// The Calldata field in a userOperation is expected to contain the intent json
-// value and or the Intent execution EVM instructions value for solved userOps
-// or conventional userOps respectively.
-// The separator token is required when both intent json and EVM instructions
-// values are present.
-// The separator token is not required when either the Intent or EVM
-// instructions are present.
-//
-// The separator token is defined as "<intent-end>".
-//
-// <intent json><intent-end><Intent Execution:EVM instructions>
-//
-// 1. <Intent json>: The Intent JSON definition.
-//
-// 2. <intent-end>: A separator token to separate the Intent JSON from the EVM
-// instructions value.
-//
-// 3. Execution EVM instructions: a hexadecimal 0x prefixed value.
-// Execution EVM instructions are the EVM instructions that
-// will be executed on chain.
+// The CallData field in a userOperation is expected to contain either the Intent JSON or
+// the EVM instructions but not both.
+// The Intent JSON is expected to be appended to the signature value within the Signature field
+// when the Calldata field contains the EVM instructions.
+// The Signature field is expected to contain only the signature when the userOperation is unsolved.
 package model
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/goccy/go-json"
 )
 
-// BodyOfUserOps represents the body of an HTTP request to the Solver.
+// BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
+// It contains slices of UserOperation and UserOperationExt, representing the primary
+// data and its extended information required for processing by the Solver.
 type BodyOfUserOps struct {
 	UserOps    []*UserOperation   `json:"user_ops" binding:"required,dive"`
 	UserOpsExt []UserOperationExt `json:"user_ops_ext" binding:"required,dive"`
 }
 
-// UserOperationExt represents additional extended information about a UserOperation that will be communicated from the
-// Bundler to the Solver.
-// The Solver may change the sequence of UserOperations in the UserOperationExt slice to match the sequence of
-// UserOperations in the UserOps slice.
-// The `OriginalHashValue` field is the hash value of the UserOperation as it was calculated for the userOp submitted
-// by the wallet before the UserOperation is solved and it is a Read-Only field.
+// UserOperationExt extends the UserOperation with additional information necessary for
+// processing by the Solver.This includes the original hash value of the UserOperation
+// and its processing status.The sequence of UserOperationExt instances must correspond
+// to the sequence in the UserOps slice.
 type UserOperationExt struct {
 	OriginalHashValue string           `json:"original_hash_value" mapstructure:"original_hash_value" validate:"required"`
 	ProcessingStatus  ProcessingStatus `json:"processing_status" mapstructure:"processing_status" validate:"required"`
 }
 
-const IntentEndToken = "<intent-end>"
+// userOpSolvedStatus defines the possible states of a UserOperation's resolution.
+// It indicates whether an operation is unsolved, solved, conventional, or in an unknown state.
+type userOpSolvedStatus int
 
+const (
+	unsolvedUserOp userOpSolvedStatus = iota
+	solvedUserOp
+	// conventionalUserOp indicates that the UserOperation does not contain Intent JSON and follows conventional
+	// processing without Intent handling.
+	conventionalUserOp
+	// unknownUserOp indicates that the UserOperation's state is unknown or ambiguous.
+	unknownUserOp
+)
+
+// userOperationError represents custom error types related to processing UserOperations.
+// These errors include issues such as missing Intent, invalid JSON, or invalid CallData.
 type userOperationError string
 
 func (e userOperationError) Error() string {
@@ -65,31 +62,130 @@ func (e userOperationError) Error() string {
 const (
 	ErrNoIntentFound     userOperationError = "no Intent found"
 	ErrIntentInvalidJSON userOperationError = "invalid Intent JSON"
-	ErrNoSeparator       userOperationError = "separator token not found"
-	ErrNoCalldata        userOperationError = "no CallData found"
+	ErrNoSignatureValue  userOperationError = "signature value is not found"
+	ErrNoCallData        userOperationError = "no CallData found"
+	ErrInvalidCallData   userOperationError = "invalid hex-encoded CallData"
+	ErrInvalidSignature  userOperationError = "invalid hex-encoded signature"
+	ErrInvalidUserOp     userOperationError = "ambiguous UserOperation solved state"
+	ErrDoubleIntentDef   userOperationError = "intent JSON is set in both calldata and signature fields"
 )
 
-// extractIntentJSON attempts to extract the Intent JSON from the CallData field.
-// It returns the JSON as a string and a boolean indicating whether a valid JSON was found.
+func has0xPrefix(input []byte) bool {
+	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
+}
+
+const signatureLength = 132
+
+// validateUserOperation checks the status of the UserOperation and returns
+// its userOpSolvedStatus. It determines if the operation is conventional,
+// unsolved, or solved based on the presence and content of CallData and Signature.
+//
+// Returns:
+//   - userOpSolvedStatus: The solved status of the UserOperation.
+//   - error: An error if there's an issue with the operation's state, contents.
+func (op *UserOperation) validateUserOperation() (userOpSolvedStatus, error) {
+	// Conventional userOp? empty CallData without signature value.
+	if len(op.CallData) == 0 && len(op.Signature) == 0 {
+		return conventionalUserOp, nil
+	}
+
+	// Conventional userOp? empty CallData without signature value.
+	if len(op.CallData) == 0 && op.HasSignature() && len(op.Signature) == signatureLength {
+		return conventionalUserOp, nil
+	}
+
+	// Unsolved userOp? Check if CallData is a non-hex-encoded string
+	if _, callDataErr := hexutil.Decode(string(op.CallData)); callDataErr != nil {
+		// not solved, check if there is a valid Intent JSON
+		_, validIntent := extractJSONFromField(string(op.CallData))
+		if validIntent && ((op.HasSignature() && len(op.Signature) == signatureLength) || len(op.Signature) == 0) {
+			// valid intent json in calldata (Unsolved) and not defined again in signature
+			return unsolvedUserOp, nil
+		}
+		if validIntent && len(op.Signature) > signatureLength {
+			// both unsolved (No calldata value) status and likely intent json in the signature
+			return unknownUserOp, ErrDoubleIntentDef
+		}
+	}
+
+	if !op.HasSignature() {
+		// need a signature value for solved userOps
+		return solvedUserOp, ErrNoSignatureValue
+	}
+
+	// Solved userOp: Intent Json values may or may not be present
+	// in signature field
+	return solvedUserOp, nil
+}
+
+// extractIntentJSON attempts to extract the Intent JSON from either the CallData
+// or Signature field of a UserOperation. It first checks the CallData field. If
+// the CallData field does not contain a valid JSON, the function then checks
+// the Signature field. The Intent JSON is expected to be appended to the
+// signature value within the Signature field. The signature has a fixed length
+// of 132 characters with '0x' prefix.
+//
+// Returns:
+//   - string: The extracted JSON string.
+//   - bool: A boolean indicating if a valid JSON was found.
 func (op *UserOperation) extractIntentJSON() (string, bool) {
-	parts := strings.Split(string(op.CallData), IntentEndToken)
-	if len(parts) >= 1 {
+	// Try to extract Intent JSON from CallData field
+	if intentJSON, ok := extractJSONFromField(string(op.CallData)); ok {
+		return intentJSON, true
+	}
+
+	if !has0xPrefix(op.Signature) {
+		return "", false
+	}
+
+	if len(op.Signature) > signatureLength {
+		jsonData := op.Signature[signatureLength:]
+		if intentJSON, ok := extractJSONFromField(string(jsonData)); ok {
+			return intentJSON, true
+		}
+	}
+
+	return "", false
+}
+
+// extractJSONFromField tries to unmarshal the provided field data into an Intent
+// struct. If successful, it assumes the field data is a valid JSON string of
+// the Intent.
+//
+// Returns:
+//   - string: The JSON data if unmarshalling is successful.
+//   - bool: A boolean indicating if the unmarshalling was successful.
+func extractJSONFromField(fieldData string) (string, bool) {
+	if fieldData != "" {
 		var intent Intent
-		if err := json.Unmarshal([]byte(parts[0]), &intent); err == nil {
-			return parts[0], true
+		if err := json.Unmarshal([]byte(fieldData), &intent); err == nil {
+			return fieldData, true
 		}
 	}
 	return "", false
 }
 
-// HasIntent checks if the CallData field contains a valid Intent JSON that
+// HasIntent checks if the CallData or signature field contains a valid Intent JSON that
 // decodes successfully into an Intent struct.
 func (op *UserOperation) HasIntent() bool {
 	_, hasIntent := op.extractIntentJSON()
 	return hasIntent
 }
 
-// GetIntentJSON returns the Intent JSON from the CallData field, if present.
+// HasSignature checks if the signature field contains a fixed length hex-encoded
+// signature value that is hex-encoded.
+func (op *UserOperation) HasSignature() bool {
+	if len(op.Signature) >= signatureLength {
+		sigValue := op.Signature[:signatureLength]
+		if _, err := hexutil.Decode(string(sigValue)); err == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetIntentJSON returns the Intent JSON from the CallData or signature fields, if present.
 func (op *UserOperation) GetIntentJSON() (string, error) {
 	intentJSON, hasIntent := op.extractIntentJSON()
 	if !hasIntent {
@@ -98,7 +194,7 @@ func (op *UserOperation) GetIntentJSON() (string, error) {
 	return intentJSON, nil
 }
 
-// GetIntent takes the Intent JSON from the CallData field, decodes it into
+// GetIntent takes the Intent Type from the CallData or Signature field, decodes it into
 // an Intent struct, and returns the struct.
 func (op *UserOperation) GetIntent() (*Intent, error) {
 	intentJSON, hasIntent := op.extractIntentJSON()
@@ -113,76 +209,91 @@ func (op *UserOperation) GetIntent() (*Intent, error) {
 	return &intent, nil
 }
 
-// HasEVMInstructions returns true if the Intent Execution EVM instructions field
-// starts with "0x" either directly or after the intent JSON and separator
-// token.
-func (op *UserOperation) HasEVMInstructions() bool {
-	parts := strings.Split(string(op.CallData), IntentEndToken)
-
-	// Check for CallData after the separator token
-	const hexPrefix = "0x"
-	if len(parts) >= 2 {
-		return strings.HasPrefix(parts[1], hexPrefix)
-	}
-
-	// Check for CallData directly if there's no separator token
-	return strings.HasPrefix(parts[0], hexPrefix)
-}
-
-// GetEVMInstructions extracts and returns the Ethereum EVM
-// instructions from the CallData field.
+// GetEVMInstructions returns the Ethereum EVM instructions from the CallData field.
 // It returns an error if the EVM instructions value does not
-// exist or does not start with "0x".
+// exist or is not a valid hex encoded string.
 func (op *UserOperation) GetEVMInstructions() ([]byte, error) {
-	parts := strings.Split(string(op.CallData), IntentEndToken)
-
-	var calldata string
-	if len(parts) >= 2 {
-		calldata = parts[1]
-	} else if len(parts) == 1 {
-		calldata = parts[0]
-	} else {
-		return nil, ErrNoCalldata
+	if _, err := hexutil.Decode(string(op.CallData)); err != nil {
+		return nil, ErrInvalidCallData
 	}
 
-	if !strings.HasPrefix(calldata, "0x") {
-		return nil, ErrNoCalldata
-	}
-
-	return []byte(calldata), nil
+	return op.CallData, nil
 }
 
-// SetIntent sets the Intent JSON part of the CallData field.
+// SetIntent sets the Intent JSON in the appropriate field of the UserOperation
+// based on the operation's solution state. The function first validates the
+// Intent JSON.
+// If the userOp CallData field does not contain EVM instructions (indicating an unsolved userOp),
+// the intentJSON is set directly in the CallData field.
+// If the CallData field contains EVM instructions (indicating a solved userOp),
+// the function then checks the length of the Signature field. If the length of
+// the Signature is less than the required signature length an error is returned.
+// If the Signature is of the appropriate length, the intentJSON is appended to
+// the Signature field starting at the signatureLength index.
+//
+// Returns:
+// - error: An error is returned if the intentJSON is invalid, if there is no
+// signature in the UserOperation when required, or if any other issue
+// arises during the process. Otherwise, nil is returned indicating
+// successful setting of the intent JSON.
 func (op *UserOperation) SetIntent(intentJSON string) error {
 	if err := json.Unmarshal([]byte(intentJSON), new(Intent)); err != nil {
 		return ErrIntentInvalidJSON
 	}
 
-	callData, err := op.GetEVMInstructions()
-	if err != nil && !errors.Is(err, ErrNoCalldata) {
+	status, err := op.validateUserOperation()
+	if err != nil {
 		return err
 	}
 
-	if len(callData) > 0 {
-		op.CallData = []byte(intentJSON + IntentEndToken + string(callData))
-	} else {
-		// Don't add the separator token if there's no CallData
+	if status == unsolvedUserOp {
 		op.CallData = []byte(intentJSON)
+		return nil
 	}
+
+	op.Signature = append(op.Signature[:signatureLength], []byte(intentJSON)...)
 
 	return nil
 }
 
-// SetEVMInstructions sets the Intent Execution Ethereum EVM instructions of the
-// CallData field.
-func (op *UserOperation) SetEVMInstructions(callDataValue []byte) {
-	intentJSON, _ := op.GetIntentJSON()
-
-	if intentJSON != "" {
-		op.CallData = []byte(intentJSON + IntentEndToken + string(callDataValue))
-	} else {
-		op.CallData = callDataValue
+// SetEVMInstructions sets the EVM instructions in the CallData field of the UserOperation.
+// It appropriately handles the Intent JSON based on the operation's solution state.
+// The function first checks the solved status of the operation. For solved operations,
+// it ensures that the signature has the required length. For unsolved operations, it moves
+// the Intent JSON to the Signature field if present and valid, and then sets the provided
+// EVM instructions in the CallData field.
+//
+// Parameters:
+//   - callDataValue: A byte slice containing the EVM instructions to be set in the CallData field.
+//
+// Returns:
+//   - error: An error is returned if the operation's status is invalid, if there is no signature
+//     in the UserOperation when required, or if any other issue arises during the process.
+//     Otherwise, nil is returned, indicating successful setting of the EVM instructions.
+func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
+	status, err := op.validateUserOperation()
+	if err != nil {
+		return err
 	}
+
+	if status == solvedUserOp || status == conventionalUserOp {
+		op.CallData = callDataValue
+		return nil
+	}
+
+	// Unsolved operation, move the Intent JSON to the Signature field if it exists.
+	intentJSON, hasIntent := op.extractIntentJSON()
+	if hasIntent {
+		if len(op.Signature) < signatureLength {
+			// Need a signed userOp to append the Intent JSON to the signature value.
+			return ErrNoSignatureValue
+		}
+		op.Signature = append(op.Signature[:signatureLength], []byte(intentJSON)...)
+		// Clear the Intent JSON from CallData as it's now moved to Signature.
+	}
+
+	op.CallData = callDataValue
+	return nil
 }
 
 // UnmarshalJSON does the reverse of the provided bundler custom

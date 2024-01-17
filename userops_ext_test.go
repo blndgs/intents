@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -11,56 +12,92 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-func mockIntent() Intent {
-	return Intent{}
+func mockCallData() []byte {
+	return []byte("0xb61d27f60000000000000000000000009d34f236bddf1b9de014312599d9c9ec8af1bc48000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000008b4bfcada627647e8280523984c78ce505c56fbe0000000000000000000000000000000000000000000000000000082f79cd9000")
 }
 
-const callDataValue = "0xethereum_calldata"
-
-// mockValidIntentJSON creates a valid JSON string for testing the Intent.
-func mockValidIntentJSON() string {
-	return `{"key":"value"}`
+func mockSignature() []byte {
+	return []byte("0x92f25342760a82b7e5649ed7c6d2d7cb93c0093f66c916d7e57de4af0ae00e2b0524bf364778c6b30c491354be332a1ce521e8a57c5e26f94f8069a404520e931b")
 }
 
-// mockUserOperation creates a UserOperation with calldata for testing.
-func mockUserOperation(withIntent bool) *UserOperation {
-	var callDataFieldValue string
+func mockIntentJSON() string {
+	var (
+		intentJSON = `{"chainId":80001, "sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","kind":"swap","hash":"","sellToken":"TokenA","buyToken":"TokenB","sellAmount":10,"buyAmount":5,"partiallyFillable":false,"status":"Received","createdAt":0,"expirationAt":0}`
+		intent     Intent
+	)
+	if err := json.Unmarshal([]byte(intentJSON), &intent); err != nil {
+		// signal when intent JSON is no longer valid
+		panic(err)
+	}
+	return intentJSON
+}
 
-	intent := mockIntent()
+func mockUserOperationWoutCallData() *UserOperation {
+	userOp := new(UserOperation)
+	intentJSON := mockIntentJSON()
 
-	if withIntent {
-		intentJSON, _ := json.Marshal(intent)
-		callDataFieldValue = string(intentJSON)
-		callDataFieldValue += IntentEndToken + callDataValue
-	} else {
-		callDataFieldValue = callDataValue
+	userOp.CallData = []byte(intentJSON)
+	userOp.Signature = mockSignature()
+	return userOp
+}
+
+func mockUserOperationWithCallData(withIntent bool) *UserOperation {
+	userOp := new(UserOperation)
+	intentJSON := mockIntentJSON()
+
+	userOp.CallData = mockCallData()
+	if !withIntent {
+		userOp.Signature = mockSignature()
+		return userOp
 	}
 
-	return &UserOperation{CallData: []byte(callDataFieldValue)}
+	// Intent JSON is placed directly in CallData
+	userOp.Signature = append(mockSignature(), intentJSON...)
+
+	return userOp
 }
 
-// TestUserOperation_HasIntent tests the HasIntent method.
+func mockUserOperationWithIntentInSignature(withIntent bool) *UserOperation {
+	userOp := &UserOperation{
+		CallData:  mockCallData(),
+		Signature: mockSignature(),
+	}
+	if !withIntent {
+		return userOp
+	}
+
+	// Append the intent JSON after the signature
+	userOp.Signature = append(mockSignature(), mockIntentJSON()...)
+
+	return userOp
+}
+
 func TestUserOperation_HasIntent(t *testing.T) {
-	uoWithIntent := mockUserOperation(true)
-	uoWithoutIntent := mockUserOperation(false)
+	uoWithIntentInCallData := mockUserOperationWoutCallData()
+	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
+	uoWithoutIntent := mockUserOperationWoutCallData()
 
-	if !uoWithIntent.HasIntent() {
-		t.Errorf("HasIntent() = false; want true for calldata with intent")
+	if !uoWithIntentInCallData.HasIntent() || !uoWithIntentInSignature.HasIntent() {
+		t.Errorf("HasIntent() = false; want true for user operation with intent")
 	}
 
-	if uoWithoutIntent.HasIntent() {
-		t.Errorf("HasIntent() = true; want false for calldata without intent")
+	if !uoWithoutIntent.HasIntent() {
+		t.Errorf("HasIntent() = true; want false for user operation without intent")
 	}
 }
 
-// TestUserOperation_GetIntentJSON tests the GetIntentJSON method.
 func TestUserOperation_GetIntentJSON(t *testing.T) {
-	uoWithIntent := mockUserOperation(true)
-	uoWithoutIntent := mockUserOperation(false)
-
-	_, err := uoWithIntent.GetIntentJSON()
+	uoWithIntentInCallData := mockUserOperationWoutCallData()
+	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
+	uoWithoutIntent := mockUserOperationWithCallData(false)
+	_, err := uoWithIntentInCallData.GetIntentJSON()
 	if err != nil {
-		t.Errorf("GetIntentJSON() with intent returned error: %v", err)
+		t.Errorf("GetIntentJSON() with intent in CallData returned error: %v", err)
+	}
+
+	_, err = uoWithIntentInSignature.GetIntentJSON()
+	if err != nil {
+		t.Errorf("GetIntentJSON() with intent in Signature returned error: %v", err)
 	}
 
 	_, err = uoWithoutIntent.GetIntentJSON()
@@ -69,52 +106,211 @@ func TestUserOperation_GetIntentJSON(t *testing.T) {
 	}
 }
 
-// TestUserOperation_GetIntent tests the GetIntent method.
 func TestUserOperation_GetIntent(t *testing.T) {
-	uoWithIntent := mockUserOperation(true)
-	uoWithoutIntent := mockUserOperation(false)
+	uoWithIntentInCallData := mockUserOperationWoutCallData()
+	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
+	uoWithCallDataWoutIntent := mockUserOperationWithCallData(false)
+	uoWithCallDataWithIntent := mockUserOperationWithCallData(true)
 
-	_, err := uoWithIntent.GetIntent()
+	_, err := uoWithIntentInCallData.GetIntent()
 	if err != nil {
-		t.Errorf("GetIntent() with valid intent returned error: %v", err)
+		t.Errorf("GetIntent() with intent in CallData returned error: %v", err)
 	}
 
-	_, err = uoWithoutIntent.GetIntent()
+	_, err = uoWithIntentInSignature.GetIntent()
+	if err != nil {
+		t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
+	}
+
+	_, err = uoWithCallDataWoutIntent.GetIntent()
 	if err == nil {
 		t.Errorf("GetIntent() without intent did not return error")
 	}
+	_, err = uoWithCallDataWithIntent.GetIntent()
+	if err != nil {
+		t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
+	}
+
+	_, err = uoWithIntentInCallData.GetEVMInstructions()
+	if err == nil {
+		t.Errorf("GetIntent() without Evm instruction did not return error: %v", err)
+	}
+
+	_, err = uoWithIntentInSignature.GetEVMInstructions()
+	if err != nil {
+		t.Errorf("GetIntent() with Calldata returned error: %v", err)
+	}
+
+	_, err = uoWithCallDataWoutIntent.GetEVMInstructions()
+	if err != nil {
+		t.Errorf("GetIntent() with Calldata returned error: %v", err)
+	}
+	_, err = uoWithCallDataWithIntent.GetEVMInstructions()
+	if err != nil {
+		t.Errorf("GetIntent() with Calldata returned error: %v", err)
+	}
 }
 
-// TestUserOperation_GetCallData tests the GetEVMInstructions method.
 func TestUserOperation_GetCallData(t *testing.T) {
-	uoWithIntent := mockUserOperation(true)
-	uoWithoutIntent := mockUserOperation(false)
+	uoWithIntent := mockUserOperationWithCallData(true)
+	uoWithoutIntent := mockUserOperationWithCallData(false)
 
-	calldata, err := uoWithIntent.GetEVMInstructions()
-	if err != nil || string(calldata) != callDataValue {
-		t.Errorf("GetEVMInstructions() with intent did not return expected calldata")
+	callData, err := uoWithIntent.GetEVMInstructions()
+	if err != nil || !bytes.Equal(callData, mockCallData()) {
+		t.Errorf("GetEVMInstructions() with intent did not return expected callData")
 	}
 
-	calldata, err = uoWithoutIntent.GetEVMInstructions()
-	if err != nil || string(calldata) != callDataValue {
-		t.Errorf("GetEVMInstructions() without intent did not return expected calldata")
+	callData, err = uoWithoutIntent.GetEVMInstructions()
+	if err != nil || !bytes.Equal(callData, mockCallData()) {
+		t.Errorf("GetEVMInstructions() without intent did not return expected callData")
 	}
 }
 
-// TestUserOperation_SetIntent tests the SetIntent method.
 func TestUserOperation_SetIntent(t *testing.T) {
-	uo := &UserOperation{}
+	uoUnsolved := mockUserOperationWoutCallData()
+	uoSolved := mockUserOperationWithIntentInSignature(false)
 
-	// Test setting valid intent
-	validIntentJSON := mockValidIntentJSON()
-	if err := uo.SetIntent(validIntentJSON); err != nil {
-		t.Errorf("SetIntent() with valid intent returned error: %v", err)
+	// Test setting valid intent for unsolved operation
+	validIntentJSON := mockIntentJSON()
+	if err := uoUnsolved.SetIntent(validIntentJSON); err != nil {
+		t.Errorf("SetIntent() with valid intent returned error for unsolved operation: %v", err)
 	}
-
+	if !uoUnsolved.HasIntent() {
+		t.Errorf("SetIntent() with valid intent did not set intent for unsolved operation")
+	}
+	intentJSON, err := uoUnsolved.GetIntentJSON()
+	if err != nil {
+		t.Errorf("GetIntentJSON() with valid intent returned error for unsolved operation: %v", err)
+	}
+	if intentJSON != validIntentJSON {
+		t.Errorf("SetIntent() with valid intent did not set intent correctly for unsolved operation: %s != %s", intentJSON, validIntentJSON)
+	}
 	// Test setting invalid intent
 	invalidIntentJSON := "invalid json"
-	if err := uo.SetIntent(invalidIntentJSON); err == nil {
-		t.Errorf("SetIntent() with invalid intent did not return error")
+	if err := uoUnsolved.SetIntent(invalidIntentJSON); err == nil {
+		t.Errorf("SetIntent() with invalid intent did not return error on unsolved operation")
+	}
+
+	// Test setting valid intent for solved operation
+	if err := uoSolved.SetIntent(validIntentJSON); err != nil {
+		t.Errorf("SetIntent() with valid intent returned error for solved operation: %v", err)
+	}
+	if !uoSolved.HasIntent() {
+		t.Errorf("SetIntent() with valid intent did not set intent for solved operation")
+	}
+	intentJSON, err = uoSolved.GetIntentJSON()
+	if err != nil {
+		t.Errorf("GetIntentJSON() with valid intent returned error for solved operation: %v", err)
+	}
+	if intentJSON != validIntentJSON {
+		t.Errorf("SetIntent() with valid intent did not set intent correctly for solved operation: %s != %s", intentJSON, validIntentJSON)
+	}
+	// Test setting invalid intent
+	if err := uoSolved.SetIntent(invalidIntentJSON); err == nil {
+		t.Errorf("SetIntent() with invalid intent did not return error on solved operation")
+	}
+}
+
+func TestValidateUserOperation(t *testing.T) {
+	tests := []struct {
+		name           string
+		userOp         *UserOperation
+		expectedStatus userOpSolvedStatus
+		expectedError  error
+	}{
+		{
+			name: "Conventional Operation - Empty CallData and Signature",
+			userOp: &UserOperation{
+				CallData:  []byte{},
+				Signature: []byte{},
+			},
+			expectedStatus: conventionalUserOp,
+			expectedError:  nil,
+		},
+		{
+			name: "Conventional Operation - Empty CallData with Valid Signature",
+			userOp: &UserOperation{
+				CallData:  []byte{},
+				Signature: makeHexEncodedSignature(signatureLength),
+			},
+			expectedStatus: conventionalUserOp,
+			expectedError:  nil,
+		},
+		{
+			name: "Unsolved Operation - Valid Intent JSON in CallData",
+			userOp: &UserOperation{
+				CallData: []byte(mockIntentJSON()),
+			},
+			expectedStatus: unsolvedUserOp,
+			expectedError:  nil,
+		},
+		{
+			name: "Unknown Operation - Intent JSON in CallData and Signature",
+			userOp: &UserOperation{
+				CallData:  []byte(mockIntentJSON()),
+				Signature: append(makeHexEncodedSignature(signatureLength), mockIntentJSON()...),
+			},
+			expectedStatus: unknownUserOp,
+			expectedError:  ErrDoubleIntentDef,
+		},
+		{
+			name: "Solved Operation - Valid CallData and Signature",
+			userOp: &UserOperation{
+				CallData:  mockCallData(),
+				Signature: makeHexEncodedSignature(signatureLength),
+			},
+			expectedStatus: solvedUserOp,
+			expectedError:  nil,
+		},
+		{
+			name: "Solved Operation Missing Signature",
+			userOp: &UserOperation{
+				CallData: mockCallData(),
+			},
+			expectedStatus: solvedUserOp,
+			expectedError:  ErrNoSignatureValue,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			status, err := test.userOp.validateUserOperation()
+			if status != test.expectedStatus || err != test.expectedError {
+				status, err := test.userOp.validateUserOperation()
+				t.Errorf("Test: %s, Expected status: %v, got: %v, Expected error: %v, got: %v", test.name, test.expectedStatus, status, test.expectedError, err)
+			}
+		})
+	}
+}
+
+// Helper function to create a hex-encoded signature of a specific length
+func makeHexEncodedSignature(length int) []byte {
+	sig := mockSignature()
+	if length <= signatureLength {
+		return sig[:length]
+	}
+
+	plus := length - signatureLength
+	sigExtra := make([]byte, plus)
+	for i := range sigExtra {
+		sigExtra[i] = byte(i % 16)
+	}
+
+	return append(sig, sigExtra...)
+}
+
+func TestValidateUserOperation_Conventional(t *testing.T) {
+	userOp := &UserOperation{}                                                                 // Empty CallData and no Signature
+	userOpWithSignature := &UserOperation{Signature: makeHexEncodedSignature(signatureLength)} // Empty CallData and valid Signature
+
+	status, err := userOp.validateUserOperation()
+	if status != conventionalUserOp || err != nil {
+		t.Errorf("validateUserOperation() = %v, %v; want %v, nil", status, err, conventionalUserOp)
+	}
+
+	status, err = userOpWithSignature.validateUserOperation()
+	if status != conventionalUserOp || err != nil {
+		t.Errorf("validateUserOperation() = %v, %v; want %v, nil", status, err, conventionalUserOp)
 	}
 }
 
@@ -123,8 +319,10 @@ func TestUserOperation_SetCallData(t *testing.T) {
 	uo := &UserOperation{}
 
 	// Test setting valid CallData
-	validCallData := []byte("0x123")
-	uo.SetEVMInstructions(validCallData)
+	validCallData := mockCallData()
+	if err := uo.SetEVMInstructions(validCallData); err != nil {
+		t.Errorf("SetEVMInstructions() returned error: %v", err)
+	}
 	if string(uo.CallData) != string(validCallData) {
 		t.Errorf("SetEVMInstructions() did not set CallData correctly")
 	}
