@@ -76,7 +76,6 @@ func mockUserOperationWithIntentInSignature(withIntent bool) *UserOperation {
 	return userOp
 }
 
-// TestUserOperation_HasIntent tests the HasIntent method.
 func TestUserOperation_HasIntent(t *testing.T) {
 	uoWithIntentInCallData := mockUserOperationWoutCallData()
 	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
@@ -91,7 +90,6 @@ func TestUserOperation_HasIntent(t *testing.T) {
 	}
 }
 
-// TestUserOperation_GetIntentJSON tests the GetIntentJSON method.
 func TestUserOperation_GetIntentJSON(t *testing.T) {
 	uoWithIntentInCallData := mockUserOperationWoutCallData()
 	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
@@ -112,7 +110,6 @@ func TestUserOperation_GetIntentJSON(t *testing.T) {
 	}
 }
 
-// TestUserOperation_GetIntent tests the GetIntent method.
 func TestUserOperation_GetIntent(t *testing.T) {
 	uoWithIntentInCallData := mockUserOperationWoutCallData()
 	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
@@ -158,7 +155,6 @@ func TestUserOperation_GetIntent(t *testing.T) {
 	}
 }
 
-// TestUserOperation_GetCallData tests the GetEVMInstructions method.
 func TestUserOperation_GetCallData(t *testing.T) {
 	uoWithIntent := mockUserOperationWithCallData(true)
 	uoWithoutIntent := mockUserOperationWithCallData(false)
@@ -174,7 +170,6 @@ func TestUserOperation_GetCallData(t *testing.T) {
 	}
 }
 
-// TestUserOperation_SetIntent tests the SetIntent method.
 func TestUserOperation_SetIntent(t *testing.T) {
 	uoUnsolved := mockUserOperationWoutCallData()
 	uoSolved := mockUserOperationWithIntentInSignature(false)
