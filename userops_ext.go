@@ -26,10 +26,8 @@
 package model
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -53,7 +51,14 @@ type UserOperationExt struct {
 	ProcessingStatus  ProcessingStatus `json:"processing_status" mapstructure:"processing_status" validate:"required"`
 }
 
-const IntentEndToken = "<intent-end>"
+type userOpSolvedStatus int
+
+const (
+	unsolvedUserOp userOpSolvedStatus = iota
+	solvedUserOp
+	conventionalUserOp
+	unknownUserOp
+)
 
 type userOperationError string
 
@@ -212,76 +217,92 @@ func (op *UserOperation) GetIntent() (*Intent, error) {
 	return &intent, nil
 }
 
-// HasEVMInstructions returns true if the Intent Execution EVM instructions field
-// starts with "0x" either directly or after the intent JSON and separator
-// token.
-func (op *UserOperation) HasEVMInstructions() bool {
-	parts := strings.Split(string(op.CallData), IntentEndToken)
-
-	// Check for CallData after the separator token
-	const hexPrefix = "0x"
-	if len(parts) >= 2 {
-		return strings.HasPrefix(parts[1], hexPrefix)
-	}
-
-	// Check for CallData directly if there's no separator token
-	return strings.HasPrefix(parts[0], hexPrefix)
-}
-
-// GetEVMInstructions extracts and returns the Ethereum EVM
+// GetEVMInstructions returns the Ethereum EVM
 // instructions from the CallData field.
 // It returns an error if the EVM instructions value does not
-// exist or does not start with "0x".
+// exist or is not a valid hex encoded string.
 func (op *UserOperation) GetEVMInstructions() ([]byte, error) {
-	parts := strings.Split(string(op.CallData), IntentEndToken)
-
-	var calldata string
-	if len(parts) >= 2 {
-		calldata = parts[1]
-	} else if len(parts) == 1 {
-		calldata = parts[0]
-	} else {
-		return nil, ErrNoCalldata
+	if _, err := hexutil.Decode(string(op.CallData)); err != nil {
+		return nil, ErrInvalidCallData
 	}
 
-	if !strings.HasPrefix(calldata, "0x") {
-		return nil, ErrNoCalldata
-	}
-
-	return []byte(calldata), nil
+	return op.CallData, nil
 }
 
-// SetIntent sets the Intent JSON part of the CallData field.
+// SetIntent sets the Intent JSON in the appropriate field of the UserOperation
+// based on the operation's solution state. The function first validates the
+// Intent JSON.
+// If the userOp CallData field does not contain EVM instructions (indicating an unsolved userOp),
+// the intentJSON is set directly in the CallData field.
+// If the CallData field contains EVM instructions (indicating a solved userOp),
+// the function then checks the length of the Signature field. If the length of
+// the Signature is less than the required signature length an error is returned.
+// If the Signature is of the appropriate length, the intentJSON is appended to
+// the Signature field starting at the signatureLength index.
+//
+// Returns:
+// - error: An error is returned if the intentJSON is invalid, if there is no
+// signature in the UserOperation when required, or if any other issue
+// arises during the process. Otherwise, nil is returned indicating
+// successful setting of the intent JSON.
 func (op *UserOperation) SetIntent(intentJSON string) error {
 	if err := json.Unmarshal([]byte(intentJSON), new(Intent)); err != nil {
 		return ErrIntentInvalidJSON
 	}
 
-	callData, err := op.GetEVMInstructions()
-	if err != nil && !errors.Is(err, ErrNoCalldata) {
+	status, err := op.validateUserOperation()
+	if err != nil {
 		return err
 	}
 
-	if len(callData) > 0 {
-		op.CallData = []byte(intentJSON + IntentEndToken + string(callData))
-	} else {
-		// Don't add the separator token if there's no CallData
+	if status == unsolvedUserOp {
 		op.CallData = []byte(intentJSON)
+		return nil
 	}
+
+	op.Signature = append(op.Signature[:signatureLength], []byte(intentJSON)...)
 
 	return nil
 }
 
-// SetEVMInstructions sets the Intent Execution Ethereum EVM instructions of the
-// CallData field.
-func (op *UserOperation) SetEVMInstructions(callDataValue []byte) {
-	intentJSON, _ := op.GetIntentJSON()
-
-	if intentJSON != "" {
-		op.CallData = []byte(intentJSON + IntentEndToken + string(callDataValue))
-	} else {
-		op.CallData = callDataValue
+// SetEVMInstructions sets the EVM instructions in the CallData field of the UserOperation.
+// It appropriately handles the Intent JSON based on the operation's solution state.
+// The function first checks the solved status of the operation. For solved operations,
+// it ensures that the signature has the required length. For unsolved operations, it moves
+// the Intent JSON to the Signature field if present and valid, and then sets the provided
+// EVM instructions in the CallData field.
+//
+// Parameters:
+//   - callDataValue: A byte slice containing the EVM instructions to be set in the CallData field.
+//
+// Returns:
+//   - error: An error is returned if the operation's status is invalid, if there is no signature
+//     in the UserOperation when required, or if any other issue arises during the process.
+//     Otherwise, nil is returned, indicating successful setting of the EVM instructions.
+func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
+	status, err := op.validateUserOperation()
+	if err != nil {
+		return err
 	}
+
+	if status == solvedUserOp || status == conventionalUserOp {
+		op.CallData = callDataValue
+		return nil
+	}
+
+	// Unsolved operation, move the Intent JSON to the Signature field if it exists.
+	intentJSON, hasIntent := op.extractIntentJSON()
+	if hasIntent {
+		if len(op.Signature) < signatureLength {
+			// Need a signed userOp to append the Intent JSON to the signature value.
+			return ErrNoSignatureValue
+		}
+		op.Signature = append(op.Signature[:signatureLength], []byte(intentJSON)...)
+		// Clear the Intent JSON from CallData as it's now moved to Signature.
+	}
+
+	op.CallData = callDataValue
+	return nil
 }
 
 // UnmarshalJSON does the reverse of the provided bundler custom
