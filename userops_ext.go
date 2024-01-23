@@ -74,7 +74,7 @@ func has0xPrefix(input []byte) bool {
 	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
 }
 
-const signatureLength = 132
+const SignatureLength = 132
 
 // validateUserOperation checks the status of the UserOperation and returns
 // its userOpSolvedStatus. It determines if the operation is conventional,
@@ -90,19 +90,19 @@ func (op *UserOperation) validateUserOperation() (userOpSolvedStatus, error) {
 	}
 
 	// Conventional userOp? empty CallData without signature value.
-	if len(op.CallData) == 0 && op.HasSignature() && len(op.Signature) == signatureLength {
+	if len(op.CallData) == 0 && op.HasSignature() && len(op.Signature) == SignatureLength {
 		return conventionalUserOp, nil
 	}
 
 	// Unsolved userOp? Check if CallData is a non-hex-encoded string
 	if _, callDataErr := hexutil.Decode(string(op.CallData)); callDataErr != nil {
 		// not solved, check if there is a valid Intent JSON
-		_, validIntent := extractJSONFromField(string(op.CallData))
-		if validIntent && ((op.HasSignature() && len(op.Signature) == signatureLength) || len(op.Signature) == 0) {
+		_, validIntent := ExtractJSONFromField(string(op.CallData))
+		if validIntent && ((op.HasSignature() && len(op.Signature) == SignatureLength) || len(op.Signature) == 0) {
 			// valid intent json in calldata (Unsolved) and not defined again in signature
 			return unsolvedUserOp, nil
 		}
-		if validIntent && len(op.Signature) > signatureLength {
+		if validIntent && len(op.Signature) > SignatureLength {
 			// both unsolved (No calldata value) status and likely intent json in the signature
 			return unknownUserOp, ErrDoubleIntentDef
 		}
@@ -130,7 +130,7 @@ func (op *UserOperation) validateUserOperation() (userOpSolvedStatus, error) {
 //   - bool: A boolean indicating if a valid JSON was found.
 func (op *UserOperation) extractIntentJSON() (string, bool) {
 	// Try to extract Intent JSON from CallData field
-	if intentJSON, ok := extractJSONFromField(string(op.CallData)); ok {
+	if intentJSON, ok := ExtractJSONFromField(string(op.CallData)); ok {
 		return intentJSON, true
 	}
 
@@ -138,9 +138,9 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 		return "", false
 	}
 
-	if len(op.Signature) > signatureLength {
-		jsonData := op.Signature[signatureLength:]
-		if intentJSON, ok := extractJSONFromField(string(jsonData)); ok {
+	if len(op.Signature) > SignatureLength {
+		jsonData := op.Signature[SignatureLength:]
+		if intentJSON, ok := ExtractJSONFromField(string(jsonData)); ok {
 			return intentJSON, true
 		}
 	}
@@ -148,14 +148,14 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 	return "", false
 }
 
-// extractJSONFromField tries to unmarshal the provided field data into an Intent
+// ExtractJSONFromField tries to unmarshal the provided field data into an Intent
 // struct. If successful, it assumes the field data is a valid JSON string of
 // the Intent.
 //
 // Returns:
 //   - string: The JSON data if unmarshalling is successful.
 //   - bool: A boolean indicating if the unmarshalling was successful.
-func extractJSONFromField(fieldData string) (string, bool) {
+func ExtractJSONFromField(fieldData string) (string, bool) {
 	if fieldData != "" {
 		var intent Intent
 		if err := json.Unmarshal([]byte(fieldData), &intent); err == nil {
@@ -175,8 +175,8 @@ func (op *UserOperation) HasIntent() bool {
 // HasSignature checks if the signature field contains a fixed length hex-encoded
 // signature value that is hex-encoded.
 func (op *UserOperation) HasSignature() bool {
-	if len(op.Signature) >= signatureLength {
-		sigValue := op.Signature[:signatureLength]
+	if len(op.Signature) >= SignatureLength {
+		sigValue := op.Signature[:SignatureLength]
 		if _, err := hexutil.Decode(string(sigValue)); err == nil {
 			return true
 		}
@@ -229,7 +229,7 @@ func (op *UserOperation) GetEVMInstructions() ([]byte, error) {
 // the function then checks the length of the Signature field. If the length of
 // the Signature is less than the required signature length an error is returned.
 // If the Signature is of the appropriate length, the intentJSON is appended to
-// the Signature field starting at the signatureLength index.
+// the Signature field starting at the SignatureLength index.
 //
 // Returns:
 // - error: An error is returned if the intentJSON is invalid, if there is no
@@ -251,7 +251,7 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 		return nil
 	}
 
-	op.Signature = append(op.Signature[:signatureLength], []byte(intentJSON)...)
+	op.Signature = append(op.Signature[:SignatureLength], []byte(intentJSON)...)
 
 	return nil
 }
@@ -284,11 +284,11 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 	// Unsolved operation, move the Intent JSON to the Signature field if it exists.
 	intentJSON, hasIntent := op.extractIntentJSON()
 	if hasIntent {
-		if len(op.Signature) < signatureLength {
+		if len(op.Signature) < SignatureLength {
 			// Need a signed userOp to append the Intent JSON to the signature value.
 			return ErrNoSignatureValue
 		}
-		op.Signature = append(op.Signature[:signatureLength], []byte(intentJSON)...)
+		op.Signature = append(op.Signature[:SignatureLength], []byte(intentJSON)...)
 		// Clear the Intent JSON from CallData as it's now moved to Signature.
 	}
 
