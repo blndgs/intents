@@ -231,7 +231,7 @@ func TestValidateUserOperation(t *testing.T) {
 			name: "Conventional Operation - Empty CallData with Valid Signature",
 			userOp: &UserOperation{
 				CallData:  []byte{},
-				Signature: makeHexEncodedSignature(signatureLength),
+				Signature: makeHexEncodedSignature(SignatureLength),
 			},
 			expectedStatus: conventionalUserOp,
 			expectedError:  nil,
@@ -248,7 +248,7 @@ func TestValidateUserOperation(t *testing.T) {
 			name: "Unknown Operation - Intent JSON in CallData and Signature",
 			userOp: &UserOperation{
 				CallData:  []byte(mockIntentJSON()),
-				Signature: append(makeHexEncodedSignature(signatureLength), mockIntentJSON()...),
+				Signature: append(makeHexEncodedSignature(SignatureLength), mockIntentJSON()...),
 			},
 			expectedStatus: unknownUserOp,
 			expectedError:  ErrDoubleIntentDef,
@@ -257,7 +257,7 @@ func TestValidateUserOperation(t *testing.T) {
 			name: "Solved Operation - Valid CallData and Signature",
 			userOp: &UserOperation{
 				CallData:  mockCallData(),
-				Signature: makeHexEncodedSignature(signatureLength),
+				Signature: makeHexEncodedSignature(SignatureLength),
 			},
 			expectedStatus: solvedUserOp,
 			expectedError:  nil,
@@ -286,11 +286,11 @@ func TestValidateUserOperation(t *testing.T) {
 // Helper function to create a hex-encoded signature of a specific length
 func makeHexEncodedSignature(length int) []byte {
 	sig := mockSignature()
-	if length <= signatureLength {
+	if length <= SignatureLength {
 		return sig[:length]
 	}
 
-	plus := length - signatureLength
+	plus := length - SignatureLength
 	sigExtra := make([]byte, plus)
 	for i := range sigExtra {
 		sigExtra[i] = byte(i % 16)
@@ -301,7 +301,7 @@ func makeHexEncodedSignature(length int) []byte {
 
 func TestValidateUserOperation_Conventional(t *testing.T) {
 	userOp := &UserOperation{}                                                                 // Empty CallData and no Signature
-	userOpWithSignature := &UserOperation{Signature: makeHexEncodedSignature(signatureLength)} // Empty CallData and valid Signature
+	userOpWithSignature := &UserOperation{Signature: makeHexEncodedSignature(SignatureLength)} // Empty CallData and valid Signature
 
 	status, err := userOp.validateUserOperation()
 	if status != conventionalUserOp || err != nil {
