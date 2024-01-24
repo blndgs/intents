@@ -17,7 +17,14 @@ func mockCallData() []byte {
 }
 
 func mockSignature() []byte {
-	return []byte("0x92f25342760a82b7e5649ed7c6d2d7cb93c0093f66c916d7e57de4af0ae00e2b0524bf364778c6b30c491354be332a1ce521e8a57c5e26f94f8069a404520e931b")
+	hexSign := "0xf53516700206e168fa905dde88789b0e8cb1c0cc212d8d5f0eac09a4665aa41f148124867ba15f3d38d0fbd6d5a9d2f6671e5258ec40b463af810a0a1299c8f81c"
+	signature, err := hexutil.Decode(hexSign)
+	if err != nil {
+		// sig literal is not valid hex
+		panic(err)
+	}
+
+	return signature
 }
 
 func mockIntentJSON() string {
