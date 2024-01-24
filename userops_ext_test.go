@@ -17,7 +17,14 @@ func mockCallData() []byte {
 }
 
 func mockSignature() []byte {
-	return []byte("0x92f25342760a82b7e5649ed7c6d2d7cb93c0093f66c916d7e57de4af0ae00e2b0524bf364778c6b30c491354be332a1ce521e8a57c5e26f94f8069a404520e931b")
+	hexSign := "0xf53516700206e168fa905dde88789b0e8cb1c0cc212d8d5f0eac09a4665aa41f148124867ba15f3d38d0fbd6d5a9d2f6671e5258ec40b463af810a0a1299c8f81c"
+	signature, err := hexutil.Decode(hexSign)
+	if err != nil {
+		// sig literal is not valid hex
+		panic(err)
+	}
+
+	return signature
 }
 
 func mockIntentJSON() string {
@@ -32,11 +39,18 @@ func mockIntentJSON() string {
 	return intentJSON
 }
 
-func mockUserOperationWoutCallData() *UserOperation {
+func mockUserOperationWithIntentInCallData() *UserOperation {
 	userOp := new(UserOperation)
 	intentJSON := mockIntentJSON()
 
 	userOp.CallData = []byte(intentJSON)
+	userOp.Signature = mockSignature()
+	return userOp
+}
+
+func mockUserOperationWithoutIntent() *UserOperation {
+	userOp := new(UserOperation)
+
 	userOp.Signature = mockSignature()
 	return userOp
 }
@@ -73,21 +87,21 @@ func mockUserOperationWithIntentInSignature(withIntent bool) *UserOperation {
 }
 
 func TestUserOperation_HasIntent(t *testing.T) {
-	uoWithIntentInCallData := mockUserOperationWoutCallData()
+	uoWithIntentInCallData := mockUserOperationWithIntentInCallData()
 	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
-	uoWithoutIntent := mockUserOperationWoutCallData()
+	uoWithoutIntent := mockUserOperationWithoutIntent()
 
 	if !uoWithIntentInCallData.HasIntent() || !uoWithIntentInSignature.HasIntent() {
 		t.Errorf("HasIntent() = false; want true for user operation with intent")
 	}
 
-	if !uoWithoutIntent.HasIntent() {
+	if uoWithoutIntent.HasIntent() {
 		t.Errorf("HasIntent() = true; want false for user operation without intent")
 	}
 }
 
 func TestUserOperation_GetIntentJSON(t *testing.T) {
-	uoWithIntentInCallData := mockUserOperationWoutCallData()
+	uoWithIntentInCallData := mockUserOperationWithIntentInCallData()
 	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
 	uoWithoutIntent := mockUserOperationWithCallData(false)
 	_, err := uoWithIntentInCallData.GetIntentJSON()
@@ -107,7 +121,7 @@ func TestUserOperation_GetIntentJSON(t *testing.T) {
 }
 
 func TestUserOperation_GetIntent(t *testing.T) {
-	uoWithIntentInCallData := mockUserOperationWoutCallData()
+	uoWithIntentInCallData := mockUserOperationWithIntentInCallData()
 	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
 	uoWithCallDataWoutIntent := mockUserOperationWithCallData(false)
 	uoWithCallDataWithIntent := mockUserOperationWithCallData(true)
@@ -167,7 +181,7 @@ func TestUserOperation_GetCallData(t *testing.T) {
 }
 
 func TestUserOperation_SetIntent(t *testing.T) {
-	uoUnsolved := mockUserOperationWoutCallData()
+	uoUnsolved := mockUserOperationWithIntentInCallData()
 	uoSolved := mockUserOperationWithIntentInSignature(false)
 
 	// Test setting valid intent for unsolved operation
@@ -443,7 +457,7 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	if intent == nil {
 		t.Fatalf("GetIntent returned nil")
 	}
-	if intent.ChainID.Uint64() != 80001 {
+	if intent != nil && intent.ChainID.Uint64() != 80001 {
 		t.Errorf("GetIntent returned invalid chainID")
 	}
 	if intent.Sender != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {

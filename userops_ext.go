@@ -70,11 +70,7 @@ const (
 	ErrDoubleIntentDef   userOperationError = "intent JSON is set in both calldata and signature fields"
 )
 
-func has0xPrefix(input []byte) bool {
-	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
-}
-
-const SignatureLength = 132
+const SignatureLength = 65
 
 // validateUserOperation checks the status of the UserOperation and returns
 // its userOpSolvedStatus. It determines if the operation is conventional,
@@ -134,10 +130,6 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 		return intentJSON, true
 	}
 
-	if !has0xPrefix(op.Signature) {
-		return "", false
-	}
-
 	if len(op.Signature) > SignatureLength {
 		jsonData := op.Signature[SignatureLength:]
 		if intentJSON, ok := ExtractJSONFromField(string(jsonData)); ok {
@@ -175,11 +167,8 @@ func (op *UserOperation) HasIntent() bool {
 // HasSignature checks if the signature field contains a fixed length hex-encoded
 // signature value that is hex-encoded.
 func (op *UserOperation) HasSignature() bool {
-	if len(op.Signature) >= SignatureLength {
-		sigValue := op.Signature[:SignatureLength]
-		if _, err := hexutil.Decode(string(sigValue)); err == nil {
-			return true
-		}
+	if len(op.Signature) >= SignatureLength && op.Signature[0] != '0' && op.Signature[1] != 'x' {
+		return true
 	}
 
 	return false
