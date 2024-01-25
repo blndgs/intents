@@ -229,7 +229,7 @@ func TestValidateUserOperation(t *testing.T) {
 	tests := []struct {
 		name           string
 		userOp         *UserOperation
-		expectedStatus userOpSolvedStatus
+		expectedStatus UserOpSolvedStatus
 		expectedError  error
 	}{
 		{
@@ -238,7 +238,7 @@ func TestValidateUserOperation(t *testing.T) {
 				CallData:  []byte{},
 				Signature: []byte{},
 			},
-			expectedStatus: conventionalUserOp,
+			expectedStatus: ConventionalUserOp,
 			expectedError:  nil,
 		},
 		{
@@ -247,7 +247,7 @@ func TestValidateUserOperation(t *testing.T) {
 				CallData:  []byte{},
 				Signature: makeHexEncodedSignature(SignatureLength),
 			},
-			expectedStatus: conventionalUserOp,
+			expectedStatus: ConventionalUserOp,
 			expectedError:  nil,
 		},
 		{
@@ -255,7 +255,7 @@ func TestValidateUserOperation(t *testing.T) {
 			userOp: &UserOperation{
 				CallData: []byte(mockIntentJSON()),
 			},
-			expectedStatus: unsolvedUserOp,
+			expectedStatus: UnsolvedUserOp,
 			expectedError:  nil,
 		},
 		{
@@ -264,7 +264,7 @@ func TestValidateUserOperation(t *testing.T) {
 				CallData:  []byte(mockIntentJSON()),
 				Signature: append(makeHexEncodedSignature(SignatureLength), mockIntentJSON()...),
 			},
-			expectedStatus: unknownUserOp,
+			expectedStatus: UnknownUserOp,
 			expectedError:  ErrDoubleIntentDef,
 		},
 		{
@@ -273,7 +273,7 @@ func TestValidateUserOperation(t *testing.T) {
 				CallData:  mockCallData(),
 				Signature: makeHexEncodedSignature(SignatureLength),
 			},
-			expectedStatus: solvedUserOp,
+			expectedStatus: SolvedUserOp,
 			expectedError:  nil,
 		},
 		{
@@ -281,16 +281,16 @@ func TestValidateUserOperation(t *testing.T) {
 			userOp: &UserOperation{
 				CallData: mockCallData(),
 			},
-			expectedStatus: solvedUserOp,
+			expectedStatus: SolvedUserOp,
 			expectedError:  ErrNoSignatureValue,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			status, err := test.userOp.validateUserOperation()
+			status, err := test.userOp.Validate()
 			if status != test.expectedStatus || err != test.expectedError {
-				status, err := test.userOp.validateUserOperation()
+				status, err := test.userOp.Validate()
 				t.Errorf("Test: %s, Expected status: %v, got: %v, Expected error: %v, got: %v", test.name, test.expectedStatus, status, test.expectedError, err)
 			}
 		})
@@ -317,14 +317,14 @@ func TestValidateUserOperation_Conventional(t *testing.T) {
 	userOp := &UserOperation{}                                                                 // Empty CallData and no Signature
 	userOpWithSignature := &UserOperation{Signature: makeHexEncodedSignature(SignatureLength)} // Empty CallData and valid Signature
 
-	status, err := userOp.validateUserOperation()
-	if status != conventionalUserOp || err != nil {
-		t.Errorf("validateUserOperation() = %v, %v; want %v, nil", status, err, conventionalUserOp)
+	status, err := userOp.Validate()
+	if status != ConventionalUserOp || err != nil {
+		t.Errorf("Validate() = %v, %v; want %v, nil", status, err, ConventionalUserOp)
 	}
 
-	status, err = userOpWithSignature.validateUserOperation()
-	if status != conventionalUserOp || err != nil {
-		t.Errorf("validateUserOperation() = %v, %v; want %v, nil", status, err, conventionalUserOp)
+	status, err = userOpWithSignature.Validate()
+	if status != ConventionalUserOp || err != nil {
+		t.Errorf("Validate() = %v, %v; want %v, nil", status, err, ConventionalUserOp)
 	}
 }
 

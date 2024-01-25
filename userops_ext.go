@@ -36,18 +36,19 @@ type UserOperationExt struct {
 	ProcessingStatus  ProcessingStatus `json:"processing_status" mapstructure:"processing_status" validate:"required"`
 }
 
-// userOpSolvedStatus defines the possible states of a UserOperation's resolution.
-// It indicates whether an operation is unsolved, solved, conventional, or in an unknown state.
-type userOpSolvedStatus int
+// UserOpSolvedStatus is an enum type that defines the possible states of a
+// UserOperation's resolution.It indicates whether an operation is unsolved,
+// solved, conventional, or in an unknown state.
+type UserOpSolvedStatus int
 
 const (
-	unsolvedUserOp userOpSolvedStatus = iota
-	solvedUserOp
-	// conventionalUserOp indicates that the UserOperation does not contain Intent JSON and follows conventional
+	UnsolvedUserOp UserOpSolvedStatus = iota
+	SolvedUserOp
+	// ConventionalUserOp indicates that the UserOperation does not contain Intent JSON and follows conventional
 	// processing without Intent handling.
-	conventionalUserOp
-	// unknownUserOp indicates that the UserOperation's state is unknown or ambiguous.
-	unknownUserOp
+	ConventionalUserOp
+	// UnknownUserOp indicates that the UserOperation's state is unknown or ambiguous.
+	UnknownUserOp
 )
 
 // userOperationError represents custom error types related to processing UserOperations.
@@ -72,22 +73,22 @@ const (
 
 const SignatureLength = 65
 
-// validateUserOperation checks the status of the UserOperation and returns
+// Validate checks the status of the UserOperation and returns
 // its userOpSolvedStatus. It determines if the operation is conventional,
 // unsolved, or solved based on the presence and content of CallData and Signature.
 //
 // Returns:
 //   - userOpSolvedStatus: The solved status of the UserOperation.
 //   - error: An error if there's an issue with the operation's state, contents.
-func (op *UserOperation) validateUserOperation() (userOpSolvedStatus, error) {
+func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	// Conventional userOp? empty CallData without signature value.
 	if len(op.CallData) == 0 && len(op.Signature) == 0 {
-		return conventionalUserOp, nil
+		return ConventionalUserOp, nil
 	}
 
 	// Conventional userOp? empty CallData without signature value.
 	if len(op.CallData) == 0 && op.HasSignature() && len(op.Signature) == SignatureLength {
-		return conventionalUserOp, nil
+		return ConventionalUserOp, nil
 	}
 
 	// Unsolved userOp? Check if CallData is a non-hex-encoded string
@@ -96,22 +97,22 @@ func (op *UserOperation) validateUserOperation() (userOpSolvedStatus, error) {
 		_, validIntent := ExtractJSONFromField(string(op.CallData))
 		if validIntent && ((op.HasSignature() && len(op.Signature) == SignatureLength) || len(op.Signature) == 0) {
 			// valid intent json in calldata (Unsolved) and not defined again in signature
-			return unsolvedUserOp, nil
+			return UnsolvedUserOp, nil
 		}
 		if validIntent && len(op.Signature) > SignatureLength {
 			// both unsolved (No calldata value) status and likely intent json in the signature
-			return unknownUserOp, ErrDoubleIntentDef
+			return UnknownUserOp, ErrDoubleIntentDef
 		}
 	}
 
 	if !op.HasSignature() {
 		// need a signature value for solved userOps
-		return solvedUserOp, ErrNoSignatureValue
+		return SolvedUserOp, ErrNoSignatureValue
 	}
 
 	// Solved userOp: Intent Json values may or may not be present
-	// in signature field
-	return solvedUserOp, nil
+	// in the signature field
+	return SolvedUserOp, nil
 }
 
 // extractIntentJSON attempts to extract the Intent JSON from either the CallData
@@ -230,12 +231,12 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 		return ErrIntentInvalidJSON
 	}
 
-	status, err := op.validateUserOperation()
+	status, err := op.Validate()
 	if err != nil {
 		return err
 	}
 
-	if status == unsolvedUserOp {
+	if status == UnsolvedUserOp {
 		op.CallData = []byte(intentJSON)
 		return nil
 	}
@@ -260,12 +261,12 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 //     in the UserOperation when required, or if any other issue arises during the process.
 //     Otherwise, nil is returned, indicating successful setting of the EVM instructions.
 func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
-	status, err := op.validateUserOperation()
+	status, err := op.Validate()
 	if err != nil {
 		return err
 	}
 
-	if status == solvedUserOp || status == conventionalUserOp {
+	if status == SolvedUserOp || status == ConventionalUserOp {
 		op.CallData = callDataValue
 		return nil
 	}
