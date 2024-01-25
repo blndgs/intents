@@ -371,7 +371,7 @@ func (op *UserOperation) String() string {
 		if len(b) == 0 {
 			return "0x" // default for empty byte slice
 		}
-		if b[0] == '0' && b[1] == 'x' {
+		if len(b) >= 2 && b[0] == '0' && b[1] == 'x' {
 			return string(b)
 		}
 
