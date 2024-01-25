@@ -254,12 +254,14 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 // EVM instructions in the CallData field.
 //
 // Parameters:
-//   - callDataValue: A byte slice containing the EVM instructions to be set in the CallData field.
+//   - callDataValue: A hex-encoded or byte-level representation containing the
+//     EVM instructions to be set in the CallData field.
 //
 // Returns:
 //   - error: An error is returned if the operation's status is invalid, if there is no signature
 //     in the UserOperation when required, or if any other issue arises during the process.
-//     Otherwise, nil is returned, indicating successful setting of the EVM instructions.
+//     Otherwise, nil is returned, indicating successful setting of the EVM instructions in byte-level
+//     representation.
 func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 	status, err := op.Validate()
 	if err != nil {
@@ -282,7 +284,17 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 		// Clear the Intent JSON from CallData as it's now moved to Signature.
 	}
 
+	if len(callDataValue) >= 2 && callDataValue[0] == '0' && callDataValue[1] == 'x' {
+		// `Decode` allows using the source as the destination
+		callDataValue, err = hexutil.Decode(string(callDataValue))
+		if err != nil {
+			return fmt.Errorf("invalid hex data: %w", err)
+		}
+	}
+
+	// Assign byte-level representation
 	op.CallData = callDataValue
+
 	return nil
 }
 
