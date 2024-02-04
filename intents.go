@@ -15,6 +15,11 @@ const (
 	Swap = "swap"
 	Buy  = "buy"
 	Sell = "sell"
+	// liquid staking and retaking use cases
+	LiquidStake   = "liquidstake"
+	LiquidUnstake = "liquidunstake"
+	ReStake       = "restake"
+	UnStake       = "unrestake"
 )
 
 type ProcessingStatus string
@@ -69,6 +74,10 @@ func (i *Intent) ValidateKind() bool {
 	case Sell:
 		return isValidToken(i.SellToken) && isPositive(i.SellAmount) &&
 			isEmptyToken(i.BuyToken) && isZero(i.BuyAmount)
+	case LiquidStake, LiquidUnstake, ReStake, UnStake:
+		// For staking-related kinds, validate based on the presence of Amount and absence of SellToken and BuyToken
+		// Assuming SellAmount represents the native token amount for staking/unstaking operations
+		return isPositive(i.SellAmount) && isEmptyToken(i.SellToken) && isEmptyToken(i.BuyToken)
 	default:
 		return false
 	}

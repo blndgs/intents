@@ -197,6 +197,67 @@ func TestSubmitHandler(t *testing.T) {
 			},
 			expectCode: http.StatusBadRequest,
 		},
+
+		{
+			description: "Valid LiquidStake Request",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Sender:     senderAddress,
+						Kind:       LiquidStake,
+						SellAmount: 100.0, // Assuming this represents the amount of the native token to stake
+						Status:     "Received",
+						ChainID:    big.NewInt(1),
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Valid LiquidUnstake Request",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Sender:     senderAddress,
+						Kind:       LiquidUnstake,
+						SellAmount: 50.0, // Assuming this represents the amount of the native token to unstake
+						Status:     "Received",
+						ChainID:    big.NewInt(1),
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Invalid LiquidStake Request with Negative Amount",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Sender:     senderAddress,
+						Kind:       LiquidStake,
+						SellAmount: -100.0, // Invalid negative amount
+						Status:     "Received",
+						ChainID:    big.NewInt(1),
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Invalid LiquidUnstake Request with Zero Amount",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Sender:     senderAddress,
+						Kind:       LiquidUnstake,
+						SellAmount: 0, // Invalid zero amount
+						Status:     "Received",
+						ChainID:    big.NewInt(1),
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
 	}
 
 	// Run test cases
