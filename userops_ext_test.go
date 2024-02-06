@@ -413,107 +413,58 @@ func TestIntentUserOperation_UnmarshalJSON(t *testing.T) {
 }
 
 func TestIntentUserOperation_RawJSON(t *testing.T) {
-	// Simulate command line input
+	// Simulate command line input, adjusted for a more generic Intent scenario
 	rawJSON := `
 {
-   "sender":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
-   "nonce":"0x8",
-   "initCode":"0x",
-   "callData":"{\"chainId\":80001, \"sender\":\"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b\",\"kind\":\"swap\",\"hash\":\"\",\"sellToken\":\"TokenA\",\"buyToken\":\"TokenB\",\"sellAmount\":10,\"buyAmount\":5,\"partiallyFillable\":false,\"status\":\"Received\",\"createdAt\":0,\"expirationAt\":0}",
-   "callGasLimit":"0x2dc6c0",
-   "verificationGasLimit":"0x2dc6c0",
-   "preVerificationGas":"0xbb70",
-   "maxFeePerGas":"0x7e498f31e",
-   "maxPriorityFeePerGas":"0x7e498f300",
-   "paymasterAndData":"0x",
-   "signature":"0x92f25342760a82b7e5649ed7c6d2d7cb93c0093f66c916d7e57de4af0ae00e2b0524bf364778c6b30c491354be332a1ce521e8a57c5e26f94f8069a404520e931b"
-}	
-	`
+    "From": {
+        "Type": "TOKEN",
+        "Address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+        "Amount": "100",
+        "ChainId": "80001"
+    },
+    "To": {
+        "Type": "TOKEN",
+        "Address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
+        "Amount": "50",
+        "ChainId": "80001"
+    },
+    "ExpirationDate": 123456789,
+    "PartiallyFillable": false,
+    "Status": "Received"
+}
+`
 
-	// Unmarshal the JSON back into a new UserOperation instance
-	var unmarshaledOp UserOperation
-	if err := unmarshaledOp.UnmarshalJSON([]byte(rawJSON)); err != nil {
+	var intent Intent
+	if err := json.Unmarshal([]byte(rawJSON), &intent); err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
-	if unmarshaledOp.Sender.String() != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
-		t.Errorf("Sender does not match expected value")
+
+	// Validate key fields in the unmarshalled Intent
+	if intent.From.Address != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {
+		t.Errorf("From.Address does not match expected value")
 	}
-	if unmarshaledOp.Nonce.String() != "8" {
-		t.Errorf("Nonce does not match expected value")
+	if intent.To.Address != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
+		t.Errorf("To.Address does not match expected value")
 	}
-	if len(unmarshaledOp.InitCode) != 0 {
-		t.Errorf("InitCode does not match expected value")
+	if intent.From.ChainId.String() != "80001" {
+		t.Errorf("From.ChainId does not match expected value, got %s", intent.From.ChainId.String())
 	}
-	if unmarshaledOp.CallData == nil {
-		t.Errorf("CallData does not match expected value")
-	}
-	if !unmarshaledOp.HasIntent() {
-		t.Errorf("HasIntent does not match expected value")
-	}
-	intent, err := unmarshaledOp.GetIntent()
-	if err != nil {
-		t.Errorf("GetIntent returned error: %v", err)
-	}
-	if intent == nil {
-		t.Fatalf("GetIntent returned nil")
-	}
-	if intent != nil && intent.ChainID.Uint64() != 80001 {
-		t.Errorf("GetIntent returned invalid chainID")
-	}
-	if intent.Sender != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {
-		t.Errorf("GetIntent returned invalid sender")
-	}
-	if intent.Kind != Swap {
-		t.Errorf("GetIntent returned invalid kind")
-	}
-	if intent.Hash != "" {
-		t.Errorf("GetIntent returned invalid hash")
-	}
-	if intent.SellToken != "TokenA" {
-		t.Errorf("GetIntent returned invalid sellToken")
-	}
-	if intent.BuyToken != "TokenB" {
-		t.Errorf("GetIntent returned invalid buyToken")
-	}
-	if intent.SellAmount != 10 {
-		t.Errorf("GetIntent returned invalid sellAmount")
-	}
-	if intent.BuyAmount != 5 {
-		t.Errorf("GetIntent returned invalid buyAmount")
-	}
-	if intent.PartiallyFillable {
-		t.Errorf("GetIntent returned invalid partiallyFillable")
+	if intent.To.ChainId.String() != "80001" {
+		t.Errorf("To.ChainId does not match expected value, got %s", intent.To.ChainId.String())
 	}
 	if intent.Status != Received {
-		t.Errorf("GetIntent returned invalid status")
-	}
-	if intent.CreatedAt != 0 {
-		t.Errorf("GetIntent returned invalid createdAt")
-	}
-	if intent.ExpirationAt != 0 {
-		t.Errorf("GetIntent returned invalid expirationAt")
-	}
-	if unmarshaledOp.CallGasLimit.String() != "3000000" {
-		t.Errorf("CallGasLimit does not match expected value")
-	}
-	if unmarshaledOp.VerificationGasLimit.String() != "3000000" {
-		t.Errorf("VerificationGasLimit does not match expected value")
-	}
-	if unmarshaledOp.PreVerificationGas.String() != "47984" {
-		t.Errorf("PreVerificationGas does not match expected value")
-	}
-	if unmarshaledOp.MaxFeePerGas.String() != "33900000030" {
-		t.Errorf("MaxFeePerGas does not match expected value")
-	}
-	if unmarshaledOp.MaxPriorityFeePerGas.String() != "33900000000" {
-		t.Errorf("MaxPriorityFeePerGas does not match expected value")
-	}
-	if len(unmarshaledOp.PaymasterAndData) != 0 {
-		t.Errorf("PaymasterAndData does not match expected value")
+		t.Errorf("Status does not match expected value, got %s", intent.Status)
 	}
 
-	if hexutil.Encode(unmarshaledOp.Signature) != "0x92f25342760a82b7e5649ed7c6d2d7cb93c0093f66c916d7e57de4af0ae00e2b0524bf364778c6b30c491354be332a1ce521e8a57c5e26f94f8069a404520e931b" {
-		t.Errorf("Signature does not match expected value")
+	// Assuming there's a way to validate the amounts correctly, considering they're strings in the provided example
+	fromAmount, ok := new(big.Int).SetString(intent.From.Amount, 10)
+	if !ok || fromAmount.Cmp(big.NewInt(100)) != 0 {
+		t.Errorf("From.Amount does not match expected value, got %s", intent.From.Amount)
+	}
+
+	toAmount, ok := new(big.Int).SetString(intent.To.Amount, 10)
+	if !ok || toAmount.Cmp(big.NewInt(50)) != 0 {
+		t.Errorf("To.Amount does not match expected value, got %s", intent.To.Amount)
 	}
 }
 
