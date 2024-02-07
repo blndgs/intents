@@ -158,6 +158,98 @@ func TestSubmitHandler(t *testing.T) {
 			},
 			expectCode: http.StatusBadRequest,
 		},
+		{
+			description: "Valid Operation - Swap (buy or sell) for AMM without expiration date",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Kind:   SellKind,
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+						},
+						Status: Received,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Valid Operation - Orderbook with expiration date",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Kind:   SellKind,
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						Status: Received,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Valid Operation - Staking",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Kind:   SellKind,
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    StakeType,
+							Address: "0xValidTokenAddressTo",
+						},
+						Status: Received,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Valid Operation - Unstaking",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Kind:   SellKind,
+						Sender: senderAddress,
+						From: Asset{
+							Type:    StakeType,
+							Address: "0xValidTokenAddressTo",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+						},
+						Status: Received,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
 	}
 
 	// Run test cases
