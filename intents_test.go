@@ -177,8 +177,7 @@ func TestSubmitHandler(t *testing.T) {
 							Address: "0xValidTokenAddressTo",
 							ChainId: "1",
 						},
-						ExpirationAt: time.Now().Unix(), // will be validated by solver
-						Status:       Received,
+						Status: Received,
 					},
 				},
 			},
@@ -203,7 +202,8 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "100",
 							ChainId: "1",
 						},
-						Status: Received,
+						ExpirationAt: time.Now().Unix(), // will be validated by solver
+						Status:       Received,
 					},
 				},
 			},
