@@ -1,9 +1,9 @@
 package model
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 
 	"github.com/goccy/go-json"
 
@@ -12,27 +12,20 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-// Type defines the type of asset involved in the transaction.
-type Type string
+type Kind string
 
-// Enumeration of possible asset types.
 const (
-	Token         Type = "TOKEN"
-	LiquidStake   Type = "STAKE"
-	LiquidReStake Type = "RESTAKE"
+	BuyKind  Kind = "BUY"
+	SellKind Kind = "SELL"
 )
 
-// Kind represents the kind of transaction being performed.
-type Kind string // no validate yet, need to have more options later
+type AssetType string
 
-// Enumeration of possible transaction kinds.
 const (
-	Swap Kind = "swap"
-	Buy  Kind = "buy"
-	Sell Kind = "sell"
+	TokenType AssetType = "TOKEN"
+	StakeType AssetType = "STAKE"
 )
 
-// ProcessingStatus enumerates the various states a transaction can be in.
 type ProcessingStatus string
 
 // Enumeration of possible processing statuses.
@@ -46,17 +39,17 @@ const (
 	Invalid      ProcessingStatus = "Invalid"
 )
 
-// Asset structure for TokenFrom, CurrencyTo, and ReStakeTo
 type Asset struct {
-	Type    Type     `json:"Type"`
-	Address string   `json:"Address"`
-	Amount  string   `json:"Amount"`
-	ChainId *big.Int `json:"ChainId"`
+	Type    AssetType `json:"type"`
+	Address string    `json:"address"` // Contract address for a token or a staking pool
+	Amount  string    `json:"amount"`  // Using string to handle large or fractional values
+	ChainId *big.Int  `json:"chainId"`
 }
 
 // Intent represents a user's intention to perform a transaction, which could be a swap, buy, sell,
 // staking, or restaking action.
 type Intent struct {
+	Kind              Kind             `json:"kind" binding:"required"`
 	Sender            string           `json:"sender" binding:"required,eth_addr"`
 	From              Asset            `json:"From"`
 	To                Asset            `json:"To"`
@@ -73,66 +66,19 @@ type Body struct {
 	Intents []*Intent `json:"intents" binding:"required,dive"`
 }
 
-// ValidateIntent leverages existing validation functions to ensure the integrity of an Intent.
-func (i *Intent) ValidateIntent(v *validator.Validate) error {
-	// Validate From and To Assets
-	if err := validateAsset(i.From, v); err != nil {
-		return err
-	}
-	if err := validateAsset(i.To, v); err != nil {
-		return err
-	}
-
-	// Directly validate the Status using the validator instance.
-	if !validStatusString(string(i.Status)) {
-		return errors.New("invalid processing status")
-	}
-	return nil
-}
-
+// Custom validation for Ethereum address using go-playground validator.
 func validEthAddress(fl validator.FieldLevel) bool {
-	addressHex := fl.Field().String()
-	return common.IsHexAddress(addressHex)
+	address := fl.Field().String()
+	return common.IsHexAddress(address)
 }
 
-// validateAsset encapsulates validation logic for Asset structures using existing validation functions.
-func validateAsset(a Asset, v *validator.Validate) error {
-	// Validate Asset Address
-	if !common.IsHexAddress(a.Address) {
-		return errors.New("invalid asset address")
-	}
-
-	// Validate Asset Amount as positive and non-zero.
-	if _, ok := new(big.Int).SetString(a.Amount, 10); !ok || a.Amount == "0" {
-		return errors.New("invalid asset amount")
-	}
-
-	// Validate ChainId with the existing validChainID function.
-	if !validChainIDCustom(a.ChainId) {
-		return errors.New("invalid chain ID")
-	}
-
-	return nil
-}
-
-// validStatusString is a helper function to validate the processing status.
-func validStatusString(status string) bool {
-	return status == string(Received) || status == string(SentToSolver) || status == string(Solved) || status == string(Unsolved) || status == string(Expired) || status == string(OnChain) || status == string(Invalid)
-}
-
-// validChainIDCustom wraps the existing validChainID function for direct use with *big.Int
-func validChainIDCustom(chainID *big.Int) bool {
-	// Mimic the validator.FieldLevel interface behavior for direct comparison.
-	return chainID != nil && chainID.Sign() > 0
-}
-
-// validChainID verifies if the provided chain ID is valid.
+// Custom validation for ChainID to ensure it's a positive *big.Int.
 func validChainID(fl validator.FieldLevel) bool {
 	chainID, ok := fl.Field().Interface().(*big.Int)
 	return ok && chainID != nil && chainID.Sign() > 0
 }
 
-// validStatus checks if the provided processing status is among the defined constants.
+// validStatusCustom checks if the status is among the predefined set of valid statuses.
 func validStatus(fl validator.FieldLevel) bool {
 	status := ProcessingStatus(fl.Field().String())
 	switch status {
@@ -143,43 +89,131 @@ func validStatus(fl validator.FieldLevel) bool {
 	}
 }
 
-// NewValidator initializes custom validators for the model package.
+// Custom validation for the Kind field.
+func validKind(fl validator.FieldLevel) bool {
+	kind := Kind(fl.Field().String())
+	switch kind {
+	case BuyKind, SellKind:
+		return true
+	default:
+		return false
+	}
+}
+
+// Custom validation for the AssetType field.
+func validAssetType(fl validator.FieldLevel) bool {
+	assetType := AssetType(fl.Field().String())
+	switch assetType {
+	case TokenType, StakeType:
+		return true
+	default:
+		return false
+	}
+}
+
+// validOptionalInt checks if the field is either empty or a valid integer.
+func validOptionalInt(fl validator.FieldLevel) bool {
+	fieldValue := fl.Field().String()
+	// Check if the field is empty (considered valid as it's optional).
+	if fieldValue == "" {
+		return true
+	}
+	// Attempt to convert the string value to an integer.
+	_, err := strconv.Atoi(fieldValue)
+	// Return true if conversion is successful (valid integer), else false.
+	return err == nil
+}
+
+// Initialization of custom validators.
 func NewValidator() error {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+
 		if err := v.RegisterValidation("eth_addr", validEthAddress); err != nil {
-			return fmt.Errorf("validator %s failed", "eth_addr")
+			return fmt.Errorf("failed to register validator for eth_addr: %w", err)
 		}
+
 		if err := v.RegisterValidation("chain_id", validChainID); err != nil {
-			return fmt.Errorf("validator %s failed", "chain_id")
+			return fmt.Errorf("failed to register validator for chain_id: %w", err)
 		}
+
+		// Register the custom validation function for 'opt_int'
+		err := v.RegisterValidation("opt_int", validOptionalInt)
+		if err != nil {
+			return fmt.Errorf("failed to register validator for 'opt_int': %w", err)
+		}
+
+		// Register custom validators for Kind and AssetType
+		if err := v.RegisterValidation("kind", validKind); err != nil {
+			return fmt.Errorf("failed to register validator for Kind: %w", err)
+		}
+
+		if err := v.RegisterValidation("assetType", validAssetType); err != nil {
+			return fmt.Errorf("failed to register validator for AssetType: %w", err)
+		}
+
 		if err := v.RegisterValidation("status", validStatus); err != nil {
-			return fmt.Errorf("validator %s failed", "status")
+			return fmt.Errorf("failed to register validator for 'status': %w", err)
 		}
 	}
 	return nil
 }
 
-// ToJSON serializes the Intent into a JSON string.
+// Validation logic for the Intent structure.
+func (i *Intent) ValidateIntent() error {
+	fmt.Println("Validating Intent:", i)
+	// Direct Ethereum address validation for the sender.
+	if !validEthAddressCustom(i.Sender) {
+		return fmt.Errorf("invalid sender Ethereum address")
+	}
+
+	// Asset validations.
+	if err := validateAsset(i.From); err != nil {
+		return fmt.Errorf("invalid 'From' asset: %w", err)
+	}
+	if err := validateAsset(i.To); err != nil {
+		return fmt.Errorf("invalid 'To' asset: %w", err)
+	}
+	return nil
+}
+
+// Custom validator functions for direct call (not using the validator.FieldLevel interface).
+func validEthAddressCustom(address string) bool {
+	return common.IsHexAddress(address)
+}
+
+func validChainIDCustom(chainID *big.Int) bool {
+	return chainID != nil && chainID.Sign() > 0
+}
+
+// Validates an Asset for correctness.
+func validateAsset(a Asset) error {
+	if !validEthAddressCustom(a.Address) {
+		return fmt.Errorf("invalid asset address")
+	}
+
+	amount, ok := new(big.Int).SetString(a.Amount, 10)
+	if !ok || amount.Sign() != 1 {
+		return fmt.Errorf("invalid asset amount")
+	}
+
+	if !validChainIDCustom(a.ChainId) {
+		return fmt.Errorf("invalid asset chain ID")
+	}
+
+	return nil
+}
+
+// ToJSON serializes the Intent into a JSON string correctly using "github.com/goccy/go-json".
 func (i *Intent) ToJSON() (string, error) {
 	jsonData, err := json.Marshal(i)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal Intent into JSON: %w", err)
 	}
 	return string(jsonData), nil
 }
 
-// ToString provides a string representation of the Intent for debugging and logging.
+// ToString provides a corrected string representation of the Intent.
 func (i *Intent) ToString() string {
-	return fmt.Sprintf("Intent((Sender: %s, Hash: %s, Calldata: %s,  From: %+v, To: %+v, CreatedAt: %d, ExpirationAt: %d, PartialallyFillable: %t, Status: %s)",
-		i.Sender, i.Hash, i.CallData, i.From, i.To, i.CreatedAt, i.ExpirationAt, i.PartiallyFillable, i.Status)
-}
-
-// ValidateType checks if the Asset's Type is valid according to predefined types.
-func (a *Asset) ValidateType() bool {
-	switch a.Type {
-	case Token, LiquidStake, LiquidReStake:
-		return true
-	default:
-		return false
-	}
+	return fmt.Sprintf("Intent(Sender: %s, Kind: %s, From: %+v, To: %+v, PartiallyFillable: %t, Status: %s, CreatedAt: %d, ExpirationAt: %d)",
+		i.Sender, i.Kind, i.From, i.To, i.PartiallyFillable, i.Status, i.CreatedAt, i.ExpirationAt)
 }
