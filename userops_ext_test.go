@@ -414,26 +414,27 @@ func TestIntentUserOperation_UnmarshalJSON(t *testing.T) {
 
 func TestIntentUserOperation_RawJSON(t *testing.T) {
 	// Simulate command line input, adjusted for a more generic Intent scenario
-	rawJSON := `
-{
-    "From": {
-        "Type": "TOKEN",
-        "Address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-        "Amount": "100",
-        "ChainId": "80001"
-    },
-    "To": {
-        "Type": "TOKEN",
-        "Address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
-        "Amount": "50",
-        "ChainId": "80001"
-    },
-    "ExpirationDate": 123456789,
-    "PartiallyFillable": false,
-    "Status": "Received"
-}
-`
-
+	rawJSON := `{
+            "kind": "BUY",
+            "sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+            "from": {
+              "type": "TOKEN",
+              "address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+              "amount": "100",
+              "chainId": "1"
+            },
+            "to": {
+              "type": "TOKEN",
+              "address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
+              "amount": "50",
+              "chainId": "1"
+            },
+            "partiallyFillable": false,
+            "status": "Received",
+            "hash": "",
+            "callData": ""
+      }
+      `
 	var intent Intent
 	if err := json.Unmarshal([]byte(rawJSON), &intent); err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
@@ -446,11 +447,11 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	if intent.To.Address != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
 		t.Errorf("To.Address does not match expected value")
 	}
-	if intent.From.ChainId.String() != "80001" {
-		t.Errorf("From.ChainId does not match expected value, got %s", intent.From.ChainId.String())
+	if intent.From.ChainId != "1" {
+		t.Errorf("From.ChainId does not match expected value, got %s", intent.From.ChainId)
 	}
-	if intent.To.ChainId.String() != "80001" {
-		t.Errorf("To.ChainId does not match expected value, got %s", intent.To.ChainId.String())
+	if intent.To.ChainId != "1" {
+		t.Errorf("To.ChainId does not match expected value, got %s", intent.To.ChainId)
 	}
 	if intent.Status != Received {
 		t.Errorf("Status does not match expected value, got %s", intent.Status)

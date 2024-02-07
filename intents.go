@@ -3,7 +3,6 @@ package model
 import (
 	"fmt"
 	"math/big"
-	"strconv"
 
 	"github.com/goccy/go-json"
 
@@ -43,7 +42,7 @@ type Asset struct {
 	Type    AssetType `json:"type"`
 	Address string    `json:"address"` // Contract address for a token or a staking pool
 	Amount  string    `json:"amount"`  // Using string to handle large or fractional values
-	ChainId *big.Int  `json:"chainId"`
+	ChainId string    `json:"chainId"`
 }
 
 // Intent represents a user's intention to perform a transaction, which could be a swap, buy, sell,
@@ -51,14 +50,14 @@ type Asset struct {
 type Intent struct {
 	Kind              Kind             `json:"kind" binding:"required"`
 	Sender            string           `json:"sender" binding:"required,eth_addr"`
-	From              Asset            `json:"From"`
-	To                Asset            `json:"To"`
-	PartiallyFillable bool             `json:"PartiallyFillable"`
+	From              Asset            `json:"from"`
+	To                Asset            `json:"to"`
+	PartiallyFillable bool             `json:"partiallyFillable"`
 	Hash              string           `json:"hash"`
 	CallData          string           `json:"callData"`
 	Status            ProcessingStatus `json:"status" binding:"status"`
-	CreatedAt         int64            `json:"createdAt" binding:"opt_int"`
-	ExpirationAt      int64            `json:"expirationAt" binding:"opt_int"`
+	CreatedAt         int64            `json:"createdAt"`
+	ExpirationAt      int64            `json:"expirationAt"`
 }
 
 // Body wraps a list of Intents for batch processing.
@@ -111,35 +110,15 @@ func validAssetType(fl validator.FieldLevel) bool {
 	}
 }
 
-// validOptionalInt checks if the field is either empty or a valid integer.
-func validOptionalInt(fl validator.FieldLevel) bool {
-	fieldValue := fl.Field().String()
-	// Check if the field is empty (considered valid as it's optional).
-	if fieldValue == "" {
-		return true
-	}
-	// Attempt to convert the string value to an integer.
-	_, err := strconv.Atoi(fieldValue)
-	// Return true if conversion is successful (valid integer), else false.
-	return err == nil
-}
-
 // Initialization of custom validators.
 func NewValidator() error {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-
 		if err := v.RegisterValidation("eth_addr", validEthAddress); err != nil {
 			return fmt.Errorf("failed to register validator for eth_addr: %w", err)
 		}
 
 		if err := v.RegisterValidation("chain_id", validChainID); err != nil {
 			return fmt.Errorf("failed to register validator for chain_id: %w", err)
-		}
-
-		// Register the custom validation function for 'opt_int'
-		err := v.RegisterValidation("opt_int", validOptionalInt)
-		if err != nil {
-			return fmt.Errorf("failed to register validator for 'opt_int': %w", err)
 		}
 
 		// Register custom validators for Kind and AssetType
@@ -160,12 +139,10 @@ func NewValidator() error {
 
 // Validation logic for the Intent structure.
 func (i *Intent) ValidateIntent() error {
-	fmt.Println("Validating Intent:", i)
 	// Direct Ethereum address validation for the sender.
 	if !validEthAddressCustom(i.Sender) {
-		return fmt.Errorf("invalid sender Ethereum address")
+		return fmt.Errorf("invalid sender Ethereum address: %s", i.Sender)
 	}
-
 	// Asset validations.
 	if err := validateAsset(i.From); err != nil {
 		return fmt.Errorf("invalid 'From' asset: %w", err)
@@ -181,14 +158,15 @@ func validEthAddressCustom(address string) bool {
 	return common.IsHexAddress(address)
 }
 
-func validChainIDCustom(chainID *big.Int) bool {
-	return chainID != nil && chainID.Sign() > 0
+func validChainIDCustom(chainIDStr string) bool {
+	chainID, ok := new(big.Int).SetString(chainIDStr, 10)
+	return ok && chainID.Sign() > 0
 }
 
 // Validates an Asset for correctness.
 func validateAsset(a Asset) error {
 	if !validEthAddressCustom(a.Address) {
-		return fmt.Errorf("invalid asset address")
+		return fmt.Errorf("invalid asset address: %s", a.Address)
 	}
 
 	amount, ok := new(big.Int).SetString(a.Amount, 10)

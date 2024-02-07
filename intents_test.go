@@ -3,7 +3,7 @@ package model
 import (
 	"bytes"
 	"encoding/json"
-	"math/big"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,6 +15,7 @@ func submitHandler(c *gin.Context) {
 	var body Body
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		fmt.Println(body.Intents[0].ToJSON())
 		return
 	}
 	// Validate the kind-specific fields
@@ -62,13 +63,65 @@ func TestSubmitHandler(t *testing.T) {
 							Type:    TokenType,
 							Address: validTokenAddressFrom,
 							Amount:  "100",
-							ChainId: big.NewInt(1),
+							ChainId: "1",
 						},
 						To: Asset{
 							Type:    TokenType,
 							Address: validTokenAddressTo,
 							Amount:  "50",
-							ChainId: big.NewInt(1),
+							ChainId: "1",
+						},
+						Status: Received,
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Invalid Request - Invalid Ethereum address format",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Kind:   SellKind,
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "InvalidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+							Amount:  "50",
+							ChainId: "1",
+						},
+						ExpirationAt:      123456789,
+						PartiallyFillable: false,
+						Status:            Received,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Invalid Request - Invalid Chain ID",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Kind:   BuyKind,
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "-1", // Invalid Chain ID
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+							Amount:  "50",
+							ChainId: "1",
 						},
 						ExpirationAt:      123456789,
 						PartiallyFillable: true,
@@ -76,89 +129,35 @@ func TestSubmitHandler(t *testing.T) {
 					},
 				},
 			},
-			expectCode: http.StatusOK,
+			expectCode: http.StatusBadRequest,
 		},
-		// {
-		// 	description: "Invalid Request - Invalid Ethereum address format",
-		// 	payload: Body{
-		// 		Intents: []*Intent{
-		// 			{
-		// 				Kind:   SellKind,
-		// 				Sender: senderAddress,
-		// 				From: Asset{
-		// 					Type:    TokenType,
-		// 					Address: "InvalidTokenAddressFrom",
-		// 					Amount:  "100",
-		// 					ChainId: big.NewInt(1),
-		// 				},
-		// 				To: Asset{
-		// 					Type:    TokenType,
-		// 					Address: "0xValidTokenAddressTo",
-		// 					Amount:  "50",
-		// 					ChainId: big.NewInt(1),
-		// 				},
-		// 				ExpirationAt:      123456789,
-		// 				PartiallyFillable: false,
-		// 				Status:            Received,
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusBadRequest,
-		// },
-		// {
-		// 	description: "Invalid Request - Invalid Chain ID",
-		// 	payload: Body{
-		// 		Intents: []*Intent{
-		// 			{
-		// 				Kind:   BuyKind,
-		// 				Sender: senderAddress,
-		// 				From: Asset{
-		// 					Type:    TokenType,
-		// 					Address: "0xValidTokenAddressFrom",
-		// 					Amount:  "100",
-		// 					ChainId: big.NewInt(-1), // Invalid Chain ID
-		// 				},
-		// 				To: Asset{
-		// 					Type:    TokenType,
-		// 					Address: "0xValidTokenAddressTo",
-		// 					Amount:  "50",
-		// 					ChainId: big.NewInt(1),
-		// 				},
-		// 				ExpirationAt:      123456789,
-		// 				PartiallyFillable: true,
-		// 				Status:            Received,
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusBadRequest,
-		// },
-		// {
-		// 	description: "Invalid Request - Unsupported Asset Type",
-		// 	payload: Body{
-		// 		Intents: []*Intent{
-		// 			{
-		// 				Kind:   SellKind,
-		// 				Sender: senderAddress,
-		// 				From: Asset{
-		// 					Type:    "UNSUPPORTED_TYPE", // Unsupported asset type
-		// 					Address: "0xValidTokenAddressFrom",
-		// 					Amount:  "100",
-		// 					ChainId: big.NewInt(1),
-		// 				},
-		// 				To: Asset{
-		// 					Type:    TokenType,
-		// 					Address: "0xValidTokenAddressTo",
-		// 					Amount:  "50",
-		// 					ChainId: big.NewInt(1),
-		// 				},
-		// 				ExpirationAt:      123456789,
-		// 				PartiallyFillable: false,
-		// 				Status:            Received,
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusBadRequest,
-		// },
+		{
+			description: "Invalid Request - Unsupported Asset Type",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Kind:   SellKind,
+						Sender: senderAddress,
+						From: Asset{
+							Type:    "UNSUPPORTED_TYPE", // Unsupported asset type
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+							Amount:  "50",
+							ChainId: "1",
+						},
+						ExpirationAt:      123456789,
+						PartiallyFillable: false,
+						Status:            Received,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
 	}
 
 	// Run test cases
