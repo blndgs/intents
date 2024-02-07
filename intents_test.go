@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -174,8 +175,10 @@ func TestSubmitHandler(t *testing.T) {
 						To: Asset{
 							Type:    TokenType,
 							Address: "0xValidTokenAddressTo",
+							ChainId: "1",
 						},
-						Status: Received,
+						ExpirationAt: time.Now().Unix(), // will be validated by solver
+						Status:       Received,
 					},
 				},
 			},
