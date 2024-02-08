@@ -3,10 +3,11 @@ package model
 import (
 	"bytes"
 	"encoding/json"
-	"math/big"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,16 +16,16 @@ func submitHandler(c *gin.Context) {
 	var body Body
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		fmt.Println(body.Intents[0].ToJSON())
 		return
 	}
 	// Validate the kind-specific fields
 	for _, intent := range body.Intents {
-		if !intent.ValidateKind() {
+		if err := intent.ValidateIntent(); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "The Intent's kind does not validate"})
 			return
 		}
 	}
-
 	// Process the valid request
 	c.JSON(http.StatusOK, gin.H{"message": "Received successfully"})
 }
@@ -42,156 +43,225 @@ func setupRouter() *gin.Engine {
 
 func TestSubmitHandler(t *testing.T) {
 	// Setup
+	gin.SetMode(gin.TestMode)
 	router := setupRouter()
-
-	// Define test cases
 	const senderAddress = "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b"
+	const validTokenAddressFrom = "0x0000000000000000000000000000000000000001"
+	const validTokenAddressTo = "0x0000000000000000000000000000000000000002"
 	testCases := []struct {
 		description string
 		payload     Body
 		expectCode  int
 	}{
 		{
-			description: "Valid Swap Request",
+			description: "Valid Request with TOKEN assets",
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Sender:     senderAddress,
-						Kind:       Swap,
-						SellToken:  "TokenA",
-						BuyToken:   "TokenB",
-						SellAmount: 10.0,
-						BuyAmount:  5.0,
-						Status:     "Received",
-						CallData:   "<intent>",
-						ChainID:    big.NewInt(1),
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: validTokenAddressFrom,
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: validTokenAddressTo,
+							Amount:  "50",
+							ChainId: "1",
+						},
+						ExtraData: ExtraData{
+							Kind:              BuyKind,
+							PartiallyFillable: false,
+						},
+						Status: Received,
 					},
 				},
 			},
 			expectCode: http.StatusOK,
 		},
 		{
-			description: "Valid Minimal Limit Request",
+			description: "Invalid Request - Invalid Ethereum address format",
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Sender:    senderAddress,
-						Kind:      Buy,
-						BuyToken:  "TokenA",
-						BuyAmount: 5.0,
-						CallData:  "<intent>",
-						ChainID:   big.NewInt(1),
-					},
-				},
-			},
-			expectCode: http.StatusOK,
-		},
-		{
-			description: "Valid Limit Request with lengthy (understatement) float",
-			payload: Body{
-				Intents: []*Intent{
-					{
-						Sender:    senderAddress,
-						Kind:      Buy,
-						BuyToken:  "TokenA",
-						BuyAmount: 999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
-						CallData:  "<intent>",
-						ChainID:   big.NewInt(1),
-					},
-				},
-			},
-			expectCode: http.StatusOK,
-		},
-		{
-			description: "Invalid Request with bad float",
-			payload: Body{
-				Intents: []*Intent{
-					{
-						Sender:    senderAddress,
-						Kind:      Buy,
-						BuyToken:  "TokenA",
-						BuyAmount: -0.,
-						CallData:  "<intent>",
-						ChainID:   big.NewInt(1),
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "InvalidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+							Amount:  "50",
+							ChainId: "1",
+						},
+						ExtraData: ExtraData{
+							Kind:              BuyKind,
+							PartiallyFillable: false,
+						},
+						ExpirationAt: 123456789,
+						Status:       Received,
 					},
 				},
 			},
 			expectCode: http.StatusBadRequest,
 		},
 		{
-			description: "Invalid Request with negative float",
+			description: "Invalid Request - Invalid Chain ID",
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Sender:    senderAddress,
-						Kind:      Buy,
-						BuyToken:  "TokenA",
-						BuyAmount: -0.5,
-						CallData:  "<intent>",
-						ChainID:   big.NewInt(1),
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "-1", // Invalid Chain ID
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+							Amount:  "50",
+							ChainId: "1",
+						},
+						ExtraData: ExtraData{
+							Kind:              BuyKind,
+							PartiallyFillable: false,
+						},
+						ExpirationAt: 123456789,
+						Status:       Received,
 					},
 				},
 			},
 			expectCode: http.StatusBadRequest,
 		},
 		{
-			description: "Invalid Request with bad status",
+			description: "Invalid Request - Unsupported Asset Type",
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Sender:    senderAddress,
-						Kind:      Buy,
-						BuyToken:  "TokenA",
-						BuyAmount: 0.5,
-						Status:    "Feeling Lucky",
-						CallData:  "<intent>",
-						ChainID:   big.NewInt(1),
+						Sender: senderAddress,
+						From: Asset{
+							Type:    "UNSUPPORTED_TYPE", // Unsupported asset type
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+							Amount:  "50",
+							ChainId: "1",
+						},
+						ExtraData: ExtraData{
+							Kind:              BuyKind,
+							PartiallyFillable: false,
+						},
+						ExpirationAt: 123456789,
+						Status:       Received,
 					},
 				},
 			},
 			expectCode: http.StatusBadRequest,
 		},
 		{
-			description: "Invalid Request with negative float",
+			description: "Valid Operation - Swap (buy or sell) for AMM without expiration date",
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Sender:    senderAddress,
-						Kind:      Buy,
-						BuyToken:  "TokenA",
-						BuyAmount: -99999999999999999999999999999999999999999999999999999999999999,
-						CallData:  "<intent>",
-						ChainID:   big.NewInt(1),
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+							ChainId: "1",
+						},
+						ExtraData: ExtraData{
+							Kind:              SellKind,
+							PartiallyFillable: false,
+						},
+						Status: Received,
 					},
 				},
 			},
 			expectCode: http.StatusBadRequest,
 		},
 		{
-			description: "Invalid Request with missing Kind",
+			description: "Valid Operation - Orderbook with expiration date",
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Sender:     senderAddress,
-						BuyToken:   "TokenA",
-						BuyAmount:  0.5,
-						SellToken:  "TokenB",
-						SellAmount: 0.5,
-						CallData:   "<intent>",
-						Status:     "Received",
-						ChainID:    big.NewInt(1),
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						ExtraData: ExtraData{
+							Kind:              SellKind,
+							PartiallyFillable: false,
+						},
+						ExpirationAt: time.Now().Unix(), // will be validated by solver
+						Status:       Received,
 					},
 				},
 			},
 			expectCode: http.StatusBadRequest,
 		},
 		{
-			description: "Invalid Request (missing fields)",
+			description: "Valid Operation - Staking",
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Sender:   senderAddress,
-						CallData: "<intent>",
+						Sender: senderAddress,
+						From: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressFrom",
+							Amount:  "100",
+							ChainId: "1",
+						},
+						To: Stake{
+							Type:    StakeType,
+							Address: "0xValidTokenAddressTo",
+							ChainId: "1",
+						},
+						Status: Received,
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Valid Operation - Unstaking",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Sender: senderAddress,
+						From: Stake{
+							Type:    StakeType,
+							Address: "0xValidTokenAddressTo",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xValidTokenAddressTo",
+						},
+						Status: Received,
 					},
 				},
 			},
@@ -210,7 +280,7 @@ func TestSubmitHandler(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if w.Code != tc.expectCode {
-				t.Errorf("Expected status code %d, got %d, %v", tc.expectCode, w.Code, w.Body)
+				t.Errorf("Expected status code %d, got %d for scenario '%s'", tc.expectCode, w.Code, tc.description)
 			}
 		})
 	}
