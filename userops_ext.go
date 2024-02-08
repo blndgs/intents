@@ -332,11 +332,14 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	op.CallData = []byte(aux.CallData)
-	if !op.HasIntent() {
+	// Check if CallData is JSON (indicating Intent); otherwise, decode as hex.
+	if intentJSON, ok := ExtractJSONFromField(aux.CallData); ok {
+		op.CallData = []byte(intentJSON)
+	} else {
+		var err error
 		op.CallData, err = hexutil.Decode(aux.CallData)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid CallData: %w", err)
 		}
 	}
 
@@ -397,10 +400,11 @@ func (op *UserOperation) String() string {
 		return fmt.Sprintf("0x%x, %s", b, b.Text(10))
 	}
 	formatCallData := func(callDataBytes []byte) string {
-		if op.HasIntent() {
+		// Directly return string if it's intended to be JSON (Intent)
+		if _, ok := ExtractJSONFromField(string(callDataBytes)); ok {
 			return string(callDataBytes)
 		}
-
+		// Otherwise, encode as hex
 		return formatBytes(callDataBytes)
 	}
 
@@ -418,7 +422,7 @@ func (op *UserOperation) String() string {
 			"  PaymasterAndData: %s\n"+
 			"  Signature: %s\n"+
 			"}",
-		op.Sender.String(),
+		op.Sender.Hex(),
 		formatBigInt(op.Nonce),
 		formatBytes(op.InitCode),
 		formatCallData(op.CallData),

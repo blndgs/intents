@@ -39,25 +39,36 @@ const (
 )
 
 type Asset struct {
-	Type    AssetType `json:"type"`
-	Address string    `json:"address"` // Contract address for a token or a staking pool
-	Amount  string    `json:"amount"`  // Using string to handle large or fractional values
+	Type    AssetType `json:"type" binding:"required"`
+	Address string    `json:"address" binding:"required"`
+	ChainId string    `json:"chainId"`
+	Amount  string    `json:"amount" binding:"required"`
+}
+
+type Stake struct {
+	Type    AssetType `json:"type" binding:"required"`
+	Address string    `json:"address"`
 	ChainId string    `json:"chainId"`
 }
+
+// Transactional interface to be implemented by Asset and Stake.
+type Transactional interface{}
 
 // Intent represents a user's intention to perform a transaction, which could be a swap, buy, sell,
 // staking, or restaking action.
 type Intent struct {
-	Kind              Kind             `json:"kind" binding:"required"`
-	Sender            string           `json:"sender" binding:"required,eth_addr"`
-	From              Asset            `json:"from"`
-	To                Asset            `json:"to"`
-	PartiallyFillable bool             `json:"partiallyFillable"`
-	Hash              string           `json:"hash"`
-	CallData          string           `json:"callData"`
-	Status            ProcessingStatus `json:"status" binding:"status"`
-	CreatedAt         int64            `json:"createdAt"`
-	ExpirationAt      int64            `json:"expirationAt"`
+	Sender       string           `json:"sender" binding:"required,eth_addr"`
+	From         Transactional    `json:"from"` // asset or un stake
+	To           Transactional    `json:"to"`   // asset or stake
+	ExtraData    ExtraData        `json:"extraData"`
+	Status       ProcessingStatus `json:"status" binding:"status"`
+	CreatedAt    int64            `json:"createdAt"`
+	ExpirationAt int64            `json:"expirationAt"`
+}
+
+type ExtraData struct {
+	Kind              Kind `json:"kind"`
+	PartiallyFillable bool `json:"partiallyFillable"`
 }
 
 // Body wraps a list of Intents for batch processing.
@@ -144,11 +155,57 @@ func (i *Intent) ValidateIntent() error {
 		return fmt.Errorf("invalid sender Ethereum address: %s", i.Sender)
 	}
 	// Asset validations.
-	if err := validateAsset(i.From); err != nil {
-		return fmt.Errorf("invalid 'From' asset: %w", err)
+	if err := validateTransactional(i.From); err != nil {
+		return fmt.Errorf("invalid 'From' detail: %w", err)
 	}
-	if err := validateAsset(i.To); err != nil {
-		return fmt.Errorf("invalid 'To' asset: %w", err)
+	if err := validateTransactional(i.To); err != nil {
+		return fmt.Errorf("invalid 'To' detail: %w", err)
+	}
+
+	// Validate the expiration date for orderbook operations
+	if i.ExtraData.Kind == SellKind && i.ExpirationAt == 0 {
+		return fmt.Errorf("orderbook operations must have an expiration date")
+	}
+	switch i.From.(type) {
+	case Asset:
+		if _, ok := i.To.(Asset); !ok && i.ExtraData.Kind != Kind(StakeType) {
+			return fmt.Errorf("swap operations should involve assets only")
+		}
+	case Stake:
+		if _, ok := i.To.(Asset); ok && i.ExtraData.Kind == Kind(StakeType) {
+			return fmt.Errorf("staking operations should not convert to assets directly")
+		}
+	}
+	return nil
+}
+
+// Validates the asset amount for correctness.
+func validAmount(amountStr string) bool {
+	amount, ok := new(big.Int).SetString(amountStr, 10)
+	return ok && amount.Sign() > 0
+}
+
+// validateTransactionDetail validates the TransactionDetail interface, which could be an Asset or a Stake.
+func validateTransactional(td Transactional) error {
+	switch v := td.(type) {
+	case Asset:
+		// For Assets, both Address and Amount are required.
+		if !validEthAddressCustom(v.Address) {
+			return fmt.Errorf("invalid asset address: %s", v.Address)
+		}
+		if !validAmount(v.Amount) {
+			return fmt.Errorf("invalid asset amount")
+		}
+		if !validChainIDCustom(v.ChainId) {
+			return fmt.Errorf("invalid asset chain ID")
+		}
+	case Stake:
+		// No amount and address validation needed for Stake
+		if !validChainIDCustom(v.ChainId) {
+			return fmt.Errorf("invalid stake chain ID")
+		}
+	default:
+		return fmt.Errorf("unsupported transaction detail type")
 	}
 	return nil
 }
@@ -163,25 +220,7 @@ func validChainIDCustom(chainIDStr string) bool {
 	return ok && chainID.Sign() > 0
 }
 
-// Validates an Asset for correctness.
-func validateAsset(a Asset) error {
-	if !validEthAddressCustom(a.Address) {
-		return fmt.Errorf("invalid asset address: %s", a.Address)
-	}
-
-	amount, ok := new(big.Int).SetString(a.Amount, 10)
-	if !ok || amount.Sign() != 1 {
-		return fmt.Errorf("invalid asset amount")
-	}
-
-	if !validChainIDCustom(a.ChainId) {
-		return fmt.Errorf("invalid asset chain ID")
-	}
-
-	return nil
-}
-
-// ToJSON serializes the Intent into a JSON string correctly using "github.com/goccy/go-json".
+// ToJSON serializes the Intent into a JSON string
 func (i *Intent) ToJSON() (string, error) {
 	jsonData, err := json.Marshal(i)
 	if err != nil {
@@ -190,8 +229,63 @@ func (i *Intent) ToJSON() (string, error) {
 	return string(jsonData), nil
 }
 
-// ToString provides a corrected string representation of the Intent.
-func (i *Intent) ToString() string {
-	return fmt.Sprintf("Intent(Sender: %s, Kind: %s, From: %+v, To: %+v, PartiallyFillable: %t, Status: %s, CreatedAt: %d, ExpirationAt: %d)",
-		i.Sender, i.Kind, i.From, i.To, i.PartiallyFillable, i.Status, i.CreatedAt, i.ExpirationAt)
+// UnmarshalJSON custom method for Intent.
+func (i *Intent) UnmarshalJSON(data []byte) error {
+	type Alias Intent
+	var tmp struct {
+		From json.RawMessage `json:"from"`
+		To   json.RawMessage `json:"to"`
+		*Alias
+	}
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	// Assign the Alias fields back to i first.
+	*i = Intent(*tmp.Alias)
+
+	// Then handle the From field.
+	from, err := unmarshalTransactional(tmp.From)
+	if err != nil {
+		return fmt.Errorf("error unmarshalling 'from' field: %w", err)
+	}
+	i.From = from
+
+	// Handle the To field.
+	to, err := unmarshalTransactional(tmp.To)
+	if err != nil {
+		return fmt.Errorf("error unmarshalling 'to' field: %w", err)
+	}
+
+	i.To = to
+
+	return nil
+}
+
+// Helper function to unmarshal a Transactional which could be either Asset or Stake.
+func unmarshalTransactional(data json.RawMessage) (Transactional, error) {
+	// Detect the type based on the "type" field in the JSON.
+	var typeDetect struct {
+		Type AssetType `json:"type"`
+	}
+	if err := json.Unmarshal(data, &typeDetect); err != nil {
+		return nil, err
+	}
+	switch typeDetect.Type {
+	case TokenType:
+		var asset Asset
+		if err := json.Unmarshal(data, &asset); err != nil {
+			return nil, err
+		}
+		return asset, nil
+	case StakeType:
+		var stake Stake
+		if err := json.Unmarshal(data, &stake); err != nil {
+			return nil, err
+		}
+		return stake, nil
+	default:
+		return nil, fmt.Errorf("unknown transactional type: %s", typeDetect.Type)
+	}
 }

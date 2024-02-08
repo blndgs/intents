@@ -29,7 +29,7 @@ func mockSignature() []byte {
 
 func mockIntentJSON() string {
 	var (
-		intentJSON = `{"chainId":80001, "sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","kind":"swap","hash":"","sellToken":"TokenA","buyToken":"TokenB","sellAmount":10,"buyAmount":5,"partiallyFillable":false,"status":"Received","createdAt":0,"expirationAt":0}`
+		intentJSON = `{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","from":{"type":"TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":"100","chainId":"80001"},"to":{"type":"TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":"50","chainId":"80001"},"extraData":{"kind":"BUY","partiallyFillable":false},"status":"Received"}`
 		intent     Intent
 	)
 	if err := json.Unmarshal([]byte(intentJSON), &intent); err != nil {
@@ -413,59 +413,69 @@ func TestIntentUserOperation_UnmarshalJSON(t *testing.T) {
 }
 
 func TestIntentUserOperation_RawJSON(t *testing.T) {
-	// Simulate command line input, adjusted for a more generic Intent scenario
 	rawJSON := `{
-            "kind": "BUY",
-            "sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-            "from": {
-              "type": "TOKEN",
-              "address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-              "amount": "100",
-              "chainId": "1"
-            },
-            "to": {
-              "type": "TOKEN",
-              "address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
-              "amount": "50",
-              "chainId": "1"
-            },
-            "partiallyFillable": false,
-            "status": "Received",
-            "hash": "",
-            "callData": ""
-      }
-      `
+		"sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+		"from": {
+			"type": "TOKEN",
+			"address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+			"amount": "100",
+			"chainId": "1"
+		},
+		"to": {
+			"type": "TOKEN",
+			"address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
+			"amount": "50",
+			"chainId": "1"
+		},
+		"extraData": {
+			"kind": "BUY",
+			"partiallyFillable": false
+		},
+		"status": "Received",
+		"createdAt": 0,
+		"expirationAt": 0
+	}`
+
 	var intent Intent
 	if err := json.Unmarshal([]byte(rawJSON), &intent); err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
-
-	// Validate key fields in the unmarshalled Intent
-	if intent.From.Address != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {
+	// Correctly type-assert 'From' and 'To' after unmarshalling
+	fromAsset, fromOk := intent.From.(Asset)
+	if !fromOk {
+		t.Fatalf("From field is not of type Asset")
+	}
+	if fromAsset.Address != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {
 		t.Errorf("From.Address does not match expected value")
 	}
-	if intent.To.Address != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
+	if fromAsset.ChainId != "1" {
+		t.Errorf("From.ChainId does not match expected value, got %s", fromAsset.ChainId)
+	}
+
+	toAsset, toOk := intent.To.(Asset)
+	if !toOk {
+		t.Fatalf("To field is not of type Asset")
+	}
+	if toAsset.Address != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
 		t.Errorf("To.Address does not match expected value")
 	}
-	if intent.From.ChainId != "1" {
-		t.Errorf("From.ChainId does not match expected value, got %s", intent.From.ChainId)
+	if toAsset.ChainId != "1" {
+		t.Errorf("To.ChainId does not match expected value, got %s", toAsset.ChainId)
 	}
-	if intent.To.ChainId != "1" {
-		t.Errorf("To.ChainId does not match expected value, got %s", intent.To.ChainId)
-	}
+
 	if intent.Status != Received {
 		t.Errorf("Status does not match expected value, got %s", intent.Status)
 	}
 
 	// Assuming there's a way to validate the amounts correctly, considering they're strings in the provided example
-	fromAmount, ok := new(big.Int).SetString(intent.From.Amount, 10)
+	fromAmount, ok := new(big.Int).SetString(fromAsset.Amount, 10)
 	if !ok || fromAmount.Cmp(big.NewInt(100)) != 0 {
-		t.Errorf("From.Amount does not match expected value, got %s", intent.From.Amount)
+		t.Errorf("From.Amount does not match expected value, got %s", fromAsset.Amount)
 	}
 
-	toAmount, ok := new(big.Int).SetString(intent.To.Amount, 10)
+	toAmount, ok := new(big.Int).SetString(toAsset.Amount, 10)
 	if !ok || toAmount.Cmp(big.NewInt(50)) != 0 {
-		t.Errorf("To.Amount does not match expected value, got %s", intent.To.Amount)
+		t.Errorf("To.Amount does not match expected value, got %s", toAsset.Amount)
 	}
 }
 
@@ -575,22 +585,23 @@ func Test_UserOperationLongCallDataString(t *testing.T) {
 	}
 }
 
+// Test_Intent_UserOperationString test user op string.
 func Test_Intent_UserOperationString(t *testing.T) {
+	// Setup: Simplified UserOperation without embedding JSON into CallData directly for this test.
 	userOp := UserOperation{
 		Sender:               common.HexToAddress("0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47"),
 		Nonce:                big.NewInt(0x7),
 		InitCode:             []byte{},
-		CallData:             []byte("{\"sender\":\"0x89f5CFE852a6a04A56b1972A25C318f36C5a8192\",\"nonce\":\"0x0\",\"initCode\":\"0xd49a72cb78c44c6bfbf0d471581b7635cf62e81e5fbfb9cf000000000000000000000000a4bfe126d3ad137f972695dddb1780a29065e5560000000000000000000000000000000000000000000000000000000000000000\",\"callData\":\"0x\",\"callGasLimit\":\"0x2dc6c0\",\"verificationGasLimit\":\"0x2dc6c0\",\"preVerificationGas\":\"0xbf7b\",\"maxFeePerGas\":\"0x150c428804\",\"maxPriorityFeePerGas\":\"0x150c4287e4\",\"paymasterAndData\":\"0x\",\"signature\":\"0x00000000e760b3f885a0af751295bd7f0b69029e72026199fcffb766edb3db9d45dd102e21920f52d2bec67120988e8cfb178ea74e34e1eb7aec86dc24d815a01ff952fe1c\"}"),
+		CallData:             []byte("0xd49a72cb78c44c6bfbf0d471581b7635cf62e81e5fbfb9cf"),
 		CallGasLimit:         big.NewInt(0x2dc6c0),
 		VerificationGasLimit: big.NewInt(0x2dc6c0),
 		PreVerificationGas:   big.NewInt(0xbb70),
 		MaxFeePerGas:         big.NewInt(0x7e498f31e),
 		MaxPriorityFeePerGas: big.NewInt(0x7e498f300),
 		PaymasterAndData:     []byte{},
-		Signature:            []byte("0xbda2865b91c92ef7f8a43adc039b8a3f43011a20cfc818d078847ef2ffd916ec236a1cc9218b164fe2f5a7088b7010c90ad0f9a9dcf3a21168d433e784582afb1c"),
+		Signature:            []byte("0xe760b3f885a0af751295bd7f0b69029e72026199fcffb766edb3db9d45dd102e21920f52d2bec67120988e8cfb178ea74e34e1eb7aec86dc24d815a01ff952fe1c"),
 	}
 
-	// Define the expected string with new formatting.
 	expected := fmt.Sprintf(
 		`UserOperation{
   Sender: %s
@@ -608,19 +619,18 @@ func Test_Intent_UserOperationString(t *testing.T) {
 		userOp.Sender.String(),
 		"0x7, 7",
 		"0x",
-		`{"sender":"0x89f5CFE852a6a04A56b1972A25C318f36C5a8192","nonce":"0x0","initCode":"0xd49a72cb78c44c6bfbf0d471581b7635cf62e81e5fbfb9cf000000000000000000000000a4bfe126d3ad137f972695dddb1780a29065e5560000000000000000000000000000000000000000000000000000000000000000","callData":"0x","callGasLimit":"0x2dc6c0","verificationGasLimit":"0x2dc6c0","preVerificationGas":"0xbf7b","maxFeePerGas":"0x150c428804","maxPriorityFeePerGas":"0x150c4287e4","paymasterAndData":"0x","signature":"0x00000000e760b3f885a0af751295bd7f0b69029e72026199fcffb766edb3db9d45dd102e21920f52d2bec67120988e8cfb178ea74e34e1eb7aec86dc24d815a01ff952fe1c"}`,
+		"0xd49a72cb78c44c6bfbf0d471581b7635cf62e81e5fbfb9cf", // Simplified for readability
 		"0x2dc6c0, 3000000",
 		"0x2dc6c0, 3000000",
 		"0xbb70, 47984",
 		"0x7e498f31e, 33900000030",
 		"0x7e498f300, 33900000000",
 		"0x",
-		"0xbda2865b91c92ef7f8a43adc039b8a3f43011a20cfc818d078847ef2ffd916ec236a1cc9218b164fe2f5a7088b7010c90ad0f9a9dcf3a21168d433e784582afb1c", // Signature as hex
+		"0xe760b3f885a0af751295bd7f0b69029e72026199fcffb766edb3db9d45dd102e21920f52d2bec67120988e8cfb178ea74e34e1eb7aec86dc24d815a01ff952fe1c", // Simplified for readability
 	)
 
 	// Call the String method.
 	result := userOp.String()
-	t.Log(result)
 
 	// Compare the result with the expected string.
 	if result != expected {

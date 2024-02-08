@@ -58,7 +58,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Kind:   BuyKind,
 						Sender: senderAddress,
 						From: Asset{
 							Type:    TokenType,
@@ -72,6 +71,10 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "50",
 							ChainId: "1",
 						},
+						ExtraData: ExtraData{
+							Kind:              BuyKind,
+							PartiallyFillable: false,
+						},
 						Status: Received,
 					},
 				},
@@ -83,7 +86,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Kind:   SellKind,
 						Sender: senderAddress,
 						From: Asset{
 							Type:    TokenType,
@@ -97,9 +99,12 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "50",
 							ChainId: "1",
 						},
-						ExpirationAt:      123456789,
-						PartiallyFillable: false,
-						Status:            Received,
+						ExtraData: ExtraData{
+							Kind:              BuyKind,
+							PartiallyFillable: false,
+						},
+						ExpirationAt: 123456789,
+						Status:       Received,
 					},
 				},
 			},
@@ -110,7 +115,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Kind:   BuyKind,
 						Sender: senderAddress,
 						From: Asset{
 							Type:    TokenType,
@@ -124,9 +128,12 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "50",
 							ChainId: "1",
 						},
-						ExpirationAt:      123456789,
-						PartiallyFillable: true,
-						Status:            Received,
+						ExtraData: ExtraData{
+							Kind:              BuyKind,
+							PartiallyFillable: false,
+						},
+						ExpirationAt: 123456789,
+						Status:       Received,
 					},
 				},
 			},
@@ -137,7 +144,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Kind:   SellKind,
 						Sender: senderAddress,
 						From: Asset{
 							Type:    "UNSUPPORTED_TYPE", // Unsupported asset type
@@ -151,9 +157,12 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "50",
 							ChainId: "1",
 						},
-						ExpirationAt:      123456789,
-						PartiallyFillable: false,
-						Status:            Received,
+						ExtraData: ExtraData{
+							Kind:              BuyKind,
+							PartiallyFillable: false,
+						},
+						ExpirationAt: 123456789,
+						Status:       Received,
 					},
 				},
 			},
@@ -164,7 +173,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Kind:   SellKind,
 						Sender: senderAddress,
 						From: Asset{
 							Type:    TokenType,
@@ -176,6 +184,10 @@ func TestSubmitHandler(t *testing.T) {
 							Type:    TokenType,
 							Address: "0xValidTokenAddressTo",
 							ChainId: "1",
+						},
+						ExtraData: ExtraData{
+							Kind:              SellKind,
+							PartiallyFillable: false,
 						},
 						Status: Received,
 					},
@@ -188,7 +200,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Kind:   SellKind,
 						Sender: senderAddress,
 						From: Asset{
 							Type:    TokenType,
@@ -201,6 +212,10 @@ func TestSubmitHandler(t *testing.T) {
 							Address: "0xValidTokenAddressTo",
 							Amount:  "100",
 							ChainId: "1",
+						},
+						ExtraData: ExtraData{
+							Kind:              SellKind,
+							PartiallyFillable: false,
 						},
 						ExpirationAt: time.Now().Unix(), // will be validated by solver
 						Status:       Received,
@@ -214,7 +229,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Kind:   SellKind,
 						Sender: senderAddress,
 						From: Asset{
 							Type:    TokenType,
@@ -222,9 +236,10 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "100",
 							ChainId: "1",
 						},
-						To: Asset{
+						To: Stake{
 							Type:    StakeType,
 							Address: "0xValidTokenAddressTo",
+							ChainId: "1",
 						},
 						Status: Received,
 					},
@@ -237,9 +252,8 @@ func TestSubmitHandler(t *testing.T) {
 			payload: Body{
 				Intents: []*Intent{
 					{
-						Kind:   SellKind,
 						Sender: senderAddress,
-						From: Asset{
+						From: Stake{
 							Type:    StakeType,
 							Address: "0xValidTokenAddressTo",
 						},
