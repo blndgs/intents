@@ -162,10 +162,6 @@ func (i *Intent) ValidateIntent() error {
 		return fmt.Errorf("invalid 'To' detail: %w", err)
 	}
 
-	// Validate the expiration date for orderbook operations
-	if i.ExtraData.Kind == SellKind && i.ExpirationAt == 0 {
-		return fmt.Errorf("orderbook operations must have an expiration date")
-	}
 	switch i.From.(type) {
 	case Asset:
 		if _, ok := i.To.(Asset); !ok && i.ExtraData.Kind != Kind(StakeType) {
