@@ -8,4 +8,6 @@ For the test run the following command:
 
 ```sh
 go test ./...
+
+go build ./...
 ```
