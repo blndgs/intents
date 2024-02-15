@@ -34,8 +34,8 @@ const (
 type Asset struct {
 	Type    AssetType `json:"type" binding:"required"`
 	Address string    `json:"address" binding:"required"`
-	ChainId string    `json:"chainId"`
 	Amount  string    `json:"amount" binding:"required"`
+	ChainId string    `json:"chainId"`
 }
 
 type Stake struct {
