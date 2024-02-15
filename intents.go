@@ -11,13 +11,6 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-type Kind string
-
-const (
-	BuyKind  Kind = "BUY"
-	SellKind Kind = "SELL"
-)
-
 type AssetType string
 
 const (
@@ -60,14 +53,13 @@ type Intent struct {
 	Sender       string           `json:"sender" binding:"required,eth_addr"`
 	From         Transactional    `json:"from"` // asset or un stake
 	To           Transactional    `json:"to"`   // asset or stake
-	ExtraData    ExtraData        `json:"extraData"`
-	Status       ProcessingStatus `json:"status" binding:"status"`
-	CreatedAt    int64            `json:"createdAt"`
-	ExpirationAt int64            `json:"expirationAt"`
+	ExtraData    *ExtraData       `json:"extraData,omitempty"`
+	Status       ProcessingStatus `json:"status,omitempty"`
+	CreatedAt    int64            `json:"createdAt,omitempty"`
+	ExpirationAt int64            `json:"expirationAt,omitempty"`
 }
 
 type ExtraData struct {
-	Kind              Kind `json:"kind"`
 	PartiallyFillable bool `json:"partiallyFillable"`
 }
 
@@ -99,17 +91,6 @@ func validStatus(fl validator.FieldLevel) bool {
 	}
 }
 
-// Custom validation for the Kind field.
-func validKind(fl validator.FieldLevel) bool {
-	kind := Kind(fl.Field().String())
-	switch kind {
-	case BuyKind, SellKind:
-		return true
-	default:
-		return false
-	}
-}
-
 // Custom validation for the AssetType field.
 func validAssetType(fl validator.FieldLevel) bool {
 	assetType := AssetType(fl.Field().String())
@@ -130,11 +111,6 @@ func NewValidator() error {
 
 		if err := v.RegisterValidation("chain_id", validChainID); err != nil {
 			return fmt.Errorf("failed to register validator for chain_id: %w", err)
-		}
-
-		// Register custom validators for Kind and AssetType
-		if err := v.RegisterValidation("kind", validKind); err != nil {
-			return fmt.Errorf("failed to register validator for Kind: %w", err)
 		}
 
 		if err := v.RegisterValidation("assetType", validAssetType); err != nil {
@@ -160,17 +136,6 @@ func (i *Intent) ValidateIntent() error {
 	}
 	if err := validateTransactional(i.To); err != nil {
 		return fmt.Errorf("invalid 'To' detail: %w", err)
-	}
-
-	switch i.From.(type) {
-	case Asset:
-		if _, ok := i.To.(Asset); !ok && i.ExtraData.Kind != Kind(StakeType) {
-			return fmt.Errorf("swap operations should involve assets only")
-		}
-	case Stake:
-		if _, ok := i.To.(Asset); ok && i.ExtraData.Kind == Kind(StakeType) {
-			return fmt.Errorf("staking operations should not convert to assets directly")
-		}
 	}
 	return nil
 }

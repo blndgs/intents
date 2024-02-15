@@ -71,8 +71,7 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "50",
 							ChainId: "1",
 						},
-						ExtraData: ExtraData{
-							Kind:              BuyKind,
+						ExtraData: &ExtraData{
 							PartiallyFillable: false,
 						},
 						Status: Received,
@@ -99,8 +98,7 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "50",
 							ChainId: "1",
 						},
-						ExtraData: ExtraData{
-							Kind:              BuyKind,
+						ExtraData: &ExtraData{
 							PartiallyFillable: false,
 						},
 						ExpirationAt: 123456789,
@@ -128,8 +126,7 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "50",
 							ChainId: "1",
 						},
-						ExtraData: ExtraData{
-							Kind:              BuyKind,
+						ExtraData: &ExtraData{
 							PartiallyFillable: false,
 						},
 						ExpirationAt: 123456789,
@@ -157,8 +154,7 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "50",
 							ChainId: "1",
 						},
-						ExtraData: ExtraData{
-							Kind:              BuyKind,
+						ExtraData: &ExtraData{
 							PartiallyFillable: false,
 						},
 						ExpirationAt: 123456789,
@@ -185,8 +181,7 @@ func TestSubmitHandler(t *testing.T) {
 							Address: "0xValidTokenAddressTo",
 							ChainId: "1",
 						},
-						ExtraData: ExtraData{
-							Kind:              SellKind,
+						ExtraData: &ExtraData{
 							PartiallyFillable: false,
 						},
 						Status: Received,
@@ -213,8 +208,7 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "100",
 							ChainId: "1",
 						},
-						ExtraData: ExtraData{
-							Kind:              SellKind,
+						ExtraData: &ExtraData{
 							PartiallyFillable: false,
 						},
 						ExpirationAt: time.Now().Unix(), // will be validated by solver

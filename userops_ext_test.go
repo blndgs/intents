@@ -29,7 +29,7 @@ func mockSignature() []byte {
 
 func mockIntentJSON() string {
 	var (
-		intentJSON = `{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","from":{"type":"TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":"100","chainId":"80001"},"to":{"type":"TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":"50","chainId":"80001"},"extraData":{"kind":"BUY","partiallyFillable":false},"status":"Received"}`
+		intentJSON = `{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","from":{"type":"TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":"100","chainId":"80001"},"to":{"type":"TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":"50","chainId":"80001"},"extraData":{"partiallyFillable":false},"status":"Received"}`
 		intent     Intent
 	)
 	if err := json.Unmarshal([]byte(intentJSON), &intent); err != nil {
@@ -127,6 +127,7 @@ func TestUserOperation_GetIntent(t *testing.T) {
 	uoWithCallDataWithIntent := mockUserOperationWithCallData(true)
 
 	_, err := uoWithIntentInCallData.GetIntent()
+
 	if err != nil {
 		t.Errorf("GetIntent() with intent in CallData returned error: %v", err)
 	}
@@ -428,7 +429,6 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 			"chainId": "1"
 		},
 		"extraData": {
-			"kind": "BUY",
 			"partiallyFillable": false
 		},
 		"status": "Received",
