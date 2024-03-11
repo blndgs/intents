@@ -46,6 +46,23 @@ type Stake struct {
 	ChainId string    `json:"chainId"`
 }
 
+type Supply struct {
+	Type    AssetType `json:"type" binding:"required"`
+	Address string    `json:"address" binding:"required"`
+
+	// can be empty? and solver chooses a default protocol to supply to?
+	Protocol string `json:"protocol,omitempty"`
+}
+
+type WithdrawSupply struct {
+	Type     AssetType `json:"type,omitempty" binding:"required"`
+	Currency string    `json:"currency,omitempty" binding:"required"`
+	Amount   string    `json:"amount,omitempty" binding:"required"`
+
+	// Contract address of the project to withdraw from
+	Address string `json:"address,omitempty" binding:"required"`
+}
+
 // Transactional interface to be implemented by Asset and Stake.
 type Transactional interface{}
 
