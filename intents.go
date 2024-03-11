@@ -14,8 +14,10 @@ import (
 type AssetType string
 
 const (
-	TokenType AssetType = "TOKEN"
-	StakeType AssetType = "STAKE"
+	TokenType          AssetType = "TOKEN"
+	StakeType          AssetType = "STAKE"
+	SupplyType         AssetType = "SUPPLY"
+	WithdrawSupplyType AssetType = "WITHDRAW_SUPPLY"
 )
 
 type ProcessingStatus string
