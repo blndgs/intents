@@ -51,7 +51,7 @@ type Supply struct {
 
 	// Asset is the contract address for the token to Supply or add into the
 	// Protocol
-	Asset string `"asset,omitempty" binding:"required"`
+	Asset string `json:"asset,omitempty" binding:"required"`
 
 	// can be empty? and solver chooses a default protocol to supply to?
 	// this would be the Contract address for the Protocol
@@ -63,7 +63,7 @@ type WithdrawSupply struct {
 	Type AssetType `json:"type,omitempty" binding:"required"`
 	// Asset is the contract address for the token to withdraw or add into the
 	// Protocol
-	Asset string `"asset,omitempty" binding:"required"`
+	Asset string `json:"asset,omitempty" binding:"required"`
 
 	Amount string `json:"amount,omitempty" binding:"required"`
 
