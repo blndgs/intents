@@ -47,20 +47,30 @@ type Stake struct {
 }
 
 type Supply struct {
-	Type    AssetType `json:"type" binding:"required"`
-	Address string    `json:"address" binding:"required"`
+	Type AssetType `json:"type,omitempty" binding:"required"`
+
+	// Asset is the contract address for the token to Supply or add into the
+	// Protocol
+	Asset string `"asset,omitempty" binding:"required"`
 
 	// can be empty? and solver chooses a default protocol to supply to?
+	// this would be the Contract address for the Protocol
+	// Aave3 as an example would be 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
 	Protocol string `json:"protocol,omitempty"`
 }
 
 type WithdrawSupply struct {
-	Type     AssetType `json:"type,omitempty" binding:"required"`
-	Currency string    `json:"currency,omitempty" binding:"required"`
-	Amount   string    `json:"amount,omitempty" binding:"required"`
+	Type AssetType `json:"type,omitempty" binding:"required"`
+	// Asset is the contract address for the token to withdraw or add into the
+	// Protocol
+	Asset string `"asset,omitempty" binding:"required"`
 
-	// Contract address of the project to withdraw from
-	Address string `json:"address,omitempty" binding:"required"`
+	Amount string `json:"amount,omitempty" binding:"required"`
+
+	// this would be the Contract address for the Protocol to withdraw
+	// your assets from. You must have previously supplied assets to this protocol
+	// Aave3 as an example would be 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
+	Protocol string `json:"protocol,omitempty" binding:"required"`
 }
 
 // Transactional interface to be implemented by Asset and Stake.
