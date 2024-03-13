@@ -15,6 +15,7 @@ import (
 func submitHandler(c *gin.Context) {
 	var body Body
 	if err := c.ShouldBindJSON(&body); err != nil {
+		fmt.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		fmt.Println(body.Intents[0].ToJSON())
 		return
@@ -261,12 +262,38 @@ func TestSubmitHandler(t *testing.T) {
 			},
 			expectCode: http.StatusBadRequest,
 		},
+		{
+			description: "Valid operation - Supply",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Sender: senderAddress,
+						From: Supply{
+							Type:     SupplyType,
+							Address:  "0xc9164f44661d83d01CbB69C0b0E471280f446099",
+							Currency: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xc9164f44661d83d01CbB69C0b0E471280f446099",
+							Amount:  "104",
+						},
+						Status: Received,
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
 	}
 
 	// Run test cases
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			payloadBytes, _ := json.Marshal(tc.payload)
+			payloadBytes, err := json.Marshal(tc.payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			req, _ := http.NewRequest("POST", "/submit", bytes.NewBuffer(payloadBytes))
 			req.Header.Set("Content-Type", "application/json")
 

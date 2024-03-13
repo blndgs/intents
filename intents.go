@@ -1,12 +1,17 @@
 package model
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"time"
 
 	"github.com/goccy/go-json"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 )
@@ -17,7 +22,7 @@ const (
 	TokenType          AssetType = "TOKEN"
 	StakeType          AssetType = "STAKE"
 	SupplyType         AssetType = "SUPPLY"
-	WithdrawSupplyType AssetType = "WITHDRAW_SUPPLY"
+	WithdrawSupplyType AssetType = "WITHDRAW"
 )
 
 type ProcessingStatus string
@@ -47,30 +52,31 @@ type Stake struct {
 }
 
 type Supply struct {
-	Type AssetType `json:"type,omitempty" binding:"required"`
+	Type AssetType `json:"type" binding:"required"`
 
-	// Asset is the contract address for the token to Supply or add into the
+	// Currency is the contract address for the token to Supply or add into the
 	// Protocol
-	Asset string `json:"asset,omitempty" binding:"required"`
+	Currency string `json:"currency" binding:"required,eth_addr"`
 
-	// can be empty? and solver chooses a default protocol to supply to?
+	// Explicit mention of a DeFi project.
+	// This can be empty and the solver chooses a default protocol to supply to?
 	// this would be the Contract address for the Protocol
 	// Aave3 as an example would be 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
-	Protocol string `json:"protocol,omitempty"`
+	Address string `json:"address" binding:"required,eth_contract"`
 }
 
 type WithdrawSupply struct {
-	Type AssetType `json:"type,omitempty" binding:"required"`
-	// Asset is the contract address for the token to withdraw or add into the
-	// Protocol
-	Asset string `json:"asset,omitempty" binding:"required"`
+	Type AssetType `json:"type" binding:"required"`
 
-	Amount string `json:"amount,omitempty" binding:"required"`
+	// Currency is the contract address for the token to withdraw
+	Currency common.Address `json:"currency" binding:"required,eth_addr"`
+
+	Amount string `json:"amount" binding:"required"`
 
 	// this would be the Contract address for the Protocol to withdraw
 	// your assets from. You must have previously supplied assets to this protocol
 	// Aave3 as an example would be 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
-	Protocol string `json:"protocol,omitempty" binding:"required"`
+	Address string `json:"address" binding:"required,eth_contract"`
 }
 
 // Transactional interface to be implemented by Asset and Stake.
@@ -100,7 +106,33 @@ type Body struct {
 // Custom validation for Ethereum address using go-playground validator.
 func validEthAddress(fl validator.FieldLevel) bool {
 	address := fl.Field().String()
+	fmt.Println(common.IsHexAddress(address), address)
 	return common.IsHexAddress(address)
+}
+
+// Custom validation for Ethereum contract address
+func validEthContractAddress(fl validator.FieldLevel) bool {
+	address := fl.Field().String()
+
+	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
+	defer cancelFn()
+
+	rpcURL := os.Getenv("ETH_RPC_URL")
+	if rpcURL == "" {
+		rpcURL = "https://rpc.flashbots.net"
+	}
+
+	client, err := ethclient.DialContext(ctx, rpcURL)
+	if err != nil {
+		return false
+	}
+
+	bytecode, err := client.CodeAt(ctx, common.HexToAddress(address), nil)
+	if err != nil {
+		return false
+	}
+
+	return len(bytecode) > 0
 }
 
 // Custom validation for ChainID to ensure it's a positive *big.Int.
@@ -135,6 +167,10 @@ func validAssetType(fl validator.FieldLevel) bool {
 func NewValidator() error {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		if err := v.RegisterValidation("eth_addr", validEthAddress); err != nil {
+			return fmt.Errorf("failed to register validator for eth_addr: %w", err)
+		}
+
+		if err := v.RegisterValidation("eth_contract", validEthContractAddress); err != nil {
 			return fmt.Errorf("failed to register validator for eth_addr: %w", err)
 		}
 
@@ -194,6 +230,17 @@ func validateTransactional(td Transactional) error {
 		if !validChainIDCustom(v.ChainId) {
 			return fmt.Errorf("invalid stake chain ID")
 		}
+
+	case Supply:
+		// we already validated both addresses
+		return nil
+
+	case WithdrawSupply:
+		// we already validated both addresses
+		if !validAmount(v.Amount) {
+			return errors.New("invalid asset amount")
+		}
+
 	default:
 		return fmt.Errorf("unsupported transaction detail type")
 	}
@@ -262,6 +309,7 @@ func unmarshalTransactional(data json.RawMessage) (Transactional, error) {
 	if err := json.Unmarshal(data, &typeDetect); err != nil {
 		return nil, err
 	}
+	fmt.Println("oops", typeDetect.Type)
 	switch typeDetect.Type {
 	case TokenType:
 		var asset Asset
@@ -275,6 +323,12 @@ func unmarshalTransactional(data json.RawMessage) (Transactional, error) {
 			return nil, err
 		}
 		return stake, nil
+	case SupplyType:
+		var supply Supply
+		return &supply, json.Unmarshal(data, &supply)
+	case WithdrawSupplyType:
+		var withdraw WithdrawSupply
+		return &withdraw, json.Unmarshal(data, &withdraw)
 	default:
 		return nil, fmt.Errorf("unknown transactional type: %s", typeDetect.Type)
 	}
