@@ -23,6 +23,7 @@ func submitHandler(c *gin.Context) {
 	// Validate the kind-specific fields
 	for _, intent := range body.Intents {
 		if err := intent.ValidateIntent(); err != nil {
+			fmt.Println(err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "The Intent's kind does not validate"})
 			return
 		}
@@ -270,13 +271,38 @@ func TestSubmitHandler(t *testing.T) {
 						Sender: senderAddress,
 						From: Supply{
 							Type:     SupplyType,
-							Address:  "0xc9164f44661d83d01CbB69C0b0E471280f446099",
+							Address:  "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
 							Currency: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
 						},
 						To: Asset{
 							Type:    TokenType,
-							Address: "0xc9164f44661d83d01CbB69C0b0E471280f446099",
+							Address: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
 							Amount:  "104",
+							ChainId: "1",
+						},
+						Status: Received,
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Valid operation - Withdraw supply",
+			payload: Body{
+				Intents: []*Intent{
+					{
+						Sender: senderAddress,
+						From: WithdrawSupply{
+							Type:     WithdrawSupplyType,
+							Address:  "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
+							Currency: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+							Amount:   "104",
+						},
+						To: Asset{
+							Type:    TokenType,
+							Address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+							Amount:  "104",
+							ChainId: "1",
 						},
 						Status: Received,
 					},

@@ -56,7 +56,7 @@ type Supply struct {
 
 	// Currency is the contract address for the token to Supply or add into the
 	// Protocol
-	Currency string `json:"currency" binding:"required,eth_addr"`
+	Currency string `json:"currency" binding:"required,eth_contract"`
 
 	// Explicit mention of a DeFi project.
 	// This can be empty and the solver chooses a default protocol to supply to?
@@ -69,7 +69,7 @@ type WithdrawSupply struct {
 	Type AssetType `json:"type" binding:"required"`
 
 	// Currency is the contract address for the token to withdraw
-	Currency common.Address `json:"currency" binding:"required,eth_addr"`
+	Currency string `json:"currency" binding:"required,eth_contract"`
 
 	Amount string `json:"amount" binding:"required"`
 
@@ -106,7 +106,6 @@ type Body struct {
 // Custom validation for Ethereum address using go-playground validator.
 func validEthAddress(fl validator.FieldLevel) bool {
 	address := fl.Field().String()
-	fmt.Println(common.IsHexAddress(address), address)
 	return common.IsHexAddress(address)
 }
 
@@ -119,7 +118,7 @@ func validEthContractAddress(fl validator.FieldLevel) bool {
 
 	rpcURL := os.Getenv("ETH_RPC_URL")
 	if rpcURL == "" {
-		rpcURL = "https://rpc.flashbots.net"
+		rpcURL = "https://eth.public-rpc.com"
 	}
 
 	client, err := ethclient.DialContext(ctx, rpcURL)
@@ -309,7 +308,6 @@ func unmarshalTransactional(data json.RawMessage) (Transactional, error) {
 	if err := json.Unmarshal(data, &typeDetect); err != nil {
 		return nil, err
 	}
-	fmt.Println("oops", typeDetect.Type)
 	switch typeDetect.Type {
 	case TokenType:
 		var asset Asset
@@ -325,10 +323,10 @@ func unmarshalTransactional(data json.RawMessage) (Transactional, error) {
 		return stake, nil
 	case SupplyType:
 		var supply Supply
-		return &supply, json.Unmarshal(data, &supply)
+		return supply, json.Unmarshal(data, &supply)
 	case WithdrawSupplyType:
 		var withdraw WithdrawSupply
-		return &withdraw, json.Unmarshal(data, &withdraw)
+		return withdraw, json.Unmarshal(data, &withdraw)
 	default:
 		return nil, fmt.Errorf("unknown transactional type: %s", typeDetect.Type)
 	}
