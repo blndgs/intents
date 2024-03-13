@@ -170,7 +170,7 @@ func NewValidator() error {
 		}
 
 		if err := v.RegisterValidation("eth_contract", validEthContractAddress); err != nil {
-			return fmt.Errorf("failed to register validator for eth_addr: %w", err)
+			return fmt.Errorf("failed to register validator for eth_contract: %w", err)
 		}
 
 		if err := v.RegisterValidation("chain_id", validChainID); err != nil {
