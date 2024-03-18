@@ -304,8 +304,8 @@ func unmarshalTransactional(data json.RawMessage) (Transactional, error) {
 		}
 		return stake, nil
 	case LoanType:
-		var supply Loan
-		return supply, json.Unmarshal(data, &supply)
+		var loan Loan
+		return loan, json.Unmarshal(data, &loan)
 
 	default:
 		return nil, fmt.Errorf("unknown transactional type: %s", typeDetect.Type)
