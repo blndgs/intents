@@ -2,7 +2,6 @@ package model
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -50,30 +49,18 @@ type Stake struct {
 	ChainId string    `json:"chainId"`
 }
 
-type LoanTo struct {
+type Loan struct {
 	Type AssetType `json:"type" binding:"required"`
 
 	// Asset is the contract address for the token to Supply or add into the
 	// Protocol
 	Asset string `json:"asset" binding:"required,eth_contract"`
 
+	Amount string `json:"amount"`
+
 	// Explicit mention of a DeFi project.
 	// This can be empty and the solver chooses a default protocol to supply to?
 	// this would be the Contract address for the Protocol
-	// Aave3 as an example would be 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
-	Address string `json:"address" binding:"required,eth_contract"`
-}
-
-type LoanFrom struct {
-	Type AssetType `json:"type" binding:"required"`
-
-	// Asset is the contract address for the token to withdraw
-	Asset string `json:"asset" binding:"required,eth_contract"`
-
-	Amount string `json:"amount" binding:"required"`
-
-	// this would be the Contract address for the Protocol to withdraw
-	// your assets from. You must have previously supplied assets to this protocol
 	// Aave3 as an example would be 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
 	Address string `json:"address" binding:"required,eth_contract"`
 }
@@ -229,16 +216,12 @@ func validateTransactional(td Transactional) error {
 			return fmt.Errorf("invalid stake chain ID")
 		}
 
-	case LoanTo:
-		// we already validated both addresses
-		return nil
-
-	case LoanFrom:
-		// we already validated both addresses
-		if !validAmount(v.Amount) {
-			return errors.New("invalid asset amount")
+	case Loan:
+		if v.Amount != "" && !validAmount(v.Amount) {
+			return fmt.Errorf("invalid stake chain ID")
 		}
 
+		return nil
 	default:
 		return fmt.Errorf("unsupported transaction detail type")
 	}
@@ -321,25 +304,8 @@ func unmarshalTransactional(data json.RawMessage) (Transactional, error) {
 		}
 		return stake, nil
 	case LoanType:
-		// we use the LoanType for both LoanTo and LoanFrom
-		// the only difference is the Amount field present in LoanFrom,
-		// we can use that to determine the struct to unmarshal into
-
-		var typeDetectStruct struct {
-			Amount string `json:"amount"`
-		}
-
-		if err := json.Unmarshal(data, &typeDetectStruct); err != nil {
-			return nil, err
-		}
-
-		if typeDetectStruct.Amount == "" {
-			var supply LoanTo
-			return supply, json.Unmarshal(data, &supply)
-		}
-
-		var withdraw LoanFrom
-		return withdraw, json.Unmarshal(data, &withdraw)
+		var supply Loan
+		return supply, json.Unmarshal(data, &supply)
 
 	default:
 		return nil, fmt.Errorf("unknown transactional type: %s", typeDetect.Type)

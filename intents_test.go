@@ -275,7 +275,7 @@ func TestSubmitHandler(t *testing.T) {
 							Amount:  "104",
 							ChainId: "1",
 						},
-						To: LoanTo{
+						To: Loan{
 							Type:    LoanType,
 							Address: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
 							Asset:   "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
@@ -287,12 +287,12 @@ func TestSubmitHandler(t *testing.T) {
 			expectCode: http.StatusOK,
 		},
 		{
-			description: "jfkf",
+			description: "Valid operation - Withdraw Supply",
 			payload: Body{
 				Intents: []*Intent{
 					{
 						Sender: senderAddress,
-						From: LoanFrom{
+						From: Loan{
 							Type:    LoanType,
 							Address: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
 							Asset:   "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
