@@ -19,10 +19,9 @@ import (
 type AssetType string
 
 const (
-	TokenType          AssetType = "TOKEN"
-	StakeType          AssetType = "STAKE"
-	SupplyType         AssetType = "SUPPLY"
-	WithdrawSupplyType AssetType = "WITHDRAW"
+	TokenType AssetType = "TOKEN"
+	StakeType AssetType = "STAKE"
+	LoanType  AssetType = "LOAN"
 )
 
 type ProcessingStatus string
@@ -51,12 +50,12 @@ type Stake struct {
 	ChainId string    `json:"chainId"`
 }
 
-type Supply struct {
+type LoanTo struct {
 	Type AssetType `json:"type" binding:"required"`
 
-	// Currency is the contract address for the token to Supply or add into the
+	// Asset is the contract address for the token to Supply or add into the
 	// Protocol
-	Currency string `json:"currency" binding:"required,eth_contract"`
+	Asset string `json:"asset" binding:"required,eth_contract"`
 
 	// Explicit mention of a DeFi project.
 	// This can be empty and the solver chooses a default protocol to supply to?
@@ -65,11 +64,11 @@ type Supply struct {
 	Address string `json:"address" binding:"required,eth_contract"`
 }
 
-type WithdrawSupply struct {
+type LoanFrom struct {
 	Type AssetType `json:"type" binding:"required"`
 
-	// Currency is the contract address for the token to withdraw
-	Currency string `json:"currency" binding:"required,eth_contract"`
+	// Asset is the contract address for the token to withdraw
+	Asset string `json:"asset" binding:"required,eth_contract"`
 
 	Amount string `json:"amount" binding:"required"`
 
@@ -230,11 +229,11 @@ func validateTransactional(td Transactional) error {
 			return fmt.Errorf("invalid stake chain ID")
 		}
 
-	case Supply:
+	case LoanTo:
 		// we already validated both addresses
 		return nil
 
-	case WithdrawSupply:
+	case LoanFrom:
 		// we already validated both addresses
 		if !validAmount(v.Amount) {
 			return errors.New("invalid asset amount")
@@ -321,12 +320,27 @@ func unmarshalTransactional(data json.RawMessage) (Transactional, error) {
 			return nil, err
 		}
 		return stake, nil
-	case SupplyType:
-		var supply Supply
-		return supply, json.Unmarshal(data, &supply)
-	case WithdrawSupplyType:
-		var withdraw WithdrawSupply
+	case LoanType:
+		// we use the LoanType for both LoanTo and LoanFrom
+		// the only difference is the Amount field present in LoanFrom,
+		// we can use that to determine the struct to unmarshal into
+
+		var typeDetectStruct struct {
+			Amount string `json:"amount"`
+		}
+
+		if err := json.Unmarshal(data, &typeDetectStruct); err != nil {
+			return nil, err
+		}
+
+		if typeDetectStruct.Amount == "" {
+			var supply LoanTo
+			return supply, json.Unmarshal(data, &supply)
+		}
+
+		var withdraw LoanFrom
 		return withdraw, json.Unmarshal(data, &withdraw)
+
 	default:
 		return nil, fmt.Errorf("unknown transactional type: %s", typeDetect.Type)
 	}
