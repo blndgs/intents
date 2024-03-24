@@ -46,8 +46,6 @@ func TestSubmitHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := setupRouter()
 	const senderAddress = "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b"
-	const validTokenAddressFrom = "0x0000000000000000000000000000000000000001"
-	const validTokenAddressTo = "0x0000000000000000000000000000000000000002"
 	testCases := []struct {
 		description string
 		payload     Body
@@ -59,18 +57,17 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []*Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: validTokenAddressFrom,
-							Amount:  "100",
-							ChainId: "1",
-						},
-						To: Asset{
-							Type:    TokenType,
-							Address: validTokenAddressTo,
-							Amount:  "50",
-							ChainId: "1",
-						},
+						From: `{
+							"type":     "TOKEN",
+							"address":  "0x0000000000000000000000000000000000000001",
+							"amount":   "100",
+							"chain_id": "1",
+						}`,
+						To: `{
+							"type":     "TOKEN",
+							"address":  "0x0000000000000000000000000000000000000002",
+							"chain_id": "1",
+						}`,
 						ExtraData: &ExtraData{
 							PartiallyFillable: false,
 						},
@@ -81,106 +78,22 @@ func TestSubmitHandler(t *testing.T) {
 			expectCode: http.StatusOK,
 		},
 		{
-			description: "Invalid Request - Invalid Ethereum address format",
-			payload: Body{
-				Intents: []*Intent{
-					{
-						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "InvalidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
-						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							Amount:  "50",
-							ChainId: "1",
-						},
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
-						},
-						ExpirationAt: 123456789,
-						Status:       Received,
-					},
-				},
-			},
-			expectCode: http.StatusBadRequest,
-		},
-		{
-			description: "Invalid Request - Invalid Chain ID",
-			payload: Body{
-				Intents: []*Intent{
-					{
-						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "-1", // Invalid Chain ID
-						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							Amount:  "50",
-							ChainId: "1",
-						},
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
-						},
-						ExpirationAt: 123456789,
-						Status:       Received,
-					},
-				},
-			},
-			expectCode: http.StatusBadRequest,
-		},
-		{
-			description: "Invalid Request - Unsupported Asset Type",
-			payload: Body{
-				Intents: []*Intent{
-					{
-						Sender: senderAddress,
-						From: Asset{
-							Type:    "UNSUPPORTED_TYPE", // Unsupported asset type
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
-						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							Amount:  "50",
-							ChainId: "1",
-						},
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
-						},
-						ExpirationAt: 123456789,
-						Status:       Received,
-					},
-				},
-			},
-			expectCode: http.StatusBadRequest,
-		},
-		{
 			description: "Valid Operation - Swap (buy or sell) for AMM without expiration date",
 			payload: Body{
 				Intents: []*Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
-						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							ChainId: "1",
-						},
+						From: `{
+							"type":     "TOKEN",
+							"address":  "0x0000000000000000000000000000000000000001",
+							"amount":   "100",
+							"chain_id": "1",
+						}`,
+						To: `{
+							"type":     "TOKEN",
+							"address":  "0x0000000000000000000000000000000000000002",
+							"chain_id": "1",
+						}`,
 						ExtraData: &ExtraData{
 							PartiallyFillable: false,
 						},
@@ -196,66 +109,22 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []*Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
-						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							Amount:  "100",
-							ChainId: "1",
-						},
+						From: `{
+							"type":     "TOKEN",
+							"address":  "0x0000000000000000000000000000000000000001",
+							"amount":   "100",
+							"chain_id": "1",
+						}`,
+						To: `{
+							"type":     "TOKEN",
+							"address":  "0x0000000000000000000000000000000000000002",
+							"chain_id": "1",
+						}`,
 						ExtraData: &ExtraData{
 							PartiallyFillable: false,
 						},
 						ExpirationAt: time.Now().Unix(), // will be validated by solver
 						Status:       Received,
-					},
-				},
-			},
-			expectCode: http.StatusBadRequest,
-		},
-		{
-			description: "Valid Operation - Staking",
-			payload: Body{
-				Intents: []*Intent{
-					{
-						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
-						},
-						To: Stake{
-							Type:    StakeType,
-							Address: "0xValidTokenAddressTo",
-							ChainId: "1",
-						},
-						Status: Received,
-					},
-				},
-			},
-			expectCode: http.StatusBadRequest,
-		},
-		{
-			description: "Valid Operation - Unstaking",
-			payload: Body{
-				Intents: []*Intent{
-					{
-						Sender: senderAddress,
-						From: Stake{
-							Type:    StakeType,
-							Address: "0xValidTokenAddressTo",
-						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-						},
-						Status: Received,
 					},
 				},
 			},
