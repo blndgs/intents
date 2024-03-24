@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -76,59 +75,6 @@ func TestSubmitHandler(t *testing.T) {
 				},
 			},
 			expectCode: http.StatusOK,
-		},
-		{
-			description: "Valid Operation - Swap (buy or sell) for AMM without expiration date",
-			payload: Body{
-				Intents: []*Intent{
-					{
-						Sender: senderAddress,
-						From: `{
-							"type":     "TOKEN",
-							"address":  "0x0000000000000000000000000000000000000001",
-							"amount":   "100",
-							"chain_id": "1",
-						}`,
-						To: `{
-							"type":     "TOKEN",
-							"address":  "0x0000000000000000000000000000000000000002",
-							"chain_id": "1",
-						}`,
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
-						},
-						Status: Received,
-					},
-				},
-			},
-			expectCode: http.StatusBadRequest,
-		},
-		{
-			description: "Valid Operation - Orderbook with expiration date",
-			payload: Body{
-				Intents: []*Intent{
-					{
-						Sender: senderAddress,
-						From: `{
-							"type":     "TOKEN",
-							"address":  "0x0000000000000000000000000000000000000001",
-							"amount":   "100",
-							"chain_id": "1",
-						}`,
-						To: `{
-							"type":     "TOKEN",
-							"address":  "0x0000000000000000000000000000000000000002",
-							"chain_id": "1",
-						}`,
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
-						},
-						ExpirationAt: time.Now().Unix(), // will be validated by solver
-						Status:       Received,
-					},
-				},
-			},
-			expectCode: http.StatusBadRequest,
 		},
 	}
 

@@ -95,20 +95,9 @@ func (i *Intent) ValidateIntent() error {
 	return nil
 }
 
-// Validates the asset amount for correctness.
-func validAmount(amountStr string) bool {
-	amount, ok := new(big.Int).SetString(amountStr, 10)
-	return ok && amount.Sign() > 0
-}
-
 // Custom validator functions for direct call (not using the validator.FieldLevel interface).
 func validEthAddressCustom(address string) bool {
 	return common.IsHexAddress(address)
-}
-
-func validChainIDCustom(chainIDStr string) bool {
-	chainID, ok := new(big.Int).SetString(chainIDStr, 10)
-	return ok && chainID.Sign() > 0
 }
 
 // ToJSON serializes the Intent into a JSON string
