@@ -1,0 +1,13 @@
+
+syntax = "proto3";
+
+package proto.v1;
+
+option go_package = "go/proto";
+
+message SimpleRequest {
+  string sender_uuid = 1;
+
+  string recipient_address = 2;
+}
+
