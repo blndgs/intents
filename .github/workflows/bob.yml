@@ -14,17 +14,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install nix
-        uses: cachix/install-nix-action@v22
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
 
-      - name: Install bob
-        uses: benchkram/bob-install-action@v1
-        with:
-          version: 0.8.0
-
-      - name: Bob build
+      - name: Generate code
         run: buf generate
 
       - name: Check Diff
@@ -38,10 +31,29 @@ jobs:
         run: exit 1 ## fail this if the committed artifact does not match the generated one
         if: env.GIT_DIFF
 
-      # - name: Post status to the Slack channel
-      #   id: slack
-      #   uses: slackapi/slack-github-action@v1.23.0
-      #   if: failure()
-      #   with:
-      #     channel-id: ""
-      #     slack-message: "${{env.DEPLOYMENT_ENV}} : Bob build failed in GH actions ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |-
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Build just succeeded"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": " github action build result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+                  }
+                }
+              ]
+            }
+        if: always()

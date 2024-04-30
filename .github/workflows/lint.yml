@@ -1,11 +1,13 @@
-name: Lint Protobuf
+name: Lint Protobuf definitions
 on:
-  pull_request:
+  - pull_request
+  - push
+
 jobs:
   golangci:
     name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: bufbuild/buf-setup-action@v1.31.0
+      - uses: bufbuild/buf-setup-action@v1
       - run: buf lint

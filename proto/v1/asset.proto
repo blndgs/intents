@@ -3,8 +3,6 @@ syntax = "proto3";
 
 package proto.v1;
 
-option go_package = "go/proto";
-
 enum AssetKind {
   ASSET_KIND_UNSPECIFIED = 0;
   ASSET_KIND_TOKEN = 1;
