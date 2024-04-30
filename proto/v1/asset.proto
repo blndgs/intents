@@ -6,9 +6,10 @@ package proto.v1;
 option go_package = "go/proto";
 
 enum AssetKind {
-  Token = 0;
-	Stake = 1;
-	Loan = 2;
+  ASSET_KIND_UNSPECIFIED = 0;
+  ASSET_KIND_TOKEN = 1;
+	ASSET_KIND_STAKE = 2;
+	ASSET_KIND_LOAN = 3;
 } 
 
 message LoanType {

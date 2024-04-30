@@ -25,7 +25,7 @@ jobs:
           version: 0.8.0
 
       - name: Bob build
-        run: bob build
+        run: buf generate
 
       - name: Check Diff
         uses: technote-space/get-diff-action@v6
