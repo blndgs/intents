@@ -1,0 +1,34 @@
+
+syntax = "proto3";
+
+package proto.v1;
+
+option go_package = "go/proto";
+
+enum AssetKind {
+  Token = 0;
+	Stake = 1;
+	Loan = 2;
+} 
+
+message LoanType {
+  AssetKind type = 1;
+  string asset = 2;
+  string amount = 3;
+  string address  = 4;
+}
+
+message AssetType {
+  AssetKind type = 1;
+  string address = 2;
+  string amount = 3;
+  string chainId = 4;
+}
+
+message StakeType {
+  AssetKind type = 1;
+  string address = 2;
+  string amount = 3;
+}
+
+
