@@ -66,6 +66,7 @@ export interface StakeType {
   type: AssetKind;
   address: string;
   amount: string;
+  chainId: string;
 }
 
 function createBaseLoanType(): LoanType {
@@ -277,7 +278,7 @@ export const AssetType = {
 };
 
 function createBaseStakeType(): StakeType {
-  return { type: 0, address: "", amount: "" };
+  return { type: 0, address: "", amount: "", chainId: "" };
 }
 
 export const StakeType = {
@@ -290,6 +291,9 @@ export const StakeType = {
     }
     if (message.amount !== "") {
       writer.uint32(26).string(message.amount);
+    }
+    if (message.chainId !== "") {
+      writer.uint32(34).string(message.chainId);
     }
     return writer;
   },
@@ -322,6 +326,13 @@ export const StakeType = {
 
           message.amount = reader.string();
           continue;
+        case 4:
+          if (tag !== 34) {
+            break;
+          }
+
+          message.chainId = reader.string();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -336,6 +347,7 @@ export const StakeType = {
       type: isSet(object.type) ? assetKindFromJSON(object.type) : 0,
       address: isSet(object.address) ? globalThis.String(object.address) : "",
       amount: isSet(object.amount) ? globalThis.String(object.amount) : "",
+      chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
     };
   },
 
@@ -350,6 +362,9 @@ export const StakeType = {
     if (message.amount !== "") {
       obj.amount = message.amount;
     }
+    if (message.chainId !== "") {
+      obj.chainId = message.chainId;
+    }
     return obj;
   },
 
@@ -361,6 +376,7 @@ export const StakeType = {
     message.type = object.type ?? 0;
     message.address = object.address ?? "";
     message.amount = object.amount ?? "";
+    message.chainId = object.chainId ?? "";
     return message;
   },
 };

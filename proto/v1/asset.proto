@@ -28,6 +28,7 @@ message StakeType {
   AssetKind type = 1;
   string address = 2;
   string amount = 3;
+  string chainId = 4;
 }
 
 
