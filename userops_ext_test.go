@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -30,7 +31,7 @@ func mockSignature() []byte {
 func mockIntentJSON() string {
 	var (
 		intentJSON = `{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","from":{"type":"TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":"100","chainId":"80001"},"to":{"type":"TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":"50","chainId":"80001"},"extraData":{"partiallyFillable":false},"status":"Received"}`
-		intent     Intent
+		intent     pb.Intent
 	)
 	if err := json.Unmarshal([]byte(intentJSON), &intent); err != nil {
 		// signal when intent JSON is no longer valid
@@ -436,46 +437,46 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 		"expirationAt": 0
 	}`
 
-	var intent Intent
+	var intent pb.Intent
 	if err := json.Unmarshal([]byte(rawJSON), &intent); err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
 	// Correctly type-assert 'From' and 'To' after unmarshalling
-	fromAsset, fromOk := intent.From.(Asset)
+	from, fromOk := intent.From.(*pb.Intent_FromAsset)
 	if !fromOk {
 		t.Fatalf("From field is not of type Asset")
 	}
-	if fromAsset.Address != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {
+	if from.FromAsset.GetAddress() != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {
 		t.Errorf("From.Address does not match expected value")
 	}
-	if fromAsset.ChainId != "1" {
-		t.Errorf("From.ChainId does not match expected value, got %s", fromAsset.ChainId)
+	if from.FromAsset.GetChainId() != "1" {
+		t.Errorf("From.ChainId does not match expected value, got %s", from.FromAsset.GetChainId())
 	}
 
-	toAsset, toOk := intent.To.(Asset)
+	to, toOk := intent.To.(*pb.Intent_ToAsset)
 	if !toOk {
 		t.Fatalf("To field is not of type Asset")
 	}
-	if toAsset.Address != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
+	if to.ToAsset.GetAddress() != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
 		t.Errorf("To.Address does not match expected value")
 	}
-	if toAsset.ChainId != "1" {
-		t.Errorf("To.ChainId does not match expected value, got %s", toAsset.ChainId)
+	if to.ToAsset.GetChainId() != "1" {
+		t.Errorf("To.ChainId does not match expected value, got %s", to.ToAsset.GetChainId())
 	}
 
-	if intent.Status != Received {
+	if intent.Status != pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED {
 		t.Errorf("Status does not match expected value, got %s", intent.Status)
 	}
 
 	// Assuming there's a way to validate the amounts correctly, considering they're strings in the provided example
-	fromAmount, ok := new(big.Int).SetString(fromAsset.Amount, 10)
+	fromAmount, ok := new(big.Int).SetString(from.FromAsset.GetAmount(), 10)
 	if !ok || fromAmount.Cmp(big.NewInt(100)) != 0 {
-		t.Errorf("From.Amount does not match expected value, got %s", fromAsset.Amount)
+		t.Errorf("From.Amount does not match expected value, got %s", from.FromAsset.GetAmount())
 	}
 
-	toAmount, ok := new(big.Int).SetString(toAsset.Amount, 10)
+	toAmount, ok := new(big.Int).SetString(to.ToAsset.GetAmount(), 10)
 	if !ok || toAmount.Cmp(big.NewInt(50)) != 0 {
-		t.Errorf("To.Amount does not match expected value, got %s", toAsset.Amount)
+		t.Errorf("To.Amount does not match expected value, got %s", to.ToAsset.GetAmount())
 	}
 }
 

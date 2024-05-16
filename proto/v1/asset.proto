@@ -1,34 +1,85 @@
-
 syntax = "proto3";
 
 package proto.v1;
 
+import "google/protobuf/wrappers.proto";
+import "validate/validate.proto";
+
+// Enum representing different types of assets.
 enum AssetKind {
-  ASSET_KIND_UNSPECIFIED = 0;
-  ASSET_KIND_TOKEN = 1;
-	ASSET_KIND_STAKE = 2;
-	ASSET_KIND_LOAN = 3;
+  ASSET_KIND_UNSPECIFIED = 0;  // Default value, unspecified asset type.
+  ASSET_KIND_TOKEN = 1;        // Token asset type.
+  ASSET_KIND_STAKE = 2;        // Stake asset type.
+  ASSET_KIND_LOAN = 3;         // Loan asset type.
 } 
 
-message LoanType {
-  AssetKind type = 1;
-  string asset = 2;
-  string amount = 3;
-  string address  = 4;
+// Enum representing the processing status of an intent.
+enum ProcessingStatus {
+  PROCESSING_STATUS_UNSPECIFIED = 0; // Default value, unspecified processing status.
+  PROCESSING_STATUS_RECEIVED = 1;        // Intent has been received.
+  PROCESSING_STATUS_SENT_TO_SOLVER = 2;  // Intent has been sent to the solver.
+  PROCESSING_STATUS_SOLVED = 3;          // Intent has been solved.
+  PROCESSING_STATUS_UNSOLVED = 4;        // Intent remains unsolved.
+  PROCESSING_STATUS_EXPIRED = 5;         // Intent has expired.
+  PROCESSING_STATUS_ON_CHAIN = 6;        // Intent is on the blockchain.
+  PROCESSING_STATUS_INVALID = 7;         // Intent is invalid.
 }
 
+// Message representing the details of an asset.
 message AssetType {
-  AssetKind type = 1;
-  string address = 2;
-  string amount = 3;
-  string chainId = 4;
+  AssetKind type = 1  [(validate.rules).enum = {defined_only: true}];  // The type of the asset.
+  string address = 2 [(validate.rules).string = {min_len: 42, max_len: 42, pattern: "^0x[a-fA-F0-9]{40}$"}];  // The address of the asset.
+  string amount = 3 [(validate.rules).string = {pattern: "^[0-9]+$"}];  // The amount of the asset.
+  string chain_id = 4 [(validate.rules).string = {min_len: 1, pattern: "^[0-9]+$"}];  // The chain ID where the asset resides.
 }
 
+// Message representing the details of a stake.
 message StakeType {
-  AssetKind type = 1;
-  string address = 2;
-  string amount = 3;
-  string chainId = 4;
+  AssetKind type = 1 [(validate.rules).enum = {defined_only: true}];  // The type of the stake.
+  string address = 2 [(validate.rules).string = {pattern: "^0x[a-fA-F0-9]{40}$"}];  // The address of the stake.
+  string amount = 3 [(validate.rules).string = {pattern: "^[0-9]+$"}];  // The amount of the stake.
+  string chain_id = 4 [(validate.rules).string = {min_len: 1, pattern: "^[0-9]+$"}];  // The chain ID where the asset resides.
 }
 
+// Message representing the details of a loan.
+message LoanType {
+  AssetKind type = 1 [(validate.rules).enum = {defined_only: true}];  // The type of the loan.
+  string asset = 2 [(validate.rules).string = {min_len: 42, max_len: 42,pattern: "^0x[a-fA-F0-9]{40}$"}];  // The asset associated with the loan.
+  string amount = 3 [(validate.rules).string = {pattern: "^[0-9]+$"}];  // The amount of the loan.
+  string address = 4 [(validate.rules).string = {min_len: 42, max_len: 42,pattern: "^0x[a-fA-F0-9]{40}$"}];  // The address associated with the loan.
+  string chain_id = 5 [(validate.rules).string = {min_len: 1, pattern: "^[0-9]+$"}];  // The chain ID where the asset resides.
+}
 
+// Message representing additional data for an intent.
+message ExtraData {
+  google.protobuf.BoolValue partially_fillable = 1;  // Indicates if the intent is partially fillable.
+}
+
+// Message representing an intent with various types of transactions.
+message Intent {
+  string sender = 1 [(validate.rules).string = {min_len: 42, max_len: 42, pattern: "^0x[a-fA-F0-9]{40}$"}];  // The sender of the intent.
+  
+  // Oneof field representing the asset being sent.
+  oneof from {
+    AssetType from_asset = 2;  // The asset being sent.
+    StakeType from_stake = 3;  // The stake being sent.
+    LoanType from_loan = 4;    // The loan being sent.
+  }
+
+  // Oneof field representing the asset being received.
+  oneof to {
+    AssetType to_asset = 5;  // The asset being received.
+    StakeType to_stake = 6;  // The stake being received.
+    LoanType to_loan = 7;    // The loan being received.
+  }
+
+  ExtraData extra_data = 8;  // Additional data for the intent.
+  ProcessingStatus status = 9;  // The processing status of the intent.
+  int64 created_at = 10 [(validate.rules).int64 = {gt: 0}];  // The creation timestamp of the intent.
+  int64 expiration_at = 11 [(validate.rules).int64 = {gt: 0}];  // The expiration timestamp of the intent.
+}
+
+// Message representing a body of intents.
+message Body {
+  repeated Intent intents = 1 [(validate.rules).repeated = {min_items: 1}];  // A list of intents.
+}

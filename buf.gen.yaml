@@ -3,11 +3,21 @@ version: v1
 managed:
   enabled: true
   go_package_prefix:
-    default: .
+    default: github.com/blndgs/model/gen/go
 
 plugins:
   - plugin: buf.build/protocolbuffers/go:v1.31.0
-    out: go
+    out: gen/go
+    opt:
+      - paths=source_relative
 
   - plugin: buf.build/community/stephenh-ts-proto:v1.167.9
-    out: typescript
+    out: gen/ts
+    opt:
+      - esModuleInterop=true
+  
+  - plugin: buf.build/bufbuild/validate-go
+    out: gen/go
+    opt:
+      - paths=source_relative
+      - module=github.com/blndgs/model

@@ -2,41 +2,37 @@ package model
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func submitHandler(c *gin.Context) {
-	var body Body
+	var body pb.Body
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		fmt.Println(body.Intents[0].ToJSON())
+		fmt.Println(body.Intents[0])
 		return
 	}
-	// Validate the kind-specific fields
-	for _, intent := range body.Intents {
-		if err := intent.ValidateIntent(); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "The Intent's kind does not validate"})
-			return
-		}
+
+	// Validate the body using the generated Validate method
+	if err := body.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
+
 	// Process the valid request
 	c.JSON(http.StatusOK, gin.H{"message": "Received successfully"})
 }
 
 func setupRouter() *gin.Engine {
 	r := gin.Default()
-
-	if err := NewValidator(); err != nil {
-		panic(err)
-	}
-
 	r.POST("/submit", submitHandler)
 	return r
 }
@@ -50,31 +46,35 @@ func TestSubmitHandler(t *testing.T) {
 	const validTokenAddressTo = "0x0000000000000000000000000000000000000002"
 	testCases := []struct {
 		description string
-		payload     Body
+		payload     *pb.Body
 		expectCode  int
 	}{
 		{
 			description: "Valid Request with TOKEN assets",
-			payload: Body{
-				Intents: []*Intent{
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: validTokenAddressFrom,
-							Amount:  "100",
-							ChainId: "1",
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								Amount:  "100",
+								ChainId: "1",
+							},
 						},
-						To: Asset{
-							Type:    TokenType,
-							Address: validTokenAddressTo,
-							Amount:  "50",
-							ChainId: "1",
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								Amount:  "50",
+								ChainId: "1",
+							},
 						},
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						Status: Received,
+						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 					},
 				},
 			},
@@ -82,27 +82,30 @@ func TestSubmitHandler(t *testing.T) {
 		},
 		{
 			description: "Invalid Request - Invalid Ethereum address format",
-			payload: Body{
-				Intents: []*Intent{
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "InvalidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: "InvalidTokenAddressFrom",
+								Amount:  "100",
+								ChainId: "1",
+							},
 						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							Amount:  "50",
-							ChainId: "1",
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								Amount:  "50",
+								ChainId: "1",
+							},
 						},
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						ExpirationAt: 123456789,
-						Status:       Received,
+						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 					},
 				},
 			},
@@ -110,27 +113,30 @@ func TestSubmitHandler(t *testing.T) {
 		},
 		{
 			description: "Invalid Request - Invalid Chain ID",
-			payload: Body{
-				Intents: []*Intent{
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "-1", // Invalid Chain ID
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								Amount:  "100",
+								ChainId: "-1", // Invalid Chain ID
+							},
 						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							Amount:  "50",
-							ChainId: "1",
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								Amount:  "50",
+								ChainId: "1",
+							},
 						},
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						ExpirationAt: 123456789,
-						Status:       Received,
+						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 					},
 				},
 			},
@@ -138,27 +144,30 @@ func TestSubmitHandler(t *testing.T) {
 		},
 		{
 			description: "Invalid Request - Unsupported Asset Type",
-			payload: Body{
-				Intents: []*Intent{
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    "UNSUPPORTED_TYPE", // Unsupported asset type
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind(999), // Unsupported asset type
+								Address: validTokenAddressFrom,
+								Amount:  "100",
+								ChainId: "1",
+							},
 						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							Amount:  "50",
-							ChainId: "1",
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								Amount:  "50",
+								ChainId: "1",
+							},
 						},
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						ExpirationAt: 123456789,
-						Status:       Received,
+						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 					},
 				},
 			},
@@ -166,107 +175,130 @@ func TestSubmitHandler(t *testing.T) {
 		},
 		{
 			description: "Valid Operation - Swap (buy or sell) for AMM without expiration date",
-			payload: Body{
-				Intents: []*Intent{
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								Amount:  "100",
+								ChainId: "1",
+							},
 						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							ChainId: "1",
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								ChainId: "1",
+							},
 						},
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						Status: Received,
+						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 					},
 				},
 			},
-			expectCode: http.StatusBadRequest,
+			expectCode: http.StatusOK,
 		},
 		{
 			description: "Valid Operation - Orderbook with expiration date",
-			payload: Body{
-				Intents: []*Intent{
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								Amount:  "100",
+								ChainId: "1",
+							},
 						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
-							Amount:  "100",
-							ChainId: "1",
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								Amount:  "100",
+								ChainId: "1",
+							},
 						},
-						ExtraData: &ExtraData{
-							PartiallyFillable: false,
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						ExpirationAt: time.Now().Unix(), // will be validated by solver
-						Status:       Received,
+						ExpirationAt: 123456789, // will be validated by solver
+						Status:       pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 					},
 				},
 			},
-			expectCode: http.StatusBadRequest,
+			expectCode: http.StatusOK,
 		},
 		{
 			description: "Valid Operation - Staking",
-			payload: Body{
-				Intents: []*Intent{
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
 					{
 						Sender: senderAddress,
-						From: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressFrom",
-							Amount:  "100",
-							ChainId: "1",
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								Amount:  "100",
+								ChainId: "1",
+							},
 						},
-						To: Stake{
-							Type:    StakeType,
-							Address: "0xValidTokenAddressTo",
-							ChainId: "1",
+						To: &pb.Intent_ToStake{
+							ToStake: &pb.StakeType{
+								Type:    pb.AssetKind_ASSET_KIND_STAKE,
+								Address: validTokenAddressTo,
+								Amount:  "100",
+								ChainId: "1",
+							},
 						},
-						Status: Received,
+						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 					},
 				},
 			},
-			expectCode: http.StatusBadRequest,
+			expectCode: http.StatusOK,
 		},
 		{
 			description: "Valid Operation - Unstaking",
-			payload: Body{
-				Intents: []*Intent{
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
 					{
 						Sender: senderAddress,
-						From: Stake{
-							Type:    StakeType,
-							Address: "0xValidTokenAddressTo",
+						From: &pb.Intent_FromStake{
+							FromStake: &pb.StakeType{
+								Type:    pb.AssetKind_ASSET_KIND_STAKE,
+								Address: validTokenAddressTo,
+								Amount:  "100",
+								ChainId: "1",
+							},
 						},
-						To: Asset{
-							Type:    TokenType,
-							Address: "0xValidTokenAddressTo",
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								ChainId: "1",
+							},
 						},
-						Status: Received,
+						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 					},
 				},
 			},
-			expectCode: http.StatusBadRequest,
+			expectCode: http.StatusOK,
 		},
 	}
 
 	// Run test cases
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			payloadBytes, _ := json.Marshal(tc.payload)
+			payloadBytes, err := protojson.Marshal(tc.payload)
+			if err != nil {
+				t.Fatalf("Failed to marshal payload: %v", err)
+			}
 			req, _ := http.NewRequest("POST", "/submit", bytes.NewBuffer(payloadBytes))
 			req.Header.Set("Content-Type", "application/json")
 
