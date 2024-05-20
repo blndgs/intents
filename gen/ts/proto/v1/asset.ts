@@ -1,6 +1,6 @@
 /* eslint-disable */
-import Long from "long";
 import _m0 from "protobufjs/minimal";
+import { Timestamp } from "../../google/protobuf/timestamp";
 import { BoolValue } from "../../google/protobuf/wrappers";
 
 export const protobufPackage = "proto.v1";
@@ -216,9 +216,11 @@ export interface Intent {
   /** The processing status of the intent. */
   status: ProcessingStatus;
   /** The creation timestamp of the intent. */
-  createdAt: number;
-  /** The expiration timestamp of the intent. */
-  expirationAt: number;
+  createdAt:
+    | Date
+    | undefined;
+  /** when this intent expires */
+  expirationAt: Date | undefined;
 }
 
 /** Message representing a body of intents. */
@@ -622,8 +624,8 @@ function createBaseIntent(): Intent {
     toLoan: undefined,
     extraData: undefined,
     status: 0,
-    createdAt: 0,
-    expirationAt: 0,
+    createdAt: undefined,
+    expirationAt: undefined,
   };
 }
 
@@ -656,11 +658,11 @@ export const Intent = {
     if (message.status !== 0) {
       writer.uint32(72).int32(message.status);
     }
-    if (message.createdAt !== 0) {
-      writer.uint32(80).int64(message.createdAt);
+    if (message.createdAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.createdAt), writer.uint32(82).fork()).ldelim();
     }
-    if (message.expirationAt !== 0) {
-      writer.uint32(88).int64(message.expirationAt);
+    if (message.expirationAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.expirationAt), writer.uint32(90).fork()).ldelim();
     }
     return writer;
   },
@@ -736,18 +738,18 @@ export const Intent = {
           message.status = reader.int32() as any;
           continue;
         case 10:
-          if (tag !== 80) {
+          if (tag !== 82) {
             break;
           }
 
-          message.createdAt = longToNumber(reader.int64() as Long);
+          message.createdAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
           continue;
         case 11:
-          if (tag !== 88) {
+          if (tag !== 90) {
             break;
           }
 
-          message.expirationAt = longToNumber(reader.int64() as Long);
+          message.expirationAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
           continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
@@ -769,8 +771,8 @@ export const Intent = {
       toLoan: isSet(object.toLoan) ? LoanType.fromJSON(object.toLoan) : undefined,
       extraData: isSet(object.extraData) ? ExtraData.fromJSON(object.extraData) : undefined,
       status: isSet(object.status) ? processingStatusFromJSON(object.status) : 0,
-      createdAt: isSet(object.createdAt) ? globalThis.Number(object.createdAt) : 0,
-      expirationAt: isSet(object.expirationAt) ? globalThis.Number(object.expirationAt) : 0,
+      createdAt: isSet(object.createdAt) ? fromJsonTimestamp(object.createdAt) : undefined,
+      expirationAt: isSet(object.expirationAt) ? fromJsonTimestamp(object.expirationAt) : undefined,
     };
   },
 
@@ -803,11 +805,11 @@ export const Intent = {
     if (message.status !== 0) {
       obj.status = processingStatusToJSON(message.status);
     }
-    if (message.createdAt !== 0) {
-      obj.createdAt = Math.round(message.createdAt);
+    if (message.createdAt !== undefined) {
+      obj.createdAt = message.createdAt.toISOString();
     }
-    if (message.expirationAt !== 0) {
-      obj.expirationAt = Math.round(message.expirationAt);
+    if (message.expirationAt !== undefined) {
+      obj.expirationAt = message.expirationAt.toISOString();
     }
     return obj;
   },
@@ -840,8 +842,8 @@ export const Intent = {
       ? ExtraData.fromPartial(object.extraData)
       : undefined;
     message.status = object.status ?? 0;
-    message.createdAt = object.createdAt ?? 0;
-    message.expirationAt = object.expirationAt ?? 0;
+    message.createdAt = object.createdAt ?? undefined;
+    message.expirationAt = object.expirationAt ?? undefined;
     return message;
   },
 };
@@ -917,16 +919,26 @@ type KeysOfUnion<T> = T extends T ? keyof T : never;
 export type Exact<P, I extends P> = P extends Builtin ? P
   : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
 
-function longToNumber(long: Long): number {
-  if (long.gt(globalThis.Number.MAX_SAFE_INTEGER)) {
-    throw new globalThis.Error("Value is larger than Number.MAX_SAFE_INTEGER");
-  }
-  return long.toNumber();
+function toTimestamp(date: Date): Timestamp {
+  const seconds = Math.trunc(date.getTime() / 1_000);
+  const nanos = (date.getTime() % 1_000) * 1_000_000;
+  return { seconds, nanos };
 }
 
-if (_m0.util.Long !== Long) {
-  _m0.util.Long = Long as any;
-  _m0.configure();
+function fromTimestamp(t: Timestamp): Date {
+  let millis = (t.seconds || 0) * 1_000;
+  millis += (t.nanos || 0) / 1_000_000;
+  return new globalThis.Date(millis);
+}
+
+function fromJsonTimestamp(o: any): Date {
+  if (o instanceof globalThis.Date) {
+    return o;
+  } else if (typeof o === "string") {
+    return new globalThis.Date(o);
+  } else {
+    return fromTimestamp(Timestamp.fromJSON(o));
+  }
 }
 
 function isSet(value: any): boolean {

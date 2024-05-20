@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
 	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
@@ -421,7 +422,10 @@ func TestIntentUserOperation_UnmarshalJSON(t *testing.T) {
 }
 
 func TestIntentUserOperation_RawJSON(t *testing.T) {
-	rawJSON := `{
+	now := time.Now().Format(time.RFC3339)
+	expirationDate := time.Now().Add(time.Hour).Format(time.RFC3339)
+
+	rawJSON := fmt.Sprintf(`{
 		"sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 		"from_asset": {
 			"type": "ASSET_KIND_TOKEN",
@@ -439,9 +443,9 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 			"partiallyFillable": false
 		},
 		"status": "PROCESSING_STATUS_RECEIVED",
-		"createdAt": 0,
-		"expirationAt": 0
-	}`
+		"createdAt": "%s",
+		"expirationAt": "%s"
+	}`, now, expirationDate)
 
 	var intent pb.Intent
 	if err := protojson.Unmarshal([]byte(rawJSON), &intent); err != nil {

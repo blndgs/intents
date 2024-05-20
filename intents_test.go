@@ -2,7 +2,6 @@ package model
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +12,7 @@ import (
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -92,9 +92,9 @@ func TestSubmitHandler(t *testing.T) {
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt: time.Now().Unix(),
+						CreatedAt: timestamppb.Now(),
 						// add 10 minutes
-						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
 					},
 				},
 			},
@@ -126,9 +126,9 @@ func TestSubmitHandler(t *testing.T) {
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt: time.Now().Unix(),
+						CreatedAt: timestamppb.Now(),
 						// add 10 minutes
-						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
 					},
 				},
 			},
@@ -160,9 +160,9 @@ func TestSubmitHandler(t *testing.T) {
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt: time.Now().Unix(),
+						CreatedAt: timestamppb.Now(),
 						// add 10 minutes
-						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
 					},
 				},
 			},
@@ -194,9 +194,9 @@ func TestSubmitHandler(t *testing.T) {
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt: time.Now().Unix(),
+						CreatedAt: timestamppb.Now(),
 						// add 10 minutes
-						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
 					},
 				},
 			},
@@ -227,7 +227,7 @@ func TestSubmitHandler(t *testing.T) {
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt: time.Now().Unix(),
+						CreatedAt: timestamppb.Now(),
 					},
 				},
 			},
@@ -258,9 +258,10 @@ func TestSubmitHandler(t *testing.T) {
 						ExtraData: &pb.ExtraData{
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						ExpirationAt: 123456789, // will be validated by solver
-						Status:       pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt:    time.Now().Unix(),
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+						// add 10 minutes
+						ExpirationAt: timestamppb.New(time.Now().Add(-10 * time.Minute)),
 					},
 				},
 			},
@@ -289,9 +290,9 @@ func TestSubmitHandler(t *testing.T) {
 							},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt: time.Now().Unix(),
+						CreatedAt: timestamppb.Now(),
 						// add 10 minutes
-						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
 					},
 				},
 			},
@@ -319,9 +320,9 @@ func TestSubmitHandler(t *testing.T) {
 							},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt: time.Now().Unix(),
+						CreatedAt: timestamppb.Now(),
 						// add 10 minutes
-						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
 					},
 				},
 			},
@@ -336,7 +337,6 @@ func TestSubmitHandler(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to marshal payload: %v", err)
 			}
-			fmt.Println(string(payloadBytes))
 			req, _ := http.NewRequest("POST", "/submit", bytes.NewBuffer(payloadBytes))
 			req.Header.Set("Content-Type", "application/json")
 
