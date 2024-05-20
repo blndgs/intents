@@ -17,6 +17,9 @@ jobs:
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
 
+      - name: Update dependencies
+        run: buf mod update
+
       - name: Generate code
         run: buf generate
 
