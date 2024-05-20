@@ -30,7 +30,7 @@ enum ProcessingStatus {
 // Message representing the details of an asset.
 message AssetType {
   AssetKind type = 1  [(buf.validate.field).enum = {defined_only: true}];  // The type of the asset.
-  string address = 2 [(buf.validate.field).string = {min_len: 42, max_len: 42, pattern: "^0x[a-fA-F0-9]{40}$"}];  // The address of the asset.
+  string address = 2 [(buf.validate.field).string = {len:42, pattern: "^0x[a-fA-F0-9]{40}$"}];  // The address of the asset.
   // The amount of the asset.
   // In cases of AssetType being used as the to field, it doesn't have to provided
   // and can be left empty
@@ -49,9 +49,9 @@ message StakeType {
 // Message representing the details of a loan.
 message LoanType {
   AssetKind type = 1 [(buf.validate.field).enum = {defined_only: true}];  // The type of the loan.
-  string asset = 2 [(buf.validate.field).string = {min_len: 42, max_len: 42,pattern: "^0x[a-fA-F0-9]{40}$"}];  // The asset associated with the loan.
+  string asset = 2 [(buf.validate.field).string = {len:42, pattern: "^0x[a-fA-F0-9]{40}$"}];  // The asset associated with the loan.
   string amount = 3 [(buf.validate.field).string = {pattern: "^[0-9]+$"}];  // The amount of the loan.
-  string address = 4 [(buf.validate.field).string = {min_len: 42, max_len: 42,pattern: "^0x[a-fA-F0-9]{40}$"}];  // The address associated with the loan.
+  string address = 4 [(buf.validate.field).string = {len:42, pattern: "^0x[a-fA-F0-9]{40}$"}];  // The address associated with the loan.
   string chain_id = 5 [(buf.validate.field).string = {min_len: 1, pattern: "^[1-9][0-9]*$"}];  // The chain ID where the asset resides.
 }
 
@@ -62,7 +62,7 @@ message ExtraData {
 
 // Message representing an intent with various types of transactions.
 message Intent {
-  string sender = 1 [(buf.validate.field).string = {min_len: 42, max_len: 42, pattern: "^0x[a-fA-F0-9]{40}$"}];  // The sender of the intent.
+  string sender = 1 [(buf.validate.field).string = {len:42, pattern: "^0x[a-fA-F0-9]{40}$"}];  // The sender of the intent.
   
   // Oneof field representing the asset being sent.
   oneof from {
