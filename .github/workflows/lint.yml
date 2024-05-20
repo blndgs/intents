@@ -10,4 +10,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: bufbuild/buf-setup-action@v1
+
+      - name: Update dependencies
+        run: buf mod update
+
       - run: buf lint
+        name: Run Linter
