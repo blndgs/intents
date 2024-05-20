@@ -78,3 +78,39 @@ func TestUserOperation_GetDynamicGasPrice(t *testing.T) {
 		t.Errorf("GetDynamicGasPrice() = %v, want %v", got, expectedPrice)
 	}
 }
+
+func TestUserOperation_HasSignature(t *testing.T) {
+	// Test case 1: Valid signature
+	op1 := &UserOperation{
+		Signature: []byte("30db57514a2b39077b365fe49a56fd7b74e417cbd7743683567425ba5ef13b57753c8c0fa6b6570b21b5616d65e1bfbaea532402e05f2622cc80f7b7831985381b"),
+	}
+	if !op1.HasSignature() {
+		t.Errorf("HasSignature() = false, want true")
+	}
+
+	// Test case 2: Invalid signature with '0x' prefix
+	op2 := &UserOperation{
+		Signature: []byte("30db57514a2b39077b365fe49a56fd7b74e417cbd7743683567425ba5ef13b57753c8c0fa6b6570b21b5616d65e1bfbaea532402e05f2622cc80f7b7831985381b"),
+	}
+	op2.Signature[0] = 0x30
+	op2.Signature[1] = 0x78
+	if op2.HasSignature() {
+		t.Errorf("HasSignature() = true, want false")
+	}
+
+	// Test case 3: Invalid signature with insufficient length
+	op3 := &UserOperation{
+		Signature: []byte{0x12, 0x34, 0x56, 0x78, 0x90, 0xab},
+	}
+	if op3.HasSignature() {
+		t.Errorf("HasSignature() = true, want false")
+	}
+
+	// Test case 4: Empty signature
+	op4 := &UserOperation{
+		Signature: []byte{},
+	}
+	if op4.HasSignature() {
+		t.Errorf("HasSignature() = true, want false")
+	}
+}

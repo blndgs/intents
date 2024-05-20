@@ -644,3 +644,4 @@ func Test_Intent_UserOperationString(t *testing.T) {
 		t.Errorf("String() = %v, want %v", result, expected)
 	}
 }
+

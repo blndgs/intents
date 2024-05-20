@@ -97,7 +97,7 @@ func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	if _, callDataErr := hexutil.Decode(string(op.CallData)); callDataErr != nil {
 		// not solved, check if there is a valid Intent JSON
 		_, validIntent := ExtractJSONFromField(string(op.CallData))
-		if validIntent && ((op.HasSignature() && len(op.Signature) == SignatureLength) || len(op.Signature) == 0) {
+		if validIntent && (len(op.Signature) == SignatureLength && no0xPrefix(op.Signature) || len(op.Signature) == 0) {
 			// valid intent json in calldata (Unsolved) and not defined again in signature
 			return UnsolvedUserOp, nil
 		}
@@ -115,6 +115,10 @@ func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	// Solved userOp: Intent Json values may or may not be present
 	// in the signature field
 	return SolvedUserOp, nil
+}
+
+func no0xPrefix(value []byte) bool {
+	return value[0] != '0' || value[1] != 'x'
 }
 
 // extractIntentJSON attempts to extract the Intent JSON from either the CallData
@@ -170,7 +174,8 @@ func (op *UserOperation) HasIntent() bool {
 // HasSignature checks if the signature field contains a fixed length hex-encoded
 // signature value that is hex-encoded.
 func (op *UserOperation) HasSignature() bool {
-	if len(op.Signature) >= SignatureLength && op.Signature[0] != '0' && op.Signature[1] != 'x' {
+	// valid signature does not have a '0x' prefix
+	if len(op.Signature) >= SignatureLength && no0xPrefix(op.Signature) {
 		return true
 	}
 
