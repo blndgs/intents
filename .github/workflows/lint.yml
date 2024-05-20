@@ -14,5 +14,5 @@ jobs:
       - name: Update dependencies
         run: buf mod update
 
-      - run: buf lint
-        name: Run Linter
+      - name: Run Linter
+        run: buf lint

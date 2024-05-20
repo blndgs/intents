@@ -25,5 +25,3 @@ tmp
 # v code
 launch.json
 
-# buf
-buf.lock
