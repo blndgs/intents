@@ -57,72 +57,13 @@ func (m *AssetType) validate(all bool) error {
 
 	var errors []error
 
-	if _, ok := AssetKind_name[int32(m.GetType())]; !ok {
-		err := AssetTypeValidationError{
-			field:  "Type",
-			reason: "value must be one of the defined enum values",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for Type
 
-	if utf8.RuneCountInString(m.GetAddress()) != 42 {
-		err := AssetTypeValidationError{
-			field:  "Address",
-			reason: "value length must be 42 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
+	// no validation rules for Address
 
-	}
+	// no validation rules for Amount
 
-	if !_AssetType_Address_Pattern.MatchString(m.GetAddress()) {
-		err := AssetTypeValidationError{
-			field:  "Address",
-			reason: "value does not match regex pattern \"^0x[a-fA-F0-9]{40}$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if !_AssetType_Amount_Pattern.MatchString(m.GetAmount()) {
-		err := AssetTypeValidationError{
-			field:  "Amount",
-			reason: "value does not match regex pattern \"^[0-9]+$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if utf8.RuneCountInString(m.GetChainId()) < 1 {
-		err := AssetTypeValidationError{
-			field:  "ChainId",
-			reason: "value length must be at least 1 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if !_AssetType_ChainId_Pattern.MatchString(m.GetChainId()) {
-		err := AssetTypeValidationError{
-			field:  "ChainId",
-			reason: "value does not match regex pattern \"^[0-9]+$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for ChainId
 
 	if len(errors) > 0 {
 		return AssetTypeMultiError(errors)
@@ -201,12 +142,6 @@ var _ interface {
 	ErrorName() string
 } = AssetTypeValidationError{}
 
-var _AssetType_Address_Pattern = regexp.MustCompile("^0x[a-fA-F0-9]{40}$")
-
-var _AssetType_Amount_Pattern = regexp.MustCompile("^[0-9]+$")
-
-var _AssetType_ChainId_Pattern = regexp.MustCompile("^[0-9]+$")
-
 // Validate checks the field values on StakeType with the rules defined in the
 // proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -229,60 +164,13 @@ func (m *StakeType) validate(all bool) error {
 
 	var errors []error
 
-	if _, ok := AssetKind_name[int32(m.GetType())]; !ok {
-		err := StakeTypeValidationError{
-			field:  "Type",
-			reason: "value must be one of the defined enum values",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for Type
 
-	if !_StakeType_Address_Pattern.MatchString(m.GetAddress()) {
-		err := StakeTypeValidationError{
-			field:  "Address",
-			reason: "value does not match regex pattern \"^0x[a-fA-F0-9]{40}$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for Address
 
-	if !_StakeType_Amount_Pattern.MatchString(m.GetAmount()) {
-		err := StakeTypeValidationError{
-			field:  "Amount",
-			reason: "value does not match regex pattern \"^[0-9]+$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for Amount
 
-	if utf8.RuneCountInString(m.GetChainId()) < 1 {
-		err := StakeTypeValidationError{
-			field:  "ChainId",
-			reason: "value length must be at least 1 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if !_StakeType_ChainId_Pattern.MatchString(m.GetChainId()) {
-		err := StakeTypeValidationError{
-			field:  "ChainId",
-			reason: "value does not match regex pattern \"^[0-9]+$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for ChainId
 
 	if len(errors) > 0 {
 		return StakeTypeMultiError(errors)
@@ -361,12 +249,6 @@ var _ interface {
 	ErrorName() string
 } = StakeTypeValidationError{}
 
-var _StakeType_Address_Pattern = regexp.MustCompile("^0x[a-fA-F0-9]{40}$")
-
-var _StakeType_Amount_Pattern = regexp.MustCompile("^[0-9]+$")
-
-var _StakeType_ChainId_Pattern = regexp.MustCompile("^[0-9]+$")
-
 // Validate checks the field values on LoanType with the rules defined in the
 // proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -389,95 +271,15 @@ func (m *LoanType) validate(all bool) error {
 
 	var errors []error
 
-	if _, ok := AssetKind_name[int32(m.GetType())]; !ok {
-		err := LoanTypeValidationError{
-			field:  "Type",
-			reason: "value must be one of the defined enum values",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for Type
 
-	if utf8.RuneCountInString(m.GetAsset()) != 42 {
-		err := LoanTypeValidationError{
-			field:  "Asset",
-			reason: "value length must be 42 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
+	// no validation rules for Asset
 
-	}
+	// no validation rules for Amount
 
-	if !_LoanType_Asset_Pattern.MatchString(m.GetAsset()) {
-		err := LoanTypeValidationError{
-			field:  "Asset",
-			reason: "value does not match regex pattern \"^0x[a-fA-F0-9]{40}$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for Address
 
-	if !_LoanType_Amount_Pattern.MatchString(m.GetAmount()) {
-		err := LoanTypeValidationError{
-			field:  "Amount",
-			reason: "value does not match regex pattern \"^[0-9]+$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if utf8.RuneCountInString(m.GetAddress()) != 42 {
-		err := LoanTypeValidationError{
-			field:  "Address",
-			reason: "value length must be 42 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-
-	}
-
-	if !_LoanType_Address_Pattern.MatchString(m.GetAddress()) {
-		err := LoanTypeValidationError{
-			field:  "Address",
-			reason: "value does not match regex pattern \"^0x[a-fA-F0-9]{40}$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if utf8.RuneCountInString(m.GetChainId()) < 1 {
-		err := LoanTypeValidationError{
-			field:  "ChainId",
-			reason: "value length must be at least 1 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if !_LoanType_ChainId_Pattern.MatchString(m.GetChainId()) {
-		err := LoanTypeValidationError{
-			field:  "ChainId",
-			reason: "value does not match regex pattern \"^[0-9]+$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for ChainId
 
 	if len(errors) > 0 {
 		return LoanTypeMultiError(errors)
@@ -555,14 +357,6 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = LoanTypeValidationError{}
-
-var _LoanType_Asset_Pattern = regexp.MustCompile("^0x[a-fA-F0-9]{40}$")
-
-var _LoanType_Amount_Pattern = regexp.MustCompile("^[0-9]+$")
-
-var _LoanType_Address_Pattern = regexp.MustCompile("^0x[a-fA-F0-9]{40}$")
-
-var _LoanType_ChainId_Pattern = regexp.MustCompile("^[0-9]+$")
 
 // Validate checks the field values on ExtraData with the rules defined in the
 // proto definition for this message. If any rules are violated, the first
@@ -713,28 +507,7 @@ func (m *Intent) validate(all bool) error {
 
 	var errors []error
 
-	if utf8.RuneCountInString(m.GetSender()) != 42 {
-		err := IntentValidationError{
-			field:  "Sender",
-			reason: "value length must be 42 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-
-	}
-
-	if !_Intent_Sender_Pattern.MatchString(m.GetSender()) {
-		err := IntentValidationError{
-			field:  "Sender",
-			reason: "value does not match regex pattern \"^0x[a-fA-F0-9]{40}$\"",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for Sender
 
 	if all {
 		switch v := interface{}(m.GetExtraData()).(type) {
@@ -767,27 +540,9 @@ func (m *Intent) validate(all bool) error {
 
 	// no validation rules for Status
 
-	if m.GetCreatedAt() <= 0 {
-		err := IntentValidationError{
-			field:  "CreatedAt",
-			reason: "value must be greater than 0",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for CreatedAt
 
-	if m.GetExpirationAt() <= 0 {
-		err := IntentValidationError{
-			field:  "ExpirationAt",
-			reason: "value must be greater than 0",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for ExpirationAt
 
 	switch v := m.From.(type) {
 	case *Intent_FromAsset:
@@ -1121,8 +876,6 @@ var _ interface {
 	ErrorName() string
 } = IntentValidationError{}
 
-var _Intent_Sender_Pattern = regexp.MustCompile("^0x[a-fA-F0-9]{40}$")
-
 // Validate checks the field values on Body with the rules defined in the proto
 // definition for this message. If any rules are violated, the first error
 // encountered is returned, or nil if there are no violations.
@@ -1143,17 +896,6 @@ func (m *Body) validate(all bool) error {
 	}
 
 	var errors []error
-
-	if len(m.GetIntents()) < 1 {
-		err := BodyValidationError{
-			field:  "Intents",
-			reason: "value must contain at least 1 item(s)",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
 
 	for idx, item := range m.GetIntents() {
 		_, _ = idx, item

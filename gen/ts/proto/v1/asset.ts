@@ -139,7 +139,11 @@ export interface AssetType {
   type: AssetKind;
   /** The address of the asset. */
   address: string;
-  /** The amount of the asset. */
+  /**
+   * The amount of the asset.
+   * In cases of AssetType being used as the to field, it doesn't have to provided
+   * and can be left empty
+   */
   amount: string;
   /** The chain ID where the asset resides. */
   chainId: string;

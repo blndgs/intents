@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/goccy/go-json"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
@@ -152,7 +153,7 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 func ExtractJSONFromField(fieldData string) (string, bool) {
 	if fieldData != "" {
 		var intent pb.Intent
-		if err := json.Unmarshal([]byte(fieldData), &intent); err == nil {
+		if err := protojson.Unmarshal([]byte(fieldData), &intent); err == nil {
 			return fieldData, true
 		}
 	}
@@ -194,7 +195,7 @@ func (op *UserOperation) GetIntent() (*pb.Intent, error) {
 	}
 
 	var intent pb.Intent
-	if err := json.Unmarshal([]byte(intentJSON), &intent); err != nil {
+	if err := protojson.Unmarshal([]byte(intentJSON), &intent); err != nil {
 		return nil, ErrIntentInvalidJSON
 	}
 	return &intent, nil
@@ -228,7 +229,7 @@ func (op *UserOperation) GetEVMInstructions() ([]byte, error) {
 // arises during the process. Otherwise, nil is returned indicating
 // successful setting of the intent JSON.
 func (op *UserOperation) SetIntent(intentJSON string) error {
-	if err := json.Unmarshal([]byte(intentJSON), new(pb.Intent)); err != nil {
+	if err := protojson.Unmarshal([]byte(intentJSON), new(pb.Intent)); err != nil {
 		return ErrIntentInvalidJSON
 	}
 

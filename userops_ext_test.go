@@ -2,7 +2,6 @@ package model
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -11,6 +10,7 @@ import (
 	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func mockCallData() []byte {
@@ -30,10 +30,16 @@ func mockSignature() []byte {
 
 func mockIntentJSON() string {
 	var (
-		intentJSON = `{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","from":{"type":"TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":"100","chainId":"80001"},"to":{"type":"TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":"50","chainId":"80001"},"extraData":{"partiallyFillable":false},"status":"Received"}`
-		intent     pb.Intent
+		intentJSON = `
+		{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+		"from_asset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":"100","chainId":"80001"},
+		"to_asset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":"50","chainId":"80001"},
+		"extraData":{"partiallyFillable":false},
+		"status":"PROCESSING_STATUS_RECEIVED"}
+		`
+		intent pb.Intent
 	)
-	if err := json.Unmarshal([]byte(intentJSON), &intent); err != nil {
+	if err := protojson.Unmarshal([]byte(intentJSON), &intent); err != nil {
 		// signal when intent JSON is no longer valid
 		panic(err)
 	}
@@ -417,14 +423,14 @@ func TestIntentUserOperation_UnmarshalJSON(t *testing.T) {
 func TestIntentUserOperation_RawJSON(t *testing.T) {
 	rawJSON := `{
 		"sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-		"from": {
-			"type": "TOKEN",
+		"from_asset": {
+			"type": "ASSET_KIND_TOKEN",
 			"address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 			"amount": "100",
 			"chainId": "1"
 		},
-		"to": {
-			"type": "TOKEN",
+		"to_asset": {
+			"type": "ASSET_KIND_TOKEN",
 			"address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
 			"amount": "50",
 			"chainId": "1"
@@ -432,13 +438,13 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 		"extraData": {
 			"partiallyFillable": false
 		},
-		"status": "Received",
+		"status": "PROCESSING_STATUS_RECEIVED",
 		"createdAt": 0,
 		"expirationAt": 0
 	}`
 
 	var intent pb.Intent
-	if err := json.Unmarshal([]byte(rawJSON), &intent); err != nil {
+	if err := protojson.Unmarshal([]byte(rawJSON), &intent); err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
 	// Correctly type-assert 'From' and 'To' after unmarshalling

@@ -3,11 +3,14 @@ package model
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	pb "github.com/blndgs/model/gen/go/proto/v1"
+	"github.com/bufbuild/protovalidate-go"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -15,14 +18,28 @@ import (
 
 func submitHandler(c *gin.Context) {
 	var body pb.Body
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		fmt.Println(body.Intents[0])
+
+	var b = bytes.NewBuffer(nil)
+	_, err := io.Copy(b, c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not copy json"})
+		return
+	}
+
+	protojsonUnmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+	if err := protojsonUnmarshaler.Unmarshal(b.Bytes(), &body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid protojson request"})
 		return
 	}
 
 	// Validate the body using the generated Validate method
-	if err := body.Validate(); err != nil {
+	v, err := protovalidate.New()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := v.Validate(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -74,7 +91,10 @@ func TestSubmitHandler(t *testing.T) {
 						ExtraData: &pb.ExtraData{
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: time.Now().Unix(),
+						// add 10 minutes
+						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
 					},
 				},
 			},
@@ -105,7 +125,10 @@ func TestSubmitHandler(t *testing.T) {
 						ExtraData: &pb.ExtraData{
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: time.Now().Unix(),
+						// add 10 minutes
+						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
 					},
 				},
 			},
@@ -136,7 +159,10 @@ func TestSubmitHandler(t *testing.T) {
 						ExtraData: &pb.ExtraData{
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: time.Now().Unix(),
+						// add 10 minutes
+						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
 					},
 				},
 			},
@@ -167,7 +193,10 @@ func TestSubmitHandler(t *testing.T) {
 						ExtraData: &pb.ExtraData{
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: time.Now().Unix(),
+						// add 10 minutes
+						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
 					},
 				},
 			},
@@ -197,7 +226,8 @@ func TestSubmitHandler(t *testing.T) {
 						ExtraData: &pb.ExtraData{
 							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
-						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: time.Now().Unix(),
 					},
 				},
 			},
@@ -230,6 +260,7 @@ func TestSubmitHandler(t *testing.T) {
 						},
 						ExpirationAt: 123456789, // will be validated by solver
 						Status:       pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt:    time.Now().Unix(),
 					},
 				},
 			},
@@ -257,7 +288,10 @@ func TestSubmitHandler(t *testing.T) {
 								ChainId: "1",
 							},
 						},
-						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: time.Now().Unix(),
+						// add 10 minutes
+						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
 					},
 				},
 			},
@@ -284,7 +318,10 @@ func TestSubmitHandler(t *testing.T) {
 								ChainId: "1",
 							},
 						},
-						Status: pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: time.Now().Unix(),
+						// add 10 minutes
+						ExpirationAt: time.Now().AddDate(0, 0, 10).Unix(),
 					},
 				},
 			},
@@ -299,6 +336,7 @@ func TestSubmitHandler(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to marshal payload: %v", err)
 			}
+			fmt.Println(string(payloadBytes))
 			req, _ := http.NewRequest("POST", "/submit", bytes.NewBuffer(payloadBytes))
 			req.Header.Set("Content-Type", "application/json")
 
