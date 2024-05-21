@@ -133,6 +133,11 @@ export function processingStatusToJSON(object: ProcessingStatus): string {
   }
 }
 
+/** BigInt represents a large number */
+export interface BigInt {
+  value: Uint8Array;
+}
+
 /** Message representing the details of an asset. */
 export interface AssetType {
   /** The type of the asset. */
@@ -144,7 +149,9 @@ export interface AssetType {
    * In cases of AssetType being used as the to field, it doesn't have to provided
    * and can be left empty
    */
-  amount: string;
+  amount:
+    | BigInt
+    | undefined;
   /** The chain ID where the asset resides. */
   chainId: string;
 }
@@ -156,7 +163,9 @@ export interface StakeType {
   /** The address of the stake. */
   address: string;
   /** The amount of the stake. */
-  amount: string;
+  amount:
+    | BigInt
+    | undefined;
   /** The chain ID where the asset resides. */
   chainId: string;
 }
@@ -168,7 +177,9 @@ export interface LoanType {
   /** The asset associated with the loan. */
   asset: string;
   /** The amount of the loan. */
-  amount: string;
+  amount:
+    | BigInt
+    | undefined;
   /** The address associated with the loan. */
   address: string;
   /** The chain ID where the asset resides. */
@@ -229,8 +240,65 @@ export interface Body {
   intents: Intent[];
 }
 
+function createBaseBigInt(): BigInt {
+  return { value: new Uint8Array(0) };
+}
+
+export const BigInt = {
+  encode(message: BigInt, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.value.length !== 0) {
+      writer.uint32(10).bytes(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: _m0.Reader | Uint8Array, length?: number): BigInt {
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBigInt();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 10) {
+            break;
+          }
+
+          message.value = reader.bytes();
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): BigInt {
+    return { value: isSet(object.value) ? bytesFromBase64(object.value) : new Uint8Array(0) };
+  },
+
+  toJSON(message: BigInt): unknown {
+    const obj: any = {};
+    if (message.value.length !== 0) {
+      obj.value = base64FromBytes(message.value);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<BigInt>, I>>(base?: I): BigInt {
+    return BigInt.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BigInt>, I>>(object: I): BigInt {
+    const message = createBaseBigInt();
+    message.value = object.value ?? new Uint8Array(0);
+    return message;
+  },
+};
+
 function createBaseAssetType(): AssetType {
-  return { type: 0, address: "", amount: "", chainId: "" };
+  return { type: 0, address: "", amount: undefined, chainId: "" };
 }
 
 export const AssetType = {
@@ -241,8 +309,8 @@ export const AssetType = {
     if (message.address !== "") {
       writer.uint32(18).string(message.address);
     }
-    if (message.amount !== "") {
-      writer.uint32(26).string(message.amount);
+    if (message.amount !== undefined) {
+      BigInt.encode(message.amount, writer.uint32(26).fork()).ldelim();
     }
     if (message.chainId !== "") {
       writer.uint32(34).string(message.chainId);
@@ -276,7 +344,7 @@ export const AssetType = {
             break;
           }
 
-          message.amount = reader.string();
+          message.amount = BigInt.decode(reader, reader.uint32());
           continue;
         case 4:
           if (tag !== 34) {
@@ -298,7 +366,7 @@ export const AssetType = {
     return {
       type: isSet(object.type) ? assetKindFromJSON(object.type) : 0,
       address: isSet(object.address) ? globalThis.String(object.address) : "",
-      amount: isSet(object.amount) ? globalThis.String(object.amount) : "",
+      amount: isSet(object.amount) ? BigInt.fromJSON(object.amount) : undefined,
       chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
     };
   },
@@ -311,8 +379,8 @@ export const AssetType = {
     if (message.address !== "") {
       obj.address = message.address;
     }
-    if (message.amount !== "") {
-      obj.amount = message.amount;
+    if (message.amount !== undefined) {
+      obj.amount = BigInt.toJSON(message.amount);
     }
     if (message.chainId !== "") {
       obj.chainId = message.chainId;
@@ -327,14 +395,16 @@ export const AssetType = {
     const message = createBaseAssetType();
     message.type = object.type ?? 0;
     message.address = object.address ?? "";
-    message.amount = object.amount ?? "";
+    message.amount = (object.amount !== undefined && object.amount !== null)
+      ? BigInt.fromPartial(object.amount)
+      : undefined;
     message.chainId = object.chainId ?? "";
     return message;
   },
 };
 
 function createBaseStakeType(): StakeType {
-  return { type: 0, address: "", amount: "", chainId: "" };
+  return { type: 0, address: "", amount: undefined, chainId: "" };
 }
 
 export const StakeType = {
@@ -345,8 +415,8 @@ export const StakeType = {
     if (message.address !== "") {
       writer.uint32(18).string(message.address);
     }
-    if (message.amount !== "") {
-      writer.uint32(26).string(message.amount);
+    if (message.amount !== undefined) {
+      BigInt.encode(message.amount, writer.uint32(26).fork()).ldelim();
     }
     if (message.chainId !== "") {
       writer.uint32(34).string(message.chainId);
@@ -380,7 +450,7 @@ export const StakeType = {
             break;
           }
 
-          message.amount = reader.string();
+          message.amount = BigInt.decode(reader, reader.uint32());
           continue;
         case 4:
           if (tag !== 34) {
@@ -402,7 +472,7 @@ export const StakeType = {
     return {
       type: isSet(object.type) ? assetKindFromJSON(object.type) : 0,
       address: isSet(object.address) ? globalThis.String(object.address) : "",
-      amount: isSet(object.amount) ? globalThis.String(object.amount) : "",
+      amount: isSet(object.amount) ? BigInt.fromJSON(object.amount) : undefined,
       chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
     };
   },
@@ -415,8 +485,8 @@ export const StakeType = {
     if (message.address !== "") {
       obj.address = message.address;
     }
-    if (message.amount !== "") {
-      obj.amount = message.amount;
+    if (message.amount !== undefined) {
+      obj.amount = BigInt.toJSON(message.amount);
     }
     if (message.chainId !== "") {
       obj.chainId = message.chainId;
@@ -431,14 +501,16 @@ export const StakeType = {
     const message = createBaseStakeType();
     message.type = object.type ?? 0;
     message.address = object.address ?? "";
-    message.amount = object.amount ?? "";
+    message.amount = (object.amount !== undefined && object.amount !== null)
+      ? BigInt.fromPartial(object.amount)
+      : undefined;
     message.chainId = object.chainId ?? "";
     return message;
   },
 };
 
 function createBaseLoanType(): LoanType {
-  return { type: 0, asset: "", amount: "", address: "", chainId: "" };
+  return { type: 0, asset: "", amount: undefined, address: "", chainId: "" };
 }
 
 export const LoanType = {
@@ -449,8 +521,8 @@ export const LoanType = {
     if (message.asset !== "") {
       writer.uint32(18).string(message.asset);
     }
-    if (message.amount !== "") {
-      writer.uint32(26).string(message.amount);
+    if (message.amount !== undefined) {
+      BigInt.encode(message.amount, writer.uint32(26).fork()).ldelim();
     }
     if (message.address !== "") {
       writer.uint32(34).string(message.address);
@@ -487,7 +559,7 @@ export const LoanType = {
             break;
           }
 
-          message.amount = reader.string();
+          message.amount = BigInt.decode(reader, reader.uint32());
           continue;
         case 4:
           if (tag !== 34) {
@@ -516,7 +588,7 @@ export const LoanType = {
     return {
       type: isSet(object.type) ? assetKindFromJSON(object.type) : 0,
       asset: isSet(object.asset) ? globalThis.String(object.asset) : "",
-      amount: isSet(object.amount) ? globalThis.String(object.amount) : "",
+      amount: isSet(object.amount) ? BigInt.fromJSON(object.amount) : undefined,
       address: isSet(object.address) ? globalThis.String(object.address) : "",
       chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
     };
@@ -530,8 +602,8 @@ export const LoanType = {
     if (message.asset !== "") {
       obj.asset = message.asset;
     }
-    if (message.amount !== "") {
-      obj.amount = message.amount;
+    if (message.amount !== undefined) {
+      obj.amount = BigInt.toJSON(message.amount);
     }
     if (message.address !== "") {
       obj.address = message.address;
@@ -549,7 +621,9 @@ export const LoanType = {
     const message = createBaseLoanType();
     message.type = object.type ?? 0;
     message.asset = object.asset ?? "";
-    message.amount = object.amount ?? "";
+    message.amount = (object.amount !== undefined && object.amount !== null)
+      ? BigInt.fromPartial(object.amount)
+      : undefined;
     message.address = object.address ?? "";
     message.chainId = object.chainId ?? "";
     return message;
@@ -906,6 +980,31 @@ export const Body = {
     return message;
   },
 };
+
+function bytesFromBase64(b64: string): Uint8Array {
+  if ((globalThis as any).Buffer) {
+    return Uint8Array.from(globalThis.Buffer.from(b64, "base64"));
+  } else {
+    const bin = globalThis.atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; ++i) {
+      arr[i] = bin.charCodeAt(i);
+    }
+    return arr;
+  }
+}
+
+function base64FromBytes(arr: Uint8Array): string {
+  if ((globalThis as any).Buffer) {
+    return globalThis.Buffer.from(arr).toString("base64");
+  } else {
+    const bin: string[] = [];
+    arr.forEach((byte) => {
+      bin.push(globalThis.String.fromCharCode(byte));
+    });
+    return globalThis.btoa(bin.join(""));
+  }
+}
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
 

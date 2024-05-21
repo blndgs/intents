@@ -2,6 +2,7 @@ package model
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -30,14 +32,39 @@ func mockSignature() []byte {
 }
 
 func mockIntentJSON() string {
+
+	fromInt, err := FromBigInt(big.NewInt(100))
+	if err != nil {
+		panic(err)
+	}
+
+	toInt, err := FromBigInt(big.NewInt(50))
+	if err != nil {
+		panic(err)
+	}
+
+	var fromB = bytes.NewBuffer(nil)
+
+	err = json.NewEncoder(fromB).Encode(fromInt)
+	if err != nil {
+		panic(err)
+	}
+
+	var toB = bytes.NewBuffer(nil)
+
+	err = json.NewEncoder(toB).Encode(toInt)
+	if err != nil {
+		panic(err)
+	}
+
 	var (
-		intentJSON = `
+		intentJSON = fmt.Sprintf(`
 		{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-		"from_asset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":"100","chainId":"80001"},
-		"to_asset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":"50","chainId":"80001"},
+		"from_asset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":"80001"},
+		"to_asset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":"80001"},
 		"extraData":{"partiallyFillable":false},
 		"status":"PROCESSING_STATUS_RECEIVED"}
-		`
+		`, fromB, toB)
 		intent pb.Intent
 	)
 	if err := protojson.Unmarshal([]byte(intentJSON), &intent); err != nil {
@@ -425,18 +452,32 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	now := time.Now().Format(time.RFC3339)
 	expirationDate := time.Now().Add(time.Hour).Format(time.RFC3339)
 
+	fromInt, err := FromBigInt(big.NewInt(100))
+	require.NoError(t, err)
+
+	toInt, err := FromBigInt(big.NewInt(50))
+	require.NoError(t, err)
+
+	var fromB = bytes.NewBuffer(nil)
+
+	require.NoError(t, json.NewEncoder(fromB).Encode(fromInt))
+
+	var toB = bytes.NewBuffer(nil)
+
+	require.NoError(t, json.NewEncoder(toB).Encode(toInt))
+
 	rawJSON := fmt.Sprintf(`{
 		"sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 		"from_asset": {
 			"type": "ASSET_KIND_TOKEN",
 			"address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-			"amount": "100",
+			"amount": %s,
 			"chainId": "1"
 		},
 		"to_asset": {
 			"type": "ASSET_KIND_TOKEN",
 			"address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
-			"amount": "50",
+			"amount": %s,
 			"chainId": "1"
 		},
 		"extraData": {
@@ -445,7 +486,7 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 		"status": "PROCESSING_STATUS_RECEIVED",
 		"createdAt": "%s",
 		"expirationAt": "%s"
-	}`, now, expirationDate)
+	}`, fromB, toB, now, expirationDate)
 
 	var intent pb.Intent
 	if err := protojson.Unmarshal([]byte(rawJSON), &intent); err != nil {
@@ -479,13 +520,13 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	}
 
 	// Assuming there's a way to validate the amounts correctly, considering they're strings in the provided example
-	fromAmount, ok := new(big.Int).SetString(from.FromAsset.GetAmount(), 10)
-	if !ok || fromAmount.Cmp(big.NewInt(100)) != 0 {
+	fromAmount := ToBigInt(from.FromAsset.Amount)
+	if fromAmount.Cmp(big.NewInt(100)) != 0 {
 		t.Errorf("From.Amount does not match expected value, got %s", from.FromAsset.GetAmount())
 	}
 
-	toAmount, ok := new(big.Int).SetString(to.ToAsset.GetAmount(), 10)
-	if !ok || toAmount.Cmp(big.NewInt(50)) != 0 {
+	toAmount := ToBigInt(to.ToAsset.Amount)
+	if toAmount.Cmp(big.NewInt(50)) != 0 {
 		t.Errorf("To.Amount does not match expected value, got %s", to.ToAsset.GetAmount())
 	}
 }
@@ -648,4 +689,3 @@ func Test_Intent_UserOperationString(t *testing.T) {
 		t.Errorf("String() = %v, want %v", result, expected)
 	}
 }
-

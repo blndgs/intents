@@ -25,6 +25,7 @@ The below steps are needed to successfully update and distribute the models:
 
 - Add model changes to `.proto` file.
 - Verify there are no errors by linting. Use `buf lint`
+- Also format the proto files using `buf format -w`.
 - Generate the code definition of your model. Use `buf generate`
 - If adding support for a new language, please update `buf.gen.yaml`
 to include the task.
