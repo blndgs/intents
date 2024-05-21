@@ -109,234 +109,234 @@ func TestSubmitHandler(t *testing.T) {
 			},
 			expectCode: http.StatusOK,
 		},
-		// {
-		// 	description: "Invalid Request - Invalid Ethereum address format",
-		// 	payload: &pb.Body{
-		// 		Intents: []*pb.Intent{
-		// 			{
-		// 				Sender: senderAddress,
-		// 				From: &pb.Intent_FromAsset{
-		// 					FromAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: "InvalidTokenAddressFrom",
-		// 						Amount:  "100",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				To: &pb.Intent_ToAsset{
-		// 					ToAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressTo,
-		// 						Amount:  "50",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				ExtraData: &pb.ExtraData{
-		// 					PartiallyFillable: &wrapperspb.BoolValue{Value: false},
-		// 				},
-		// 				Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-		// 				CreatedAt: timestamppb.Now(),
-		// 				// add 10 minutes
-		// 				ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusBadRequest,
-		// },
-		// {
-		// 	description: "Invalid Request - Invalid Chain ID",
-		// 	payload: &pb.Body{
-		// 		Intents: []*pb.Intent{
-		// 			{
-		// 				Sender: senderAddress,
-		// 				From: &pb.Intent_FromAsset{
-		// 					FromAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressFrom,
-		// 						Amount:  "100",
-		// 						ChainId: "-1", // Invalid Chain ID
-		// 					},
-		// 				},
-		// 				To: &pb.Intent_ToAsset{
-		// 					ToAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressTo,
-		// 						Amount:  "50",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				ExtraData: &pb.ExtraData{
-		// 					PartiallyFillable: &wrapperspb.BoolValue{Value: false},
-		// 				},
-		// 				Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-		// 				CreatedAt: timestamppb.Now(),
-		// 				// add 10 minutes
-		// 				ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusBadRequest,
-		// },
-		// {
-		// 	description: "Invalid Request - Unsupported Asset Type",
-		// 	payload: &pb.Body{
-		// 		Intents: []*pb.Intent{
-		// 			{
-		// 				Sender: senderAddress,
-		// 				From: &pb.Intent_FromAsset{
-		// 					FromAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind(999), // Unsupported asset type
-		// 						Address: validTokenAddressFrom,
-		// 						Amount:  "100",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				To: &pb.Intent_ToAsset{
-		// 					ToAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressTo,
-		// 						Amount:  "50",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				ExtraData: &pb.ExtraData{
-		// 					PartiallyFillable: &wrapperspb.BoolValue{Value: false},
-		// 				},
-		// 				Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-		// 				CreatedAt: timestamppb.Now(),
-		// 				// add 10 minutes
-		// 				ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusBadRequest,
-		// },
-		// {
-		// 	description: "Valid Operation - Swap (buy or sell) for AMM without expiration date",
-		// 	payload: &pb.Body{
-		// 		Intents: []*pb.Intent{
-		// 			{
-		// 				Sender: senderAddress,
-		// 				From: &pb.Intent_FromAsset{
-		// 					FromAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressFrom,
-		// 						Amount:  "100",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				To: &pb.Intent_ToAsset{
-		// 					ToAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressTo,
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				ExtraData: &pb.ExtraData{
-		// 					PartiallyFillable: &wrapperspb.BoolValue{Value: false},
-		// 				},
-		// 				Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-		// 				CreatedAt: timestamppb.Now(),
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusOK,
-		// },
-		// {
-		// 	description: "Valid Operation - Orderbook with expiration date",
-		// 	payload: &pb.Body{
-		// 		Intents: []*pb.Intent{
-		// 			{
-		// 				Sender: senderAddress,
-		// 				From: &pb.Intent_FromAsset{
-		// 					FromAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressFrom,
-		// 						Amount:  "100",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				To: &pb.Intent_ToAsset{
-		// 					ToAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressTo,
-		// 						Amount:  "100",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				ExtraData: &pb.ExtraData{
-		// 					PartiallyFillable: &wrapperspb.BoolValue{Value: false},
-		// 				},
-		// 				Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-		// 				CreatedAt: timestamppb.Now(),
-		// 				// add 10 minutes
-		// 				ExpirationAt: timestamppb.New(time.Now().Add(-10 * time.Minute)),
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusOK,
-		// },
-		// {
-		// 	description: "Valid Operation - Staking",
-		// 	payload: &pb.Body{
-		// 		Intents: []*pb.Intent{
-		// 			{
-		// 				Sender: senderAddress,
-		// 				From: &pb.Intent_FromAsset{
-		// 					FromAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressFrom,
-		// 						Amount:  "100",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				To: &pb.Intent_ToStake{
-		// 					ToStake: &pb.StakeType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_STAKE,
-		// 						Address: validTokenAddressTo,
-		// 						Amount:  "100",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-		// 				CreatedAt: timestamppb.Now(),
-		// 				// add 10 minutes
-		// 				ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusOK,
-		// },
-		// {
-		// 	description: "Valid Operation - Unstaking",
-		// 	payload: &pb.Body{
-		// 		Intents: []*pb.Intent{
-		// 			{
-		// 				Sender: senderAddress,
-		// 				From: &pb.Intent_FromStake{
-		// 					FromStake: &pb.StakeType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_STAKE,
-		// 						Address: validTokenAddressTo,
-		// 						Amount:  "100",
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				To: &pb.Intent_ToAsset{
-		// 					ToAsset: &pb.AssetType{
-		// 						Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-		// 						Address: validTokenAddressFrom,
-		// 						ChainId: "1",
-		// 					},
-		// 				},
-		// 				Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-		// 				CreatedAt: timestamppb.Now(),
-		// 				// add 10 minutes
-		// 				ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
-		// 			},
-		// 		},
-		// 	},
-		// 	expectCode: http.StatusOK,
-		// },
+		{
+			description: "Invalid Request - Invalid Ethereum address format",
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
+					{
+						Sender: senderAddress,
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: "InvalidTokenAddressFrom",
+								Amount:  fromInt,
+								ChainId: "1",
+							},
+						},
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								Amount:  toInt,
+								ChainId: "1",
+							},
+						},
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
+						},
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+						// add 10 minutes
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Invalid Request - Invalid Chain ID",
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
+					{
+						Sender: senderAddress,
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								Amount:  fromInt,
+								ChainId: "-1", // Invalid Chain ID
+							},
+						},
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								Amount:  toInt,
+								ChainId: "1",
+							},
+						},
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
+						},
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+						// add 10 minutes
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Invalid Request - Unsupported Asset Type",
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
+					{
+						Sender: senderAddress,
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind(999), // Unsupported asset type
+								Address: validTokenAddressFrom,
+								Amount:  fromInt,
+								ChainId: "1",
+							},
+						},
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								Amount:  toInt,
+								ChainId: "1",
+							},
+						},
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
+						},
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+						// add 10 minutes
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
+		{
+			description: "Valid Operation - Swap (buy or sell) for AMM without expiration date",
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
+					{
+						Sender: senderAddress,
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								Amount:  fromInt,
+								ChainId: "1",
+							},
+						},
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								ChainId: "1",
+							},
+						},
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
+						},
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Valid Operation - Orderbook with expiration date",
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
+					{
+						Sender: senderAddress,
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								Amount:  fromInt,
+								ChainId: "1",
+							},
+						},
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressTo,
+								Amount:  toInt,
+								ChainId: "1",
+							},
+						},
+						ExtraData: &pb.ExtraData{
+							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
+						},
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+						// add 10 minutes
+						ExpirationAt: timestamppb.New(time.Now().Add(-10 * time.Minute)),
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Valid Operation - Staking",
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
+					{
+						Sender: senderAddress,
+						From: &pb.Intent_FromAsset{
+							FromAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								Amount:  fromInt,
+								ChainId: "1",
+							},
+						},
+						To: &pb.Intent_ToStake{
+							ToStake: &pb.StakeType{
+								Type:    pb.AssetKind_ASSET_KIND_STAKE,
+								Address: validTokenAddressTo,
+								Amount:  toInt,
+								ChainId: "1",
+							},
+						},
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+						// add 10 minutes
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Valid Operation - Unstaking",
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
+					{
+						Sender: senderAddress,
+						From: &pb.Intent_FromStake{
+							FromStake: &pb.StakeType{
+								Type:    pb.AssetKind_ASSET_KIND_STAKE,
+								Address: validTokenAddressTo,
+								Amount:  fromInt,
+								ChainId: "1",
+							},
+						},
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.AssetType{
+								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+								Address: validTokenAddressFrom,
+								ChainId: "1",
+							},
+						},
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+						// add 10 minutes
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
 	}
 
 	// Run test cases
