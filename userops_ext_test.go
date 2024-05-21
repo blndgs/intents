@@ -57,14 +57,26 @@ func mockIntentJSON() string {
 		panic(err)
 	}
 
+	chainID, err := FromBigInt(big.NewInt(1))
+	if err != nil {
+		panic(err)
+	}
+
+	var chainIDBuffer = bytes.NewBuffer(nil)
+
+	err = json.NewEncoder(chainIDBuffer).Encode(chainID)
+	if err != nil {
+		panic(err)
+	}
+
 	var (
 		intentJSON = fmt.Sprintf(`
 		{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-		"from_asset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":"80001"},
-		"to_asset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":"80001"},
+		"from_asset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
+		"to_asset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
 		"extraData":{"partiallyFillable":false},
 		"status":"PROCESSING_STATUS_RECEIVED"}
-		`, fromB, toB)
+		`, fromB, chainIDBuffer, chainIDBuffer, toB)
 		intent pb.Intent
 	)
 	if err := protojson.Unmarshal([]byte(intentJSON), &intent); err != nil {
@@ -466,19 +478,25 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 
 	require.NoError(t, json.NewEncoder(toB).Encode(toInt))
 
+	chainID, err := FromBigInt(big.NewInt(1))
+	require.NoError(t, err)
+
+	var chainIDBuffer = bytes.NewBuffer(nil)
+	require.NoError(t, json.NewEncoder(chainIDBuffer).Encode(chainID))
+
 	rawJSON := fmt.Sprintf(`{
 		"sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 		"from_asset": {
 			"type": "ASSET_KIND_TOKEN",
 			"address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 			"amount": %s,
-			"chainId": "1"
+			"chainId": %s
 		},
 		"to_asset": {
 			"type": "ASSET_KIND_TOKEN",
 			"address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
 			"amount": %s,
-			"chainId": "1"
+			"chainId": %s
 		},
 		"extraData": {
 			"partiallyFillable": false
@@ -486,7 +504,7 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 		"status": "PROCESSING_STATUS_RECEIVED",
 		"createdAt": "%s",
 		"expirationAt": "%s"
-	}`, fromB, toB, now, expirationDate)
+	}`, fromB, chainIDBuffer, toB, chainIDBuffer, now, expirationDate)
 
 	var intent pb.Intent
 	if err := protojson.Unmarshal([]byte(rawJSON), &intent); err != nil {
@@ -500,7 +518,10 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	if from.FromAsset.GetAddress() != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {
 		t.Errorf("From.Address does not match expected value")
 	}
-	if from.FromAsset.GetChainId() != "1" {
+
+	chainIDFromIntent, err := ToBigInt(from.FromAsset.ChainId)
+	require.NoError(t, err)
+	if chainIDFromIntent.Int64() != 1 {
 		t.Errorf("From.ChainId does not match expected value, got %s", from.FromAsset.GetChainId())
 	}
 
@@ -511,8 +532,11 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	if to.ToAsset.GetAddress() != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
 		t.Errorf("To.Address does not match expected value")
 	}
-	if to.ToAsset.GetChainId() != "1" {
-		t.Errorf("To.ChainId does not match expected value, got %s", to.ToAsset.GetChainId())
+
+	chainIDFromIntent, err = ToBigInt(to.ToAsset.ChainId)
+	require.NoError(t, err)
+	if chainIDFromIntent.Int64() != 1 {
+		t.Errorf("To.ChainId does not match expected value, got %s", from.FromAsset.GetChainId())
 	}
 
 	if intent.Status != pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED {

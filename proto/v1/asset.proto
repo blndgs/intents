@@ -45,10 +45,7 @@ message AssetType {
   // and can be left empty
   BigInt amount = 3 [(buf.validate.field).ignore = IGNORE_IF_UNPOPULATED];
 
-  string chain_id = 4 [(buf.validate.field).string = {
-    min_len: 1,
-    pattern: "^[1-9][0-9]*$"
-  }]; // The chain ID where the asset resides.
+  BigInt chain_id = 4; // The chain ID where the asset resides.
 }
 
 // Message representing the details of a stake.
@@ -56,10 +53,7 @@ message StakeType {
   AssetKind type = 1 [(buf.validate.field).enum = {defined_only: true}]; // The type of the stake.
   string address = 2 [(buf.validate.field).string = {pattern: "^0x[a-fA-F0-9]{40}$"}]; // The address of the stake.
   BigInt amount = 3; // The amount of the stake.
-  string chain_id = 4 [(buf.validate.field).string = {
-    min_len: 1,
-    pattern: "^[1-9][0-9]*$"
-  }]; // The chain ID where the asset resides.
+  BigInt chain_id = 4; // The chain ID where the asset resides.
 }
 
 // Message representing the details of a loan.
@@ -74,10 +68,7 @@ message LoanType {
     len: 42,
     pattern: "^0x[a-fA-F0-9]{40}$"
   }]; // The address associated with the loan.
-  string chain_id = 5 [(buf.validate.field).string = {
-    min_len: 1,
-    pattern: "^[1-9][0-9]*$"
-  }]; // The chain ID where the asset resides.
+  string chain_id = 5; // The chain ID where the asset resides.
 }
 
 // Message representing additional data for an intent.

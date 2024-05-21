@@ -153,7 +153,7 @@ export interface AssetType {
     | BigInt
     | undefined;
   /** The chain ID where the asset resides. */
-  chainId: string;
+  chainId: BigInt | undefined;
 }
 
 /** Message representing the details of a stake. */
@@ -167,7 +167,7 @@ export interface StakeType {
     | BigInt
     | undefined;
   /** The chain ID where the asset resides. */
-  chainId: string;
+  chainId: BigInt | undefined;
 }
 
 /** Message representing the details of a loan. */
@@ -298,7 +298,7 @@ export const BigInt = {
 };
 
 function createBaseAssetType(): AssetType {
-  return { type: 0, address: "", amount: undefined, chainId: "" };
+  return { type: 0, address: "", amount: undefined, chainId: undefined };
 }
 
 export const AssetType = {
@@ -312,8 +312,8 @@ export const AssetType = {
     if (message.amount !== undefined) {
       BigInt.encode(message.amount, writer.uint32(26).fork()).ldelim();
     }
-    if (message.chainId !== "") {
-      writer.uint32(34).string(message.chainId);
+    if (message.chainId !== undefined) {
+      BigInt.encode(message.chainId, writer.uint32(34).fork()).ldelim();
     }
     return writer;
   },
@@ -351,7 +351,7 @@ export const AssetType = {
             break;
           }
 
-          message.chainId = reader.string();
+          message.chainId = BigInt.decode(reader, reader.uint32());
           continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
@@ -367,7 +367,7 @@ export const AssetType = {
       type: isSet(object.type) ? assetKindFromJSON(object.type) : 0,
       address: isSet(object.address) ? globalThis.String(object.address) : "",
       amount: isSet(object.amount) ? BigInt.fromJSON(object.amount) : undefined,
-      chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
+      chainId: isSet(object.chainId) ? BigInt.fromJSON(object.chainId) : undefined,
     };
   },
 
@@ -382,8 +382,8 @@ export const AssetType = {
     if (message.amount !== undefined) {
       obj.amount = BigInt.toJSON(message.amount);
     }
-    if (message.chainId !== "") {
-      obj.chainId = message.chainId;
+    if (message.chainId !== undefined) {
+      obj.chainId = BigInt.toJSON(message.chainId);
     }
     return obj;
   },
@@ -398,13 +398,15 @@ export const AssetType = {
     message.amount = (object.amount !== undefined && object.amount !== null)
       ? BigInt.fromPartial(object.amount)
       : undefined;
-    message.chainId = object.chainId ?? "";
+    message.chainId = (object.chainId !== undefined && object.chainId !== null)
+      ? BigInt.fromPartial(object.chainId)
+      : undefined;
     return message;
   },
 };
 
 function createBaseStakeType(): StakeType {
-  return { type: 0, address: "", amount: undefined, chainId: "" };
+  return { type: 0, address: "", amount: undefined, chainId: undefined };
 }
 
 export const StakeType = {
@@ -418,8 +420,8 @@ export const StakeType = {
     if (message.amount !== undefined) {
       BigInt.encode(message.amount, writer.uint32(26).fork()).ldelim();
     }
-    if (message.chainId !== "") {
-      writer.uint32(34).string(message.chainId);
+    if (message.chainId !== undefined) {
+      BigInt.encode(message.chainId, writer.uint32(34).fork()).ldelim();
     }
     return writer;
   },
@@ -457,7 +459,7 @@ export const StakeType = {
             break;
           }
 
-          message.chainId = reader.string();
+          message.chainId = BigInt.decode(reader, reader.uint32());
           continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
@@ -473,7 +475,7 @@ export const StakeType = {
       type: isSet(object.type) ? assetKindFromJSON(object.type) : 0,
       address: isSet(object.address) ? globalThis.String(object.address) : "",
       amount: isSet(object.amount) ? BigInt.fromJSON(object.amount) : undefined,
-      chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
+      chainId: isSet(object.chainId) ? BigInt.fromJSON(object.chainId) : undefined,
     };
   },
 
@@ -488,8 +490,8 @@ export const StakeType = {
     if (message.amount !== undefined) {
       obj.amount = BigInt.toJSON(message.amount);
     }
-    if (message.chainId !== "") {
-      obj.chainId = message.chainId;
+    if (message.chainId !== undefined) {
+      obj.chainId = BigInt.toJSON(message.chainId);
     }
     return obj;
   },
@@ -504,7 +506,9 @@ export const StakeType = {
     message.amount = (object.amount !== undefined && object.amount !== null)
       ? BigInt.fromPartial(object.amount)
       : undefined;
-    message.chainId = object.chainId ?? "";
+    message.chainId = (object.chainId !== undefined && object.chainId !== null)
+      ? BigInt.fromPartial(object.chainId)
+      : undefined;
     return message;
   },
 };

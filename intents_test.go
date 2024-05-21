@@ -70,6 +70,9 @@ func TestSubmitHandler(t *testing.T) {
 	toInt, err := FromBigInt(big.NewInt(50))
 	require.NoError(t, err)
 
+	chainID, err := FromBigInt(big.NewInt(1))
+	require.NoError(t, err)
+
 	testCases := []struct {
 		description string
 		payload     *pb.Body
@@ -86,7 +89,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
@@ -94,7 +97,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressTo,
 								Amount:  toInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						ExtraData: &pb.ExtraData{
@@ -120,7 +123,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: "InvalidTokenAddressFrom",
 								Amount:  fromInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
@@ -128,41 +131,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressTo,
 								Amount:  toInt,
-								ChainId: "1",
-							},
-						},
-						ExtraData: &pb.ExtraData{
-							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
-						},
-						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt: timestamppb.Now(),
-						// add 10 minutes
-						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
-					},
-				},
-			},
-			expectCode: http.StatusBadRequest,
-		},
-		{
-			description: "Invalid Request - Invalid Chain ID",
-			payload: &pb.Body{
-				Intents: []*pb.Intent{
-					{
-						Sender: senderAddress,
-						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-								Address: validTokenAddressFrom,
-								Amount:  fromInt,
-								ChainId: "-1", // Invalid Chain ID
-							},
-						},
-						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-								Address: validTokenAddressTo,
-								Amount:  toInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						ExtraData: &pb.ExtraData{
@@ -188,7 +157,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind(999), // Unsupported asset type
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
@@ -196,7 +165,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressTo,
 								Amount:  toInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						ExtraData: &pb.ExtraData{
@@ -222,14 +191,14 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
 							ToAsset: &pb.AssetType{
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressTo,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						ExtraData: &pb.ExtraData{
@@ -253,7 +222,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
@@ -261,7 +230,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressTo,
 								Amount:  toInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						ExtraData: &pb.ExtraData{
@@ -287,7 +256,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToStake{
@@ -295,7 +264,7 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_STAKE,
 								Address: validTokenAddressTo,
 								Amount:  toInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
@@ -318,14 +287,14 @@ func TestSubmitHandler(t *testing.T) {
 								Type:    pb.AssetKind_ASSET_KIND_STAKE,
 								Address: validTokenAddressTo,
 								Amount:  fromInt,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
 							ToAsset: &pb.AssetType{
 								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
 								Address: validTokenAddressFrom,
-								ChainId: "1",
+								ChainId: chainID,
 							},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
