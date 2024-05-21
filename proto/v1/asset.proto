@@ -43,10 +43,8 @@ message AssetType {
   // The amount of the asset.
   // In cases of AssetType being used as the to field, it doesn't have to provided
   // and can be left empty
-  BigInt amount = 3 [
-    (buf.validate.field).string = {pattern: "^[0-9]+$"},
-    (buf.validate.field).ignore = IGNORE_IF_UNPOPULATED
-  ];
+  BigInt amount = 3 [(buf.validate.field).ignore = IGNORE_IF_UNPOPULATED];
+
   string chain_id = 4 [(buf.validate.field).string = {
     min_len: 1,
     pattern: "^[1-9][0-9]*$"
@@ -57,7 +55,7 @@ message AssetType {
 message StakeType {
   AssetKind type = 1 [(buf.validate.field).enum = {defined_only: true}]; // The type of the stake.
   string address = 2 [(buf.validate.field).string = {pattern: "^0x[a-fA-F0-9]{40}$"}]; // The address of the stake.
-  BigInt amount = 3 [(buf.validate.field).string = {pattern: "^[0-9]+$"}]; // The amount of the stake.
+  BigInt amount = 3; // The amount of the stake.
   string chain_id = 4 [(buf.validate.field).string = {
     min_len: 1,
     pattern: "^[1-9][0-9]*$"
@@ -71,7 +69,7 @@ message LoanType {
     len: 42,
     pattern: "^0x[a-fA-F0-9]{40}$"
   }]; // The asset associated with the loan.
-  BigInt amount = 3 [(buf.validate.field).string = {pattern: "^[0-9]+$"}]; // The amount of the loan.
+  BigInt amount = 3; // The amount of the loan.
   string address = 4 [(buf.validate.field).string = {
     len: 42,
     pattern: "^0x[a-fA-F0-9]{40}$"
