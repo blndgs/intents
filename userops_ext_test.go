@@ -520,12 +520,15 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	}
 
 	// Assuming there's a way to validate the amounts correctly, considering they're strings in the provided example
-	fromAmount := ToBigInt(from.FromAsset.Amount)
+	fromAmount, err := ToBigInt(from.FromAsset.Amount)
+	require.NoError(t, err)
+
 	if fromAmount.Cmp(big.NewInt(100)) != 0 {
 		t.Errorf("From.Amount does not match expected value, got %s", from.FromAsset.GetAmount())
 	}
 
-	toAmount := ToBigInt(to.ToAsset.Amount)
+	toAmount, err := ToBigInt(to.ToAsset.Amount)
+	require.NoError(t, err)
 	if toAmount.Cmp(big.NewInt(50)) != 0 {
 		t.Errorf("To.Amount does not match expected value, got %s", to.ToAsset.GetAmount())
 	}

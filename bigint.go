@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -8,9 +9,15 @@ import (
 )
 
 // ToBigInt converts a protobuf BigInt message to a *big.Int.
-func ToBigInt(b *protov1.BigInt) *big.Int {
+func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
 	result := new(big.Int)
-	return result.SetBytes(b.GetValue())
+	result = result.SetBytes(b.GetValue())
+
+	if len(result.Bits()) == 0 {
+		return nil, errors.New("amount cannot be a zero amount")
+	}
+
+	return result, nil
 }
 
 // FromBigInt converts a *big.Int to a protobuf BigInt message.
