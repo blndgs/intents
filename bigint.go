@@ -2,7 +2,6 @@ package model
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 
 	protov1 "github.com/blndgs/model/gen/go/proto/v1"
@@ -23,7 +22,7 @@ func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
 // FromBigInt converts a *big.Int to a protobuf BigInt message.
 func FromBigInt(i *big.Int) (*protov1.BigInt, error) {
 	if i == nil {
-		return nil, fmt.Errorf("big.Int value cannot be nil")
+		return nil, errors.New("big.Int value cannot be nil")
 	}
 
 	return &protov1.BigInt{
