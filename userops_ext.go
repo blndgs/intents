@@ -14,9 +14,11 @@ import (
 	"fmt"
 	"math/big"
 
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/goccy/go-json"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
@@ -32,8 +34,8 @@ type BodyOfUserOps struct {
 // and its processing status.The sequence of UserOperationExt instances must correspond
 // to the sequence in the UserOps slice.
 type UserOperationExt struct {
-	OriginalHashValue string           `json:"original_hash_value" mapstructure:"original_hash_value" validate:"required"`
-	ProcessingStatus  ProcessingStatus `json:"processing_status" mapstructure:"processing_status" validate:"required"`
+	OriginalHashValue string              `json:"original_hash_value" mapstructure:"original_hash_value" validate:"required"`
+	ProcessingStatus  pb.ProcessingStatus `json:"processing_status" mapstructure:"processing_status" validate:"required"`
 }
 
 // UserOpSolvedStatus is an enum type that defines the possible states of a
@@ -154,8 +156,8 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 //   - bool: A boolean indicating if the unmarshalling was successful.
 func ExtractJSONFromField(fieldData string) (string, bool) {
 	if fieldData != "" {
-		var intent Intent
-		if err := json.Unmarshal([]byte(fieldData), &intent); err == nil {
+		var intent pb.Intent
+		if err := protojson.Unmarshal([]byte(fieldData), &intent); err == nil {
 			return fieldData, true
 		}
 	}
@@ -191,14 +193,14 @@ func (op *UserOperation) GetIntentJSON() (string, error) {
 
 // GetIntent takes the Intent Type from the CallData or Signature field, decodes it into
 // an Intent struct, and returns the struct.
-func (op *UserOperation) GetIntent() (*Intent, error) {
+func (op *UserOperation) GetIntent() (*pb.Intent, error) {
 	intentJSON, hasIntent := op.extractIntentJSON()
 	if !hasIntent {
 		return nil, ErrNoIntentFound
 	}
 
-	var intent Intent
-	if err := json.Unmarshal([]byte(intentJSON), &intent); err != nil {
+	var intent pb.Intent
+	if err := protojson.Unmarshal([]byte(intentJSON), &intent); err != nil {
 		return nil, ErrIntentInvalidJSON
 	}
 	return &intent, nil
@@ -232,7 +234,7 @@ func (op *UserOperation) GetEVMInstructions() ([]byte, error) {
 // arises during the process. Otherwise, nil is returned indicating
 // successful setting of the intent JSON.
 func (op *UserOperation) SetIntent(intentJSON string) error {
-	if err := json.Unmarshal([]byte(intentJSON), new(Intent)); err != nil {
+	if err := protojson.Unmarshal([]byte(intentJSON), new(pb.Intent)); err != nil {
 		return ErrIntentInvalidJSON
 	}
 

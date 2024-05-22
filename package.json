@@ -1,0 +1,25 @@
+{
+  "name": "@blndgs/model",
+  "version": "0.1.0",
+  "description": "Protobuf definitions for Intents",
+  "main": "./dist/proto/v1/asset.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blndgs/model.git"
+  },
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/blndgs/model/issues"
+  },
+  "homepage": "https://github.com/blndgs/model#readme",
+  "dependencies": {
+    "long": "^5.2.3",
+    "protobufjs": "^7.3.0"
+  }
+}

@@ -7,9 +7,13 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func mockCallData() []byte {
@@ -28,11 +32,54 @@ func mockSignature() []byte {
 }
 
 func mockIntentJSON() string {
+
+	fromInt, err := FromBigInt(big.NewInt(100))
+	if err != nil {
+		panic(err)
+	}
+
+	toInt, err := FromBigInt(big.NewInt(50))
+	if err != nil {
+		panic(err)
+	}
+
+	var fromB = bytes.NewBuffer(nil)
+
+	err = json.NewEncoder(fromB).Encode(fromInt)
+	if err != nil {
+		panic(err)
+	}
+
+	var toB = bytes.NewBuffer(nil)
+
+	err = json.NewEncoder(toB).Encode(toInt)
+	if err != nil {
+		panic(err)
+	}
+
+	chainID, err := FromBigInt(big.NewInt(1))
+	if err != nil {
+		panic(err)
+	}
+
+	var chainIDBuffer = bytes.NewBuffer(nil)
+
+	err = json.NewEncoder(chainIDBuffer).Encode(chainID)
+	if err != nil {
+		panic(err)
+	}
+
 	var (
-		intentJSON = `{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","from":{"type":"TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":"100","chainId":"80001"},"to":{"type":"TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":"50","chainId":"80001"},"extraData":{"partiallyFillable":false},"status":"Received"}`
-		intent     Intent
+		intentJSON = fmt.Sprintf(`
+		{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+		"from_asset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
+		"to_asset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
+		"extraData":{"partiallyFillable":false},
+		"status":"PROCESSING_STATUS_RECEIVED"}
+		`, fromB, chainIDBuffer, chainIDBuffer, toB)
+		intent pb.Intent
 	)
-	if err := json.Unmarshal([]byte(intentJSON), &intent); err != nil {
+	if err := protojson.Unmarshal([]byte(intentJSON), &intent); err != nil {
 		// signal when intent JSON is no longer valid
 		panic(err)
 	}
@@ -412,67 +459,102 @@ func TestIntentUserOperation_UnmarshalJSON(t *testing.T) {
 		t.Errorf("Unmarshaled UserOperation does not match the original.\nOriginal: %+v\nUnmarshaled: %+v", originalOp, unmarshaledOp)
 	}
 }
-func TestIntentUserOperation_RawJSON(t *testing.T) {
-	rawJSON := `{
-        "sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-        "from": {
-            "type": "TOKEN",
-            "address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-            "amount": "100",
-            "chainId": "1"
-        },
-        "to": {
-            "type": "TOKEN",
-            "address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
-            "amount": "50",
-            "chainId": "1"
-        },
-        "extraData": {
-            "partiallyFillable": false
-        },
-        "status": "Received",
-        "createdAt": 0,
-        "expirationAt": 0
-    }`
 
-	var intent Intent
-	if err := json.Unmarshal([]byte(rawJSON), &intent); err != nil {
+func TestIntentUserOperation_RawJSON(t *testing.T) {
+	now := time.Now().Format(time.RFC3339)
+	expirationDate := time.Now().Add(time.Hour).Format(time.RFC3339)
+
+	fromInt, err := FromBigInt(big.NewInt(100))
+	require.NoError(t, err)
+
+	toInt, err := FromBigInt(big.NewInt(50))
+	require.NoError(t, err)
+
+	var fromB = bytes.NewBuffer(nil)
+
+	require.NoError(t, json.NewEncoder(fromB).Encode(fromInt))
+
+	var toB = bytes.NewBuffer(nil)
+
+	require.NoError(t, json.NewEncoder(toB).Encode(toInt))
+
+	chainID, err := FromBigInt(big.NewInt(1))
+	require.NoError(t, err)
+
+	var chainIDBuffer = bytes.NewBuffer(nil)
+	require.NoError(t, json.NewEncoder(chainIDBuffer).Encode(chainID))
+
+	rawJSON := fmt.Sprintf(`{
+		"sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+		"from_asset": {
+			"type": "ASSET_KIND_TOKEN",
+			"address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+			"amount": %s,
+			"chainId": %s
+		},
+		"to_asset": {
+			"type": "ASSET_KIND_TOKEN",
+			"address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
+			"amount": %s,
+			"chainId": %s
+		},
+		"extraData": {
+			"partiallyFillable": false
+		},
+		"status": "PROCESSING_STATUS_RECEIVED",
+		"createdAt": "%s",
+		"expirationAt": "%s"
+	}`, fromB, chainIDBuffer, toB, chainIDBuffer, now, expirationDate)
+
+	var intent pb.Intent
+	if err := protojson.Unmarshal([]byte(rawJSON), &intent); err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
-
-	fromAsset, fromOk := intent.From.(map[string]interface{})
+	// Correctly type-assert 'From' and 'To' after unmarshalling
+	from, fromOk := intent.From.(*pb.Intent_FromAsset)
 	if !fromOk {
-		t.Fatalf("From field is not of expected type")
+		t.Fatalf("From field is not of type Asset")
 	}
-	if fromAsset["address"] != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {
+	if from.FromAsset.GetAddress() != "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" {
 		t.Errorf("From.Address does not match expected value")
 	}
-	if fromAsset["chainId"] != "1" {
-		t.Errorf("From.ChainId does not match expected value, got %s", fromAsset["chainId"])
+
+	chainIDFromIntent, err := ToBigInt(from.FromAsset.ChainId)
+	require.NoError(t, err)
+	if chainIDFromIntent.Int64() != 1 {
+		t.Errorf("From.ChainId does not match expected value, got %s", from.FromAsset.GetChainId())
 	}
 
-	toAsset, toOk := intent.To.(map[string]interface{})
+	to, toOk := intent.To.(*pb.Intent_ToAsset)
 	if !toOk {
-		t.Fatalf("To field is not of expected type")
+		t.Fatalf("To field is not of type Asset")
 	}
-	if toAsset["address"] != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
+	if to.ToAsset.GetAddress() != "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47" {
 		t.Errorf("To.Address does not match expected value")
 	}
-	if toAsset["chainId"] != "1" {
-		t.Errorf("To.ChainId does not match expected value, got %s", toAsset["chainId"])
+
+	chainIDFromIntent, err = ToBigInt(to.ToAsset.ChainId)
+	require.NoError(t, err)
+	if chainIDFromIntent.Int64() != 1 {
+		t.Errorf("To.ChainId does not match expected value, got %s", from.FromAsset.GetChainId())
 	}
 
-	// You could further improve the test by checking the type field within from and to, to ensure they're assets or stakes as expected
-
-	// Convert the amount fields from string to big.Int for comparison
-	fromAmount, ok := new(big.Int).SetString(fromAsset["amount"].(string), 10)
-	if !ok || fromAmount.Cmp(big.NewInt(100)) != 0 {
-		t.Errorf("From.Amount does not match expected value, got %s", fromAsset["amount"])
+	if intent.Status != pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED {
+		t.Errorf("Status does not match expected value, got %s", intent.Status)
 	}
 
-	toAmount, ok := new(big.Int).SetString(toAsset["amount"].(string), 10)
-	if !ok || toAmount.Cmp(big.NewInt(50)) != 0 {
-		t.Errorf("To.Amount does not match expected value, got %s", toAsset["amount"])
+	// Assuming there's a way to validate the amounts correctly, considering they're strings in the provided example
+	fromAmount, err := ToBigInt(from.FromAsset.Amount)
+	require.NoError(t, err)
+
+	if fromAmount.Cmp(big.NewInt(100)) != 0 {
+		t.Errorf("From.Amount does not match expected value, got %s", from.FromAsset.GetAmount())
+	}
+
+	toAmount, err := ToBigInt(to.ToAsset.Amount)
+	require.NoError(t, err)
+	if toAmount.Cmp(big.NewInt(50)) != 0 {
+		t.Errorf("To.Amount does not match expected value, got %s", to.ToAsset.GetAmount())
 	}
 }
 
