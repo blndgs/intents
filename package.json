@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Protobuf definitions for Intents",
   "main": "./dist/proto/v1/asset.js",
+  "private": false,
   "scripts": {
     "build": "tsc"
   },
