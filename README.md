@@ -30,6 +30,7 @@ The below steps are needed to successfully update and distribute the models:
 - If adding support for a new language, please update `buf.gen.yaml`
 to include the task.
 - Commit the generated code.
+- Bump up the version number in `package.json`
 
 ### Reproducible models
 
