@@ -431,7 +431,7 @@ func TestIntentUserOperation_UnmarshalJSON(t *testing.T) {
 		Sender:               common.HexToAddress("0x3068c2408c01bECde4BcCB9f246b56651BE1d12D"),
 		Nonce:                big.NewInt(15),
 		InitCode:             []byte("init code"),
-		CallData:             []byte(`{"chainId":80001, sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","kind":"swap","hash":"","sellToken":"TokenA","buyToken":"TokenB","sellAmount":10,"buyAmount":5,"partiallyFillable":false,"status":"Received","createdAt":0,"expirationAt":0}`),
+		CallData:             []byte(`{"sender":"0x66C0AeE289c4D332302dda4DeD0c0Cdc3784939A","from":{"type":"ASSET_KIND_TOKEN","address":"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE","amount":"5","chainId":"1"},"to":{"type":"ASSET_KIND_STAKE","address":"0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84","chainId":"1"}}`),
 		CallGasLimit:         big.NewInt(12068),
 		VerificationGasLimit: big.NewInt(58592),
 		PreVerificationGas:   big.NewInt(47996),
@@ -716,4 +716,40 @@ func Test_Intent_UserOperationString(t *testing.T) {
 	if result != expected {
 		t.Errorf("String() = %v, want %v", result, expected)
 	}
+}
+
+func TestUserOperationRawJSON(t *testing.T) {
+	rawJSON := `{
+        "user_ops": [
+            {
+                "sender": "0x66C0AeE289c4D332302dda4DeD0c0Cdc3784939A",
+                "nonce": "0xf",
+                "initCode": "0x7b2273656e646572223a22307830413731393961393666646630323532453039463736353435633165463262653336393246343662222c226b696e64223a2273776170222c2268617368223a22222c2273656c6c546f6b656e223a22546f6b656e41222c22627579546f6b656e223a22546f6b656e42222c2273656c6c416d6f756e74223a31302c22627579416d6f756e74223a352c227061727469616c6c7946696c6c61626c65223a66616c73652c22737461747573223a225265636569766564222c22637265617465644174223a302c2265787069726174696f6e4174223a307d",
+                "CallData": "{\"sender\":\"0x66C0AeE289c4D332302dda4DeD0c0Cdc3784939A\",\"from_asset\":{\"type\":\"ASSET_KIND_TOKEN\",\"address\":\"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE\",\"amount\":{\"value\":\"BQ==\"},\"chain_id\":{\"value\":\"AQ==\"}},\"to_stake\":{\"type\":\"ASSET_KIND_STAKE\",\"address\":\"0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84\",\"amount\":{\"value\":\"Mj==\"},\"chain_id\":{\"value\":\"AQ==\"}}}",
+                "callGasLimit": "0x2f24",
+                "verificationGasLimit": "0xe4e0",
+                "preVerificationGas": "0xbb7c",
+                "maxFeePerGas": "0x11f0ab2d7a",
+                "maxPriorityFeePerGas": "0x11f0ab2d3a",
+                "paymasterAndData": "0x7061796d61737465722064617461",
+                "signature": "0x41a3be3f70c6ee7935839b445d8cb78a28d0d873e81e82dd94d764f43ae41d402ac7e7c6539fcf1cc9e6ce969258556606feb252fda07a1230f469b10abb9c851b"
+            }
+        ],
+        "user_ops_ext": [
+            {
+                "original_hash_value": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+                "processing_status": 1
+            }
+        ]
+    }`
+	// processing_status passing it as a numeric 1
+	// value BQ== is should be : 5
+	//
+
+	var body BodyOfUserOps
+	err := json.Unmarshal([]byte(rawJSON), &body)
+	require.NoError(t, err, "Unmarshaling should not produce an error")
+
+	require.Len(t, body.UserOps, 1, "There should be one user operation")
+	require.Len(t, body.UserOpsExt, 1, "There should be one user operation extension")
 }
