@@ -738,7 +738,7 @@ func TestUserOperationRawJSON(t *testing.T) {
         "user_ops_ext": [
             {
                 "original_hash_value": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-                "processing_status": 1
+                "processing_status": "PROCESSING_STATUS_RECEIVED"
             }
         ]
     }`
