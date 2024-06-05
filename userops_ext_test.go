@@ -72,7 +72,7 @@ func mockIntentJSON() string {
 	var (
 		intentJSON = fmt.Sprintf(`
 		{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-		"from_asset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
+		"fromAsset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
 		"to_asset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
 		"extraData":{"partiallyFillable":false},
 		"status":"PROCESSING_STATUS_RECEIVED"}

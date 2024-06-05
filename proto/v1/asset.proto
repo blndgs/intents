@@ -85,16 +85,16 @@ message Intent {
 
   // Oneof field representing the asset being sent.
   oneof from {
-    AssetType from_asset = 2; // The asset being sent.
-    StakeType from_stake = 3; // The stake being sent.
-    LoanType from_loan = 4; // The loan being sent.
+    AssetType fromAsset = 2; // The asset being sent.
+    StakeType fromStake = 3; // The stake being sent.
+    LoanType fromLoan = 4; // The loan being sent.
   }
 
   // Oneof field representing the asset being received.
   oneof to {
-    AssetType to_asset = 5; // The asset being received.
-    StakeType to_stake = 6; // The stake being received.
-    LoanType to_loan = 7; // The loan being received.
+    AssetType toAsset = 5; // The asset being received.
+    StakeType toStake = 6; // The stake being received.
+    LoanType toLoan = 7; // The loan being received.
   }
 
   ExtraData extra_data = 8; // Additional data for the intent.
