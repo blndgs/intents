@@ -38,6 +38,22 @@ type UserOperationExt struct {
 	ProcessingStatus  pb.ProcessingStatus `json:"processing_status" mapstructure:"processing_status" validate:"required"`
 }
 
+// UnmarshalJSON makes sure we can support using strings instead of arbitrary
+// numbers for the proto processing
+func (u *UserOperationExt) UnmarshalJSON(data []byte) error {
+	aux := struct {
+		OriginalHashValue string `json:"original_hash_value"`
+		ProcessingStatus  string `json:"processing_status"`
+	}{}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	u.ProcessingStatus = pb.ProcessingStatus(pb.ProcessingStatus_value[aux.ProcessingStatus])
+	return nil
+}
+
 // UserOpSolvedStatus is an enum type that defines the possible states of a
 // UserOperation's resolution.It indicates whether an operation is unsolved,
 // solved, conventional, or in an unknown state.
@@ -157,9 +173,11 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 func ExtractJSONFromField(fieldData string) (string, bool) {
 	if fieldData != "" {
 		var intent pb.Intent
-		if err := protojson.Unmarshal([]byte(fieldData), &intent); err == nil {
-			return fieldData, true
+		err := protojson.Unmarshal([]byte(fieldData), &intent)
+		if err != nil {
+			return "", false
 		}
+		return fieldData, true
 	}
 	return "", false
 }
@@ -344,6 +362,7 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		op.CallData = []byte(intentJSON)
 	} else {
 		var err error
+
 		op.CallData, err = hexutil.Decode(aux.CallData)
 		if err != nil {
 			return fmt.Errorf("invalid CallData: %w", err)
