@@ -51,6 +51,7 @@ func (u *UserOperationExt) UnmarshalJSON(data []byte) error {
 	}
 
 	u.ProcessingStatus = pb.ProcessingStatus(pb.ProcessingStatus_value[aux.ProcessingStatus])
+	u.OriginalHashValue = aux.OriginalHashValue
 	return nil
 }
 
