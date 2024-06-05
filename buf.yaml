@@ -7,3 +7,6 @@ breaking:
 lint:
   use:
     - DEFAULT
+  except:
+    ## our fields are camelcased not snakecased
+    - FIELD_LOWER_SNAKE_CASE
