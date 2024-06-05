@@ -159,7 +159,6 @@ func ExtractJSONFromField(fieldData string) (string, bool) {
 		var intent pb.Intent
 		err := protojson.Unmarshal([]byte(fieldData), &intent)
 		if err != nil {
-			fmt.Printf("Error unmarshalling JSON to Intent protobuf: %v\n", err)
 			return "", false
 		}
 		return fieldData, true
@@ -346,7 +345,12 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 	if intentJSON, ok := ExtractJSONFromField(aux.CallData); ok {
 		op.CallData = []byte(intentJSON)
 	} else {
-		return fmt.Errorf("invalid CallData: data is not valid protobuf JSON")
+		var err error
+
+		op.CallData, err = hexutil.Decode(aux.CallData)
+		if err != nil {
+			return fmt.Errorf("invalid CallData: %w", err)
+		}
 	}
 
 	op.CallGasLimit, err = hexutil.DecodeBig(aux.CallGasLimit)
