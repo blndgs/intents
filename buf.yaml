@@ -7,7 +7,3 @@ breaking:
 lint:
   use:
     - DEFAULT
-  except:
-    # legacy reasons here because we already use chainId on the solver end
-    # no need to change it now
-    - FIELD_LOWER_SNAKE_CASE
