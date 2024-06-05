@@ -188,7 +188,6 @@ func ExtractJSONFromField(fieldData string) (string, bool) {
 	if fieldData != "" {
 		var intent pb.Intent
 		err := protojson.Unmarshal([]byte(fieldData), &intent)
-		fmt.Println(err)
 		if err != nil {
 			return "", false
 		}
