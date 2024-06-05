@@ -73,7 +73,7 @@ func mockIntentJSON() string {
 		intentJSON = fmt.Sprintf(`
 		{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 		"fromAsset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
-		"to_asset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
+		"toAsset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
 		"extraData":{"partiallyFillable":false},
 		"status":"PROCESSING_STATUS_RECEIVED"}
 		`, fromB, chainIDBuffer, chainIDBuffer, toB)
@@ -83,6 +83,7 @@ func mockIntentJSON() string {
 		// signal when intent JSON is no longer valid
 		panic(err)
 	}
+
 	return intentJSON
 }
 
@@ -486,13 +487,13 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 
 	rawJSON := fmt.Sprintf(`{
 		"sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-		"from_asset": {
+		"fromAsset": {
 			"type": "ASSET_KIND_TOKEN",
 			"address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 			"amount": %s,
 			"chainId": %s
 		},
-		"to_asset": {
+		"toAsset": {
 			"type": "ASSET_KIND_TOKEN",
 			"address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
 			"amount": %s,
