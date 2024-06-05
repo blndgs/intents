@@ -55,6 +55,19 @@ func (u *UserOperationExt) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (u *UserOperationExt) MarshalJSON() ([]byte, error) {
+
+	aux := struct {
+		OriginalHashValue string `json:"original_hash_value"`
+		ProcessingStatus  string `json:"processing_status"`
+	}{
+		OriginalHashValue: u.OriginalHashValue,
+		ProcessingStatus:  u.ProcessingStatus.String(),
+	}
+
+	return json.Marshal(&aux)
+}
+
 // UserOpSolvedStatus is an enum type that defines the possible states of a
 // UserOperation's resolution.It indicates whether an operation is unsolved,
 // solved, conventional, or in an unknown state.
@@ -175,6 +188,7 @@ func ExtractJSONFromField(fieldData string) (string, bool) {
 	if fieldData != "" {
 		var intent pb.Intent
 		err := protojson.Unmarshal([]byte(fieldData), &intent)
+		fmt.Println(err)
 		if err != nil {
 			return "", false
 		}
