@@ -718,6 +718,49 @@ func Test_Intent_UserOperationString(t *testing.T) {
 	}
 }
 
+func TestUserOperationExt_MarshalJSON(t *testing.T) {
+	tt := []struct {
+		name           string
+		expectedStatus string
+		status         pb.ProcessingStatus
+	}{
+		{
+			name:           "status received",
+			expectedStatus: "PROCESSING_STATUS_RECEIVED",
+			status:         pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+		},
+		{
+			name:           "status unspecified",
+			expectedStatus: "PROCESSING_STATUS_UNSPECIFIED",
+			status:         pb.ProcessingStatus_PROCESSING_STATUS_UNSPECIFIED,
+		},
+		{
+			name:           "status solved",
+			expectedStatus: "PROCESSING_STATUS_SOLVED",
+			status:         pb.ProcessingStatus_PROCESSING_STATUS_SOLVED,
+		},
+	}
+
+	for _, v := range tt {
+		userExt := &UserOperationExt{
+			ProcessingStatus:  v.status,
+			OriginalHashValue: "0xhash",
+		}
+
+		value, err := json.Marshal(userExt)
+		require.NoError(t, err)
+
+		var s struct {
+			ProcessingStatus string `json:"processing_status"`
+		}
+
+		err = json.Unmarshal(value, &s)
+		require.NoError(t, err)
+
+		require.Equal(t, v.expectedStatus, s.ProcessingStatus)
+	}
+}
+
 func TestUserOperationRawJSON(t *testing.T) {
 	rawJSON := `{
         "user_ops": [
