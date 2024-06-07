@@ -21,7 +21,6 @@
   },
   "homepage": "https://github.com/blndgs/model#readme",
   "dependencies": {
-    "@bufbuild/protobuf": "^1.10.0",
-    "long": "^5.2.3"
+    "@bufbuild/protobuf": "^1.10.0"
   }
 }
