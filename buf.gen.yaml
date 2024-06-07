@@ -19,7 +19,6 @@ plugins:
       - paths=source_relative
       - module=github.com/blndgs/model
 
-  - plugin: buf.build/community/stephenh-ts-proto:v1.167.9
+  - plugin: buf.build/bufbuild/es:v1.10.0
+    opt: target=ts
     out: gen/ts
-    opt:
-      - esModuleInterop=true

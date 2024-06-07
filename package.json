@@ -20,7 +20,7 @@
   },
   "homepage": "https://github.com/blndgs/model#readme",
   "dependencies": {
-    "long": "^5.2.3",
-    "protobufjs": "^7.3.0"
+    "@bufbuild/protobuf": "^1.10.0",
+    "long": "^5.2.3"
   }
 }
