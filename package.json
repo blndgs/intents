@@ -1,8 +1,9 @@
 {
   "name": "blndgs-model",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Protobuf definitions for Intents",
   "main": "./dist/proto/v1/asset.js",
+  "types": "./dist/asset_pb.d.ts",
   "private": false,
   "scripts": {
     "build": "tsc"
@@ -20,7 +21,6 @@
   },
   "homepage": "https://github.com/blndgs/model#readme",
   "dependencies": {
-    "long": "^5.2.3",
-    "protobufjs": "^7.3.0"
+    "@bufbuild/protobuf": "^1.10.0"
   }
 }

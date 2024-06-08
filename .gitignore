@@ -25,4 +25,4 @@ tmp
 # v code
 launch.json
 
-./dist/
+dist/

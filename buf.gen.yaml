@@ -19,7 +19,12 @@ plugins:
       - paths=source_relative
       - module=github.com/blndgs/model
 
-  - plugin: buf.build/community/stephenh-ts-proto:v1.167.9
+  # there does not seem to be a way to generate
+  # both typings and actual code in one pass
+  - plugin: buf.build/bufbuild/es:v1.10.0
+    opt: target=dts
     out: gen/ts
-    opt:
-      - esModuleInterop=true
+
+  - plugin: buf.build/bufbuild/es:v1.10.0
+    opt: target=ts
+    out: gen/ts
