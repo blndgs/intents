@@ -72,8 +72,8 @@ func mockIntentJSON() string {
 	var (
 		intentJSON = fmt.Sprintf(`
 		{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
-		"fromAsset":{"type":"ASSET_KIND_TOKEN","address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
-		"toAsset":{"type":"ASSET_KIND_TOKEN","address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
+		"fromAsset":{"address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
+		"toAsset":{"address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
 		"extraData":{"partiallyFillable":false},
 		"status":"PROCESSING_STATUS_RECEIVED"}
 		`, fromB, chainIDBuffer, chainIDBuffer, toB)
@@ -488,13 +488,11 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	rawJSON := fmt.Sprintf(`{
 		"sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 		"fromAsset": {
-			"type": "ASSET_KIND_TOKEN",
 			"address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 			"amount": %s,
 			"chainId": %s
 		},
 		"toAsset": {
-			"type": "ASSET_KIND_TOKEN",
 			"address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
 			"amount": %s,
 			"chainId": %s
@@ -768,7 +766,7 @@ func TestUserOperationRawJSON(t *testing.T) {
                 "sender": "0x66C0AeE289c4D332302dda4DeD0c0Cdc3784939A",
                 "nonce": "0xf",
                 "initCode": "0x7b2273656e646572223a22307830413731393961393666646630323532453039463736353435633165463262653336393246343662222c226b696e64223a2273776170222c2268617368223a22222c2273656c6c546f6b656e223a22546f6b656e41222c22627579546f6b656e223a22546f6b656e42222c2273656c6c416d6f756e74223a31302c22627579416d6f756e74223a352c227061727469616c6c7946696c6c61626c65223a66616c73652c22737461747573223a225265636569766564222c22637265617465644174223a302c2265787069726174696f6e4174223a307d",
-                "CallData": "{\"sender\":\"0x66C0AeE289c4D332302dda4DeD0c0Cdc3784939A\",\"fromAsset\":{\"type\":\"ASSET_KIND_TOKEN\",\"address\":\"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE\",\"amount\":{\"value\":\"BQ==\"},\"chain_id\":{\"value\":\"AQ==\"}},\"toStake\":{\"type\":\"ASSET_KIND_STAKE\",\"address\":\"0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84\",\"amount\":{\"value\":\"Mj==\"},\"chain_id\":{\"value\":\"AQ==\"}}}",
+                "CallData": "{\"sender\":\"0x66C0AeE289c4D332302dda4DeD0c0Cdc3784939A\",\"fromAsset\":{\"address\":\"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE\",\"amount\":{\"value\":\"BQ==\"},\"chain_id\":{\"value\":\"AQ==\"}},\"toStake\":{\"address\":\"0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84\",\"amount\":{\"value\":\"Mj==\"},\"chain_id\":{\"value\":\"AQ==\"}}}",
                 "callGasLimit": "0x2f24",
                 "verificationGasLimit": "0xe4e0",
                 "preVerificationGas": "0xbb7c",
