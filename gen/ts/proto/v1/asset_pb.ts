@@ -7,48 +7,6 @@ import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialM
 import { BoolValue, Message, proto3, Timestamp } from "@bufbuild/protobuf";
 
 /**
- * Enum representing different types of assets.
- *
- * @generated from enum proto.v1.AssetKind
- */
-export enum AssetKind {
-  /**
-   * Default value, unspecified asset type.
-   *
-   * @generated from enum value: ASSET_KIND_UNSPECIFIED = 0;
-   */
-  UNSPECIFIED = 0,
-
-  /**
-   * Token asset type.
-   *
-   * @generated from enum value: ASSET_KIND_TOKEN = 1;
-   */
-  TOKEN = 1,
-
-  /**
-   * Stake asset type.
-   *
-   * @generated from enum value: ASSET_KIND_STAKE = 2;
-   */
-  STAKE = 2,
-
-  /**
-   * Loan asset type.
-   *
-   * @generated from enum value: ASSET_KIND_LOAN = 3;
-   */
-  LOAN = 3,
-}
-// Retrieve enum metadata with: proto3.getEnumType(AssetKind)
-proto3.util.setEnumType(AssetKind, "proto.v1.AssetKind", [
-  { no: 0, name: "ASSET_KIND_UNSPECIFIED" },
-  { no: 1, name: "ASSET_KIND_TOKEN" },
-  { no: 2, name: "ASSET_KIND_STAKE" },
-  { no: 3, name: "ASSET_KIND_LOAN" },
-]);
-
-/**
  * Enum representing the processing status of an intent.
  *
  * @generated from enum proto.v1.ProcessingStatus
@@ -164,20 +122,13 @@ export class BigInt extends Message<BigInt> {
 /**
  * Message representing the details of an asset.
  *
- * @generated from message proto.v1.AssetType
+ * @generated from message proto.v1.Asset
  */
-export class AssetType extends Message<AssetType> {
-  /**
-   * The type of the asset.
-   *
-   * @generated from field: proto.v1.AssetKind type = 1;
-   */
-  type = AssetKind.UNSPECIFIED;
-
+export class Asset extends Message<Asset> {
   /**
    * The address of the asset.
    *
-   * @generated from field: string address = 2;
+   * @generated from field: string address = 1;
    */
   address = "";
 
@@ -186,183 +137,166 @@ export class AssetType extends Message<AssetType> {
    * In cases of AssetType being used as the to field, it doesn't have to provided
    * and can be left empty
    *
-   * @generated from field: proto.v1.BigInt amount = 3;
+   * @generated from field: proto.v1.BigInt amount = 2;
    */
   amount?: BigInt;
 
   /**
    * The chain ID where the asset resides.
    *
-   * @generated from field: proto.v1.BigInt chain_id = 4;
+   * @generated from field: proto.v1.BigInt chain_id = 3;
    */
   chainId?: BigInt;
 
-  constructor(data?: PartialMessage<AssetType>) {
+  constructor(data?: PartialMessage<Asset>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "proto.v1.AssetType";
+  static readonly typeName = "proto.v1.Asset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(AssetKind) },
-    { no: 2, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "amount", kind: "message", T: BigInt },
-    { no: 4, name: "chain_id", kind: "message", T: BigInt },
+    { no: 1, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "amount", kind: "message", T: BigInt },
+    { no: 3, name: "chain_id", kind: "message", T: BigInt },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AssetType {
-    return new AssetType().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Asset {
+    return new Asset().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): AssetType {
-    return new AssetType().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Asset {
+    return new Asset().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): AssetType {
-    return new AssetType().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Asset {
+    return new Asset().fromJsonString(jsonString, options);
   }
 
-  static equals(a: AssetType | PlainMessage<AssetType> | undefined, b: AssetType | PlainMessage<AssetType> | undefined): boolean {
-    return proto3.util.equals(AssetType, a, b);
+  static equals(a: Asset | PlainMessage<Asset> | undefined, b: Asset | PlainMessage<Asset> | undefined): boolean {
+    return proto3.util.equals(Asset, a, b);
   }
 }
 
 /**
  * Message representing the details of a stake.
  *
- * @generated from message proto.v1.StakeType
+ * @generated from message proto.v1.Stake
  */
-export class StakeType extends Message<StakeType> {
-  /**
-   * The type of the stake.
-   *
-   * @generated from field: proto.v1.AssetKind type = 1;
-   */
-  type = AssetKind.UNSPECIFIED;
-
+export class Stake extends Message<Stake> {
   /**
    * The address of the stake.
    *
-   * @generated from field: string address = 2;
+   * @generated from field: string address = 1;
    */
   address = "";
 
   /**
    * The amount of the stake.
    *
-   * @generated from field: proto.v1.BigInt amount = 3;
+   * @generated from field: proto.v1.BigInt amount = 2;
    */
   amount?: BigInt;
 
   /**
    * The chain ID where the asset resides.
    *
-   * @generated from field: proto.v1.BigInt chain_id = 4;
+   * @generated from field: proto.v1.BigInt chain_id = 3;
    */
   chainId?: BigInt;
 
-  constructor(data?: PartialMessage<StakeType>) {
+  constructor(data?: PartialMessage<Stake>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "proto.v1.StakeType";
+  static readonly typeName = "proto.v1.Stake";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(AssetKind) },
-    { no: 2, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "amount", kind: "message", T: BigInt },
-    { no: 4, name: "chain_id", kind: "message", T: BigInt },
+    { no: 1, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "amount", kind: "message", T: BigInt },
+    { no: 3, name: "chain_id", kind: "message", T: BigInt },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StakeType {
-    return new StakeType().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Stake {
+    return new Stake().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StakeType {
-    return new StakeType().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Stake {
+    return new Stake().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StakeType {
-    return new StakeType().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Stake {
+    return new Stake().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StakeType | PlainMessage<StakeType> | undefined, b: StakeType | PlainMessage<StakeType> | undefined): boolean {
-    return proto3.util.equals(StakeType, a, b);
+  static equals(a: Stake | PlainMessage<Stake> | undefined, b: Stake | PlainMessage<Stake> | undefined): boolean {
+    return proto3.util.equals(Stake, a, b);
   }
 }
 
 /**
  * Message representing the details of a loan.
  *
- * @generated from message proto.v1.LoanType
+ * @generated from message proto.v1.Loan
  */
-export class LoanType extends Message<LoanType> {
-  /**
-   * The type of the loan.
-   *
-   * @generated from field: proto.v1.AssetKind type = 1;
-   */
-  type = AssetKind.UNSPECIFIED;
-
+export class Loan extends Message<Loan> {
   /**
    * The asset associated with the loan.
    *
-   * @generated from field: string asset = 2;
+   * @generated from field: string asset = 1;
    */
   asset = "";
 
   /**
    * The amount of the loan.
    *
-   * @generated from field: proto.v1.BigInt amount = 3;
+   * @generated from field: proto.v1.BigInt amount = 2;
    */
   amount?: BigInt;
 
   /**
    * The address associated with the loan.
    *
-   * @generated from field: string address = 4;
+   * @generated from field: string address = 3;
    */
   address = "";
 
   /**
    * The chain ID where the asset resides.
    *
-   * @generated from field: string chain_id = 5;
+   * @generated from field: string chain_id = 4;
    */
   chainId = "";
 
-  constructor(data?: PartialMessage<LoanType>) {
+  constructor(data?: PartialMessage<Loan>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "proto.v1.LoanType";
+  static readonly typeName = "proto.v1.Loan";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(AssetKind) },
-    { no: 2, name: "asset", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "amount", kind: "message", T: BigInt },
-    { no: 4, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "chain_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "asset", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "amount", kind: "message", T: BigInt },
+    { no: 3, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "chain_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LoanType {
-    return new LoanType().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Loan {
+    return new Loan().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): LoanType {
-    return new LoanType().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Loan {
+    return new Loan().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): LoanType {
-    return new LoanType().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Loan {
+    return new Loan().fromJsonString(jsonString, options);
   }
 
-  static equals(a: LoanType | PlainMessage<LoanType> | undefined, b: LoanType | PlainMessage<LoanType> | undefined): boolean {
-    return proto3.util.equals(LoanType, a, b);
+  static equals(a: Loan | PlainMessage<Loan> | undefined, b: Loan | PlainMessage<Loan> | undefined): boolean {
+    return proto3.util.equals(Loan, a, b);
   }
 }
 
@@ -429,25 +363,25 @@ export class Intent extends Message<Intent> {
     /**
      * The asset being sent.
      *
-     * @generated from field: proto.v1.AssetType fromAsset = 2;
+     * @generated from field: proto.v1.Asset fromAsset = 2;
      */
-    value: AssetType;
+    value: Asset;
     case: "fromAsset";
   } | {
     /**
      * The stake being sent.
      *
-     * @generated from field: proto.v1.StakeType fromStake = 3;
+     * @generated from field: proto.v1.Stake fromStake = 3;
      */
-    value: StakeType;
+    value: Stake;
     case: "fromStake";
   } | {
     /**
      * The loan being sent.
      *
-     * @generated from field: proto.v1.LoanType fromLoan = 4;
+     * @generated from field: proto.v1.Loan fromLoan = 4;
      */
-    value: LoanType;
+    value: Loan;
     case: "fromLoan";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
@@ -458,27 +392,27 @@ export class Intent extends Message<Intent> {
    */
   to: {
     /**
-     * The asset being received.
+     * The token being received.
      *
-     * @generated from field: proto.v1.AssetType toAsset = 5;
+     * @generated from field: proto.v1.Asset toAsset = 5;
      */
-    value: AssetType;
+    value: Asset;
     case: "toAsset";
   } | {
     /**
      * The stake being received.
      *
-     * @generated from field: proto.v1.StakeType toStake = 6;
+     * @generated from field: proto.v1.Stake toStake = 6;
      */
-    value: StakeType;
+    value: Stake;
     case: "toStake";
   } | {
     /**
      * The loan being received.
      *
-     * @generated from field: proto.v1.LoanType toLoan = 7;
+     * @generated from field: proto.v1.Loan toLoan = 7;
      */
-    value: LoanType;
+    value: Loan;
     case: "toLoan";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
@@ -519,12 +453,12 @@ export class Intent extends Message<Intent> {
   static readonly typeName = "proto.v1.Intent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "sender", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "fromAsset", kind: "message", T: AssetType, oneof: "from" },
-    { no: 3, name: "fromStake", kind: "message", T: StakeType, oneof: "from" },
-    { no: 4, name: "fromLoan", kind: "message", T: LoanType, oneof: "from" },
-    { no: 5, name: "toAsset", kind: "message", T: AssetType, oneof: "to" },
-    { no: 6, name: "toStake", kind: "message", T: StakeType, oneof: "to" },
-    { no: 7, name: "toLoan", kind: "message", T: LoanType, oneof: "to" },
+    { no: 2, name: "fromAsset", kind: "message", T: Asset, oneof: "from" },
+    { no: 3, name: "fromStake", kind: "message", T: Stake, oneof: "from" },
+    { no: 4, name: "fromLoan", kind: "message", T: Loan, oneof: "from" },
+    { no: 5, name: "toAsset", kind: "message", T: Asset, oneof: "to" },
+    { no: 6, name: "toStake", kind: "message", T: Stake, oneof: "to" },
+    { no: 7, name: "toLoan", kind: "message", T: Loan, oneof: "to" },
     { no: 8, name: "extra_data", kind: "message", T: ExtraData },
     { no: 9, name: "status", kind: "enum", T: proto3.getEnumType(ProcessingStatus) },
     { no: 10, name: "created_at", kind: "message", T: Timestamp },

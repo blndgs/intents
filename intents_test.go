@@ -85,16 +85,14 @@ func TestSubmitHandler(t *testing.T) {
 					{
 						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							FromAsset: &pb.Asset{
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							ToAsset: &pb.Asset{
 								Address: validTokenAddressTo,
 								Amount:  toInt,
 								ChainId: chainID,
@@ -119,50 +117,14 @@ func TestSubmitHandler(t *testing.T) {
 					{
 						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							FromAsset: &pb.Asset{
 								Address: "InvalidTokenAddressFrom",
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
-								Address: validTokenAddressTo,
-								Amount:  toInt,
-								ChainId: chainID,
-							},
-						},
-						ExtraData: &pb.ExtraData{
-							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
-						},
-						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
-						CreatedAt: timestamppb.Now(),
-						// add 10 minutes
-						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
-					},
-				},
-			},
-			expectCode: http.StatusBadRequest,
-		},
-		{
-			description: "Invalid Request - Unsupported Asset Type",
-			payload: &pb.Body{
-				Intents: []*pb.Intent{
-					{
-						Sender: senderAddress,
-						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.AssetType{
-								Type:    pb.AssetKind(999), // Unsupported asset type
-								Address: validTokenAddressFrom,
-								Amount:  fromInt,
-								ChainId: chainID,
-							},
-						},
-						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							ToAsset: &pb.Asset{
 								Address: validTokenAddressTo,
 								Amount:  toInt,
 								ChainId: chainID,
@@ -187,16 +149,14 @@ func TestSubmitHandler(t *testing.T) {
 					{
 						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							FromAsset: &pb.Asset{
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							ToAsset: &pb.Asset{
 								Address: validTokenAddressTo,
 								ChainId: chainID,
 							},
@@ -218,16 +178,14 @@ func TestSubmitHandler(t *testing.T) {
 					{
 						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							FromAsset: &pb.Asset{
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							ToAsset: &pb.Asset{
 								Address: validTokenAddressTo,
 								Amount:  toInt,
 								ChainId: chainID,
@@ -252,16 +210,14 @@ func TestSubmitHandler(t *testing.T) {
 					{
 						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							FromAsset: &pb.Asset{
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToStake{
-							ToStake: &pb.StakeType{
-								Type:    pb.AssetKind_ASSET_KIND_STAKE,
+							ToStake: &pb.Stake{
 								Address: validTokenAddressTo,
 								Amount:  toInt,
 								ChainId: chainID,
@@ -283,16 +239,14 @@ func TestSubmitHandler(t *testing.T) {
 					{
 						Sender: senderAddress,
 						From: &pb.Intent_FromStake{
-							FromStake: &pb.StakeType{
-								Type:    pb.AssetKind_ASSET_KIND_STAKE,
+							FromStake: &pb.Stake{
 								Address: validTokenAddressTo,
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.AssetType{
-								Type:    pb.AssetKind_ASSET_KIND_TOKEN,
+							ToAsset: &pb.Asset{
 								Address: validTokenAddressFrom,
 								ChainId: chainID,
 							},

@@ -135,29 +135,26 @@ var _ interface {
 	ErrorName() string
 } = BigIntValidationError{}
 
-// Validate checks the field values on AssetType with the rules defined in the
+// Validate checks the field values on Asset with the rules defined in the
 // proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
-func (m *AssetType) Validate() error {
+func (m *Asset) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on AssetType with the rules defined in
-// the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in AssetTypeMultiError, or nil
-// if none found.
-func (m *AssetType) ValidateAll() error {
+// ValidateAll checks the field values on Asset with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in AssetMultiError, or nil if none found.
+func (m *Asset) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *AssetType) validate(all bool) error {
+func (m *Asset) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
-
-	// no validation rules for Type
 
 	// no validation rules for Address
 
@@ -165,7 +162,7 @@ func (m *AssetType) validate(all bool) error {
 		switch v := interface{}(m.GetAmount()).(type) {
 		case interface{ ValidateAll() error }:
 			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, AssetTypeValidationError{
+				errors = append(errors, AssetValidationError{
 					field:  "Amount",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -173,7 +170,7 @@ func (m *AssetType) validate(all bool) error {
 			}
 		case interface{ Validate() error }:
 			if err := v.Validate(); err != nil {
-				errors = append(errors, AssetTypeValidationError{
+				errors = append(errors, AssetValidationError{
 					field:  "Amount",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -182,7 +179,7 @@ func (m *AssetType) validate(all bool) error {
 		}
 	} else if v, ok := interface{}(m.GetAmount()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
-			return AssetTypeValidationError{
+			return AssetValidationError{
 				field:  "Amount",
 				reason: "embedded message failed validation",
 				cause:  err,
@@ -194,7 +191,7 @@ func (m *AssetType) validate(all bool) error {
 		switch v := interface{}(m.GetChainId()).(type) {
 		case interface{ ValidateAll() error }:
 			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, AssetTypeValidationError{
+				errors = append(errors, AssetValidationError{
 					field:  "ChainId",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -202,7 +199,7 @@ func (m *AssetType) validate(all bool) error {
 			}
 		case interface{ Validate() error }:
 			if err := v.Validate(); err != nil {
-				errors = append(errors, AssetTypeValidationError{
+				errors = append(errors, AssetValidationError{
 					field:  "ChainId",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -211,7 +208,7 @@ func (m *AssetType) validate(all bool) error {
 		}
 	} else if v, ok := interface{}(m.GetChainId()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
-			return AssetTypeValidationError{
+			return AssetValidationError{
 				field:  "ChainId",
 				reason: "embedded message failed validation",
 				cause:  err,
@@ -220,18 +217,18 @@ func (m *AssetType) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return AssetTypeMultiError(errors)
+		return AssetMultiError(errors)
 	}
 
 	return nil
 }
 
-// AssetTypeMultiError is an error wrapping multiple validation errors returned
-// by AssetType.ValidateAll() if the designated constraints aren't met.
-type AssetTypeMultiError []error
+// AssetMultiError is an error wrapping multiple validation errors returned by
+// Asset.ValidateAll() if the designated constraints aren't met.
+type AssetMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m AssetTypeMultiError) Error() string {
+func (m AssetMultiError) Error() string {
 	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -240,11 +237,11 @@ func (m AssetTypeMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m AssetTypeMultiError) AllErrors() []error { return m }
+func (m AssetMultiError) AllErrors() []error { return m }
 
-// AssetTypeValidationError is the validation error returned by
-// AssetType.Validate if the designated constraints aren't met.
-type AssetTypeValidationError struct {
+// AssetValidationError is the validation error returned by Asset.Validate if
+// the designated constraints aren't met.
+type AssetValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -252,22 +249,22 @@ type AssetTypeValidationError struct {
 }
 
 // Field function returns field value.
-func (e AssetTypeValidationError) Field() string { return e.field }
+func (e AssetValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e AssetTypeValidationError) Reason() string { return e.reason }
+func (e AssetValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e AssetTypeValidationError) Cause() error { return e.cause }
+func (e AssetValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e AssetTypeValidationError) Key() bool { return e.key }
+func (e AssetValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e AssetTypeValidationError) ErrorName() string { return "AssetTypeValidationError" }
+func (e AssetValidationError) ErrorName() string { return "AssetValidationError" }
 
 // Error satisfies the builtin error interface
-func (e AssetTypeValidationError) Error() string {
+func (e AssetValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -279,14 +276,14 @@ func (e AssetTypeValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sAssetType.%s: %s%s",
+		"invalid %sAsset.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = AssetTypeValidationError{}
+var _ error = AssetValidationError{}
 
 var _ interface {
 	Field() string
@@ -294,31 +291,28 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = AssetTypeValidationError{}
+} = AssetValidationError{}
 
-// Validate checks the field values on StakeType with the rules defined in the
+// Validate checks the field values on Stake with the rules defined in the
 // proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
-func (m *StakeType) Validate() error {
+func (m *Stake) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on StakeType with the rules defined in
-// the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in StakeTypeMultiError, or nil
-// if none found.
-func (m *StakeType) ValidateAll() error {
+// ValidateAll checks the field values on Stake with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in StakeMultiError, or nil if none found.
+func (m *Stake) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *StakeType) validate(all bool) error {
+func (m *Stake) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
-
-	// no validation rules for Type
 
 	// no validation rules for Address
 
@@ -326,7 +320,7 @@ func (m *StakeType) validate(all bool) error {
 		switch v := interface{}(m.GetAmount()).(type) {
 		case interface{ ValidateAll() error }:
 			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, StakeTypeValidationError{
+				errors = append(errors, StakeValidationError{
 					field:  "Amount",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -334,7 +328,7 @@ func (m *StakeType) validate(all bool) error {
 			}
 		case interface{ Validate() error }:
 			if err := v.Validate(); err != nil {
-				errors = append(errors, StakeTypeValidationError{
+				errors = append(errors, StakeValidationError{
 					field:  "Amount",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -343,7 +337,7 @@ func (m *StakeType) validate(all bool) error {
 		}
 	} else if v, ok := interface{}(m.GetAmount()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
-			return StakeTypeValidationError{
+			return StakeValidationError{
 				field:  "Amount",
 				reason: "embedded message failed validation",
 				cause:  err,
@@ -355,7 +349,7 @@ func (m *StakeType) validate(all bool) error {
 		switch v := interface{}(m.GetChainId()).(type) {
 		case interface{ ValidateAll() error }:
 			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, StakeTypeValidationError{
+				errors = append(errors, StakeValidationError{
 					field:  "ChainId",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -363,7 +357,7 @@ func (m *StakeType) validate(all bool) error {
 			}
 		case interface{ Validate() error }:
 			if err := v.Validate(); err != nil {
-				errors = append(errors, StakeTypeValidationError{
+				errors = append(errors, StakeValidationError{
 					field:  "ChainId",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -372,7 +366,7 @@ func (m *StakeType) validate(all bool) error {
 		}
 	} else if v, ok := interface{}(m.GetChainId()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
-			return StakeTypeValidationError{
+			return StakeValidationError{
 				field:  "ChainId",
 				reason: "embedded message failed validation",
 				cause:  err,
@@ -381,18 +375,18 @@ func (m *StakeType) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return StakeTypeMultiError(errors)
+		return StakeMultiError(errors)
 	}
 
 	return nil
 }
 
-// StakeTypeMultiError is an error wrapping multiple validation errors returned
-// by StakeType.ValidateAll() if the designated constraints aren't met.
-type StakeTypeMultiError []error
+// StakeMultiError is an error wrapping multiple validation errors returned by
+// Stake.ValidateAll() if the designated constraints aren't met.
+type StakeMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m StakeTypeMultiError) Error() string {
+func (m StakeMultiError) Error() string {
 	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -401,11 +395,11 @@ func (m StakeTypeMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m StakeTypeMultiError) AllErrors() []error { return m }
+func (m StakeMultiError) AllErrors() []error { return m }
 
-// StakeTypeValidationError is the validation error returned by
-// StakeType.Validate if the designated constraints aren't met.
-type StakeTypeValidationError struct {
+// StakeValidationError is the validation error returned by Stake.Validate if
+// the designated constraints aren't met.
+type StakeValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -413,22 +407,22 @@ type StakeTypeValidationError struct {
 }
 
 // Field function returns field value.
-func (e StakeTypeValidationError) Field() string { return e.field }
+func (e StakeValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e StakeTypeValidationError) Reason() string { return e.reason }
+func (e StakeValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e StakeTypeValidationError) Cause() error { return e.cause }
+func (e StakeValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e StakeTypeValidationError) Key() bool { return e.key }
+func (e StakeValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e StakeTypeValidationError) ErrorName() string { return "StakeTypeValidationError" }
+func (e StakeValidationError) ErrorName() string { return "StakeValidationError" }
 
 // Error satisfies the builtin error interface
-func (e StakeTypeValidationError) Error() string {
+func (e StakeValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -440,14 +434,14 @@ func (e StakeTypeValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sStakeType.%s: %s%s",
+		"invalid %sStake.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = StakeTypeValidationError{}
+var _ error = StakeValidationError{}
 
 var _ interface {
 	Field() string
@@ -455,31 +449,28 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = StakeTypeValidationError{}
+} = StakeValidationError{}
 
-// Validate checks the field values on LoanType with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *LoanType) Validate() error {
+// Validate checks the field values on Loan with the rules defined in the proto
+// definition for this message. If any rules are violated, the first error
+// encountered is returned, or nil if there are no violations.
+func (m *Loan) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on LoanType with the rules defined in
-// the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in LoanTypeMultiError, or nil
-// if none found.
-func (m *LoanType) ValidateAll() error {
+// ValidateAll checks the field values on Loan with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in LoanMultiError, or nil if none found.
+func (m *Loan) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *LoanType) validate(all bool) error {
+func (m *Loan) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
-
-	// no validation rules for Type
 
 	// no validation rules for Asset
 
@@ -487,7 +478,7 @@ func (m *LoanType) validate(all bool) error {
 		switch v := interface{}(m.GetAmount()).(type) {
 		case interface{ ValidateAll() error }:
 			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, LoanTypeValidationError{
+				errors = append(errors, LoanValidationError{
 					field:  "Amount",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -495,7 +486,7 @@ func (m *LoanType) validate(all bool) error {
 			}
 		case interface{ Validate() error }:
 			if err := v.Validate(); err != nil {
-				errors = append(errors, LoanTypeValidationError{
+				errors = append(errors, LoanValidationError{
 					field:  "Amount",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -504,7 +495,7 @@ func (m *LoanType) validate(all bool) error {
 		}
 	} else if v, ok := interface{}(m.GetAmount()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
-			return LoanTypeValidationError{
+			return LoanValidationError{
 				field:  "Amount",
 				reason: "embedded message failed validation",
 				cause:  err,
@@ -517,18 +508,18 @@ func (m *LoanType) validate(all bool) error {
 	// no validation rules for ChainId
 
 	if len(errors) > 0 {
-		return LoanTypeMultiError(errors)
+		return LoanMultiError(errors)
 	}
 
 	return nil
 }
 
-// LoanTypeMultiError is an error wrapping multiple validation errors returned
-// by LoanType.ValidateAll() if the designated constraints aren't met.
-type LoanTypeMultiError []error
+// LoanMultiError is an error wrapping multiple validation errors returned by
+// Loan.ValidateAll() if the designated constraints aren't met.
+type LoanMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m LoanTypeMultiError) Error() string {
+func (m LoanMultiError) Error() string {
 	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -537,11 +528,11 @@ func (m LoanTypeMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m LoanTypeMultiError) AllErrors() []error { return m }
+func (m LoanMultiError) AllErrors() []error { return m }
 
-// LoanTypeValidationError is the validation error returned by
-// LoanType.Validate if the designated constraints aren't met.
-type LoanTypeValidationError struct {
+// LoanValidationError is the validation error returned by Loan.Validate if the
+// designated constraints aren't met.
+type LoanValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -549,22 +540,22 @@ type LoanTypeValidationError struct {
 }
 
 // Field function returns field value.
-func (e LoanTypeValidationError) Field() string { return e.field }
+func (e LoanValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e LoanTypeValidationError) Reason() string { return e.reason }
+func (e LoanValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e LoanTypeValidationError) Cause() error { return e.cause }
+func (e LoanValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e LoanTypeValidationError) Key() bool { return e.key }
+func (e LoanValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e LoanTypeValidationError) ErrorName() string { return "LoanTypeValidationError" }
+func (e LoanValidationError) ErrorName() string { return "LoanValidationError" }
 
 // Error satisfies the builtin error interface
-func (e LoanTypeValidationError) Error() string {
+func (e LoanValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -576,14 +567,14 @@ func (e LoanTypeValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sLoanType.%s: %s%s",
+		"invalid %sLoan.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = LoanTypeValidationError{}
+var _ error = LoanValidationError{}
 
 var _ interface {
 	Field() string
@@ -591,7 +582,7 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = LoanTypeValidationError{}
+} = LoanValidationError{}
 
 // Validate checks the field values on ExtraData with the rules defined in the
 // proto definition for this message. If any rules are violated, the first
