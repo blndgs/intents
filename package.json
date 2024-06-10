@@ -1,6 +1,6 @@
 {
   "name": "blndgs-model",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Protobuf definitions for Intents",
   "main": "./dist/proto/v1/asset.js",
   "types": "./dist/asset_pb.d.ts",
