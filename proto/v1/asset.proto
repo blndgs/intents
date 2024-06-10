@@ -57,7 +57,7 @@ message Loan {
     len: 42,
     pattern: "^0x[a-fA-F0-9]{40}$"
   }]; // The address associated with the loan.
-  string chain_id = 4; // The chain ID where the asset resides.
+  BigInt chain_id = 4; // The chain ID where the asset resides.
 }
 
 // Message representing additional data for an intent.

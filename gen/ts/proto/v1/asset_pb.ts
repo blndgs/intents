@@ -265,9 +265,9 @@ export class Loan extends Message<Loan> {
   /**
    * The chain ID where the asset resides.
    *
-   * @generated from field: string chain_id = 4;
+   * @generated from field: proto.v1.BigInt chain_id = 4;
    */
-  chainId = "";
+  chainId?: BigInt;
 
   constructor(data?: PartialMessage<Loan>) {
     super();
@@ -280,7 +280,7 @@ export class Loan extends Message<Loan> {
     { no: 1, name: "asset", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "amount", kind: "message", T: BigInt },
     { no: 3, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "chain_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "chain_id", kind: "message", T: BigInt },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Loan {

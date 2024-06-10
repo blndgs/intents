@@ -211,9 +211,9 @@ export declare class Loan extends Message<Loan> {
   /**
    * The chain ID where the asset resides.
    *
-   * @generated from field: string chain_id = 4;
+   * @generated from field: proto.v1.BigInt chain_id = 4;
    */
-  chainId: string;
+  chainId?: BigInt;
 
   constructor(data?: PartialMessage<Loan>);
 
