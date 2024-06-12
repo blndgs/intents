@@ -105,7 +105,24 @@ const (
 	ErrDoubleIntentDef   userOperationError = "intent JSON is set in both calldata and signature fields"
 )
 
-const SignatureLength = 65
+type KernelSignaturePrefix int
+
+const (
+	Prefix0 KernelSignaturePrefix = iota
+	Prefix1
+	Prefix2
+)
+
+var KernelSignaturePrefixValues = map[KernelSignaturePrefix][]byte{
+	Prefix0: []byte{0, 0, 0, 0},
+	Prefix1: []byte{0, 0, 0, 1},
+	Prefix2: []byte{0, 0, 0, 2},
+}
+
+const (
+	KernelSignatureLength = 69
+	SignatureLength       = 65
+)
 
 // Validate checks the status of the UserOperation and returns
 // its userOpSolvedStatus. It determines if the operation is conventional,
@@ -209,8 +226,18 @@ func (op *UserOperation) HasIntent() bool {
 // signature value that is hex-encoded.
 func (op *UserOperation) HasSignature() bool {
 	// valid signature does not have a '0x' prefix
-	if len(op.Signature) >= SignatureLength && no0xPrefix(op.Signature) {
-		return true
+	lenSig := len(op.Signature)
+	if no0xPrefix(op.Signature) {
+		// kernel signature
+		if lenSig >= KernelSignatureLength &&
+			bytes.HasPrefix(op.Signature, KernelSignaturePrefixValues[KernelSignaturePrefix(op.Signature[3])]) {
+			return true
+		}
+
+		// conventional signature
+		if lenSig >= SignatureLength {
+			return true
+		}
 	}
 
 	return false
