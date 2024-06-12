@@ -11,14 +11,16 @@
 package model
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
-	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/goccy/go-json"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
 
 // BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
