@@ -223,19 +223,24 @@ func (op *UserOperation) HasIntent() bool {
 }
 
 // HasSignature checks if the signature field contains a fixed length hex-encoded
-// signature value that is hex-encoded.
+// signature value either a conventional or a kernel with or without Intent.
 func (op *UserOperation) HasSignature() bool {
 	// valid signature does not have a '0x' prefix
 	lenSig := len(op.Signature)
 	if no0xPrefix(op.Signature) {
-		// kernel signature
-		if lenSig >= KernelSignatureLength &&
-			bytes.HasPrefix(op.Signature, KernelSignaturePrefixValues[KernelSignaturePrefix(op.Signature[3])]) {
+		// chk kernel signature
+		lenSig := len(op.Signature)
+		if lenSig == KernelSignatureLength {
+			// cannot have a simple signature length fitting a kernel signature
+			return sigHasKernelPrefix(op.Signature)
+		}
+
+		if lenSig > KernelSignatureLength && sigHasKernelPrefix(op.Signature) {
 			return true
 		}
 
-		// conventional signature
-		if lenSig >= SignatureLength {
+		// chk conventional signature
+		if lenSig >= SimpleSignatureLength {
 			return true
 		}
 	}
@@ -344,7 +349,7 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 	// Unsolved operation, move the Intent JSON to the Signature field if it exists.
 	intentJSON, hasIntent := op.extractIntentJSON()
 	if hasIntent {
-		if len(op.Signature) < SignatureLength {
+		if !op.HasSignature() {
 			// Need a signed userOp to append the Intent JSON to the signature value.
 			return ErrNoSignatureValue
 		}
