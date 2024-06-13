@@ -54,6 +54,10 @@ func TestIntentsWithInvalidSender(t *testing.T) {
 			sender: "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" + "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 		},
 		{
+			name:   "no 0x prefix",
+			sender: "0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+		},
+		{
 			name:   "length correct but invalid format",
 			sender: "0x0A7199a96fdf0252E09F76545c1eF2be3692F46-",
 		},
