@@ -83,7 +83,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: &pb.Body{
 				Intents: []*pb.Intent{
 					{
-						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
 							FromAsset: &pb.Asset{
 								Address: validTokenAddressFrom,
@@ -115,7 +114,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: &pb.Body{
 				Intents: []*pb.Intent{
 					{
-						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
 							FromAsset: &pb.Asset{
 								Address: "InvalidTokenAddressFrom",
@@ -147,7 +145,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: &pb.Body{
 				Intents: []*pb.Intent{
 					{
-						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
 							FromAsset: &pb.Asset{
 								Address: validTokenAddressFrom,
@@ -176,7 +173,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: &pb.Body{
 				Intents: []*pb.Intent{
 					{
-						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
 							FromAsset: &pb.Asset{
 								Address: validTokenAddressFrom,
@@ -208,7 +204,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: &pb.Body{
 				Intents: []*pb.Intent{
 					{
-						Sender: senderAddress,
 						From: &pb.Intent_FromAsset{
 							FromAsset: &pb.Asset{
 								Address: validTokenAddressFrom,
@@ -237,7 +232,6 @@ func TestSubmitHandler(t *testing.T) {
 			payload: &pb.Body{
 				Intents: []*pb.Intent{
 					{
-						Sender: senderAddress,
 						From: &pb.Intent_FromStake{
 							FromStake: &pb.Stake{
 								Address: validTokenAddressTo,
