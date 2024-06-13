@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func mockCallData() []byte {
@@ -30,6 +31,23 @@ func mockSignature() []byte {
 	}
 
 	return signature
+}
+
+func TestIntentsWithCreationDateInFuture(t *testing.T) {
+	intentJSON := mockIntentJSON()
+
+	var intent = new(pb.Intent)
+
+	if err := protojson.Unmarshal([]byte(intentJSON), intent); err != nil {
+		panic(err)
+	}
+
+	intent.CreatedAt = timestamppb.New(time.Now().Add(time.Hour))
+
+	v, err := protovalidate.New()
+	require.NoError(t, err)
+
+	require.Error(t, v.Validate(intent))
 }
 
 func TestIntentsWithInvalidSender(t *testing.T) {
