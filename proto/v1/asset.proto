@@ -34,8 +34,7 @@ message Asset {
   // The amount of the asset.
   // In cases of AssetType being used as the to field, it doesn't have to provided
   // and can be left empty
-  BigInt amount = 2 [(buf.validate.field).ignore = IGNORE_IF_UNPOPULATED];
-
+  BigInt amount = 2;
   BigInt chain_id = 3; // The chain ID where the asset resides.
 }
 
