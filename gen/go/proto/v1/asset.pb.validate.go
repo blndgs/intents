@@ -216,6 +216,8 @@ func (m *Asset) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for Value
+
 	if len(errors) > 0 {
 		return AssetMultiError(errors)
 	}

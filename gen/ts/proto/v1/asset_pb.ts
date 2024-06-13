@@ -148,6 +148,11 @@ export class Asset extends Message<Asset> {
    */
   chainId?: BigInt;
 
+  /**
+   * @generated from field: bytes value = 4;
+   */
+  value = new Uint8Array(0);
+
   constructor(data?: PartialMessage<Asset>) {
     super();
     proto3.util.initPartial(data, this);
@@ -159,6 +164,7 @@ export class Asset extends Message<Asset> {
     { no: 1, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "amount", kind: "message", T: BigInt },
     { no: 3, name: "chain_id", kind: "message", T: BigInt },
+    { no: 4, name: "value", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Asset {

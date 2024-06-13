@@ -124,6 +124,11 @@ export declare class Asset extends Message<Asset> {
    */
   chainId?: BigInt;
 
+  /**
+   * @generated from field: bytes value = 4;
+   */
+  value: Uint8Array;
+
   constructor(data?: PartialMessage<Asset>);
 
   static readonly runtime: typeof proto3;

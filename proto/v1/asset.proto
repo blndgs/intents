@@ -22,7 +22,7 @@ enum ProcessingStatus {
 
 // BigInt represents a large number
 message BigInt {
-  bytes value = 1;
+  bytes value = 1  [(buf.validate.field).bytes.min_len = 1];
 }
 
 // Message representing the details of an asset.
@@ -31,12 +31,27 @@ message Asset {
     len: 42,
     pattern: "^0x[a-fA-F0-9]{40}$"
   }]; // The address of the asset.
+
   // The amount of the asset.
   // In cases of AssetType being used as the to field, it doesn't have to provided
   // and can be left empty
-  BigInt amount = 2 [(buf.validate.field).ignore = IGNORE_IF_UNPOPULATED];
+  BigInt amount = 2;
 
   BigInt chain_id = 3; // The chain ID where the asset resides.
+
+  bytes value = 4  [(buf.validate.field).bytes.min_len = 1];
+
+  option (buf.validate.message).cel = {
+    id: "amount-not-empty",
+    message: "amount cannot be empty. It must be present",
+    expression: "has(this.amount)"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "chainid-not-empty",
+    message: "chain id cannot be empty. It must be present",
+    expression: "has(this.chain_id)"
+  };
 }
 
 // Message representing the details of a stake.
@@ -44,6 +59,18 @@ message Stake {
   string address = 1 [(buf.validate.field).string = {pattern: "^0x[a-fA-F0-9]{40}$"}]; // The address of the stake.
   BigInt amount = 2; // The amount of the stake.
   BigInt chain_id = 3; // The chain ID where the asset resides.
+
+  option (buf.validate.message).cel = {
+    id: "amount-not-empty",
+    message: "amount cannot be empty. It must be present",
+    expression: "has(this.amount)"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "chainid-not-empty",
+    message: "chain id cannot be empty. It must be present",
+    expression: "has(this.amount)"
+  };
 }
 
 // Message representing the details of a loan.
@@ -58,6 +85,18 @@ message Loan {
     pattern: "^0x[a-fA-F0-9]{40}$"
   }]; // The address associated with the loan.
   BigInt chain_id = 4; // The chain ID where the asset resides.
+
+  option (buf.validate.message).cel = {
+    id: "amount-not-empty",
+    message: "amount cannot be empty. It must be present",
+    expression: "has(this.amount)"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "chainid-not-empty",
+    message: "chain id cannot be empty. It must be present",
+    expression: "has(this.amount)"
+  };
 }
 
 // Message representing additional data for an intent.
