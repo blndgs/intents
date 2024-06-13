@@ -34,8 +34,7 @@ message Asset {
   // The amount of the asset.
   // In cases of AssetType being used as the to field, it doesn't have to provided
   // and can be left empty
-  BigInt amount = 2 [(buf.validate.field).ignore = IGNORE_IF_UNPOPULATED];
-
+  BigInt amount = 2;
   BigInt chain_id = 3; // The chain ID where the asset resides.
 }
 
@@ -67,11 +66,6 @@ message ExtraData {
 
 // Message representing an intent with various types of transactions.
 message Intent {
-  string sender = 1 [(buf.validate.field).string = {
-    len: 42,
-    pattern: "^0x[a-fA-F0-9]{40}$"
-  }]; // The sender of the intent.
-
   // Oneof field representing the asset being sent.
   oneof from {
     Asset fromAsset = 2; // The asset being sent.

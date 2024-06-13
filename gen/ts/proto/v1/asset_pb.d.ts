@@ -265,13 +265,6 @@ export declare class ExtraData extends Message<ExtraData> {
  */
 export declare class Intent extends Message<Intent> {
   /**
-   * The sender of the intent.
-   *
-   * @generated from field: string sender = 1;
-   */
-  sender: string;
-
-  /**
    * Oneof field representing the asset being sent.
    *
    * @generated from oneof proto.v1.Intent.from
