@@ -16,3 +16,9 @@ jobs:
 
       - name: Run Linter
         run: buf lint
+
+      - name: Enforce module version
+        uses: adelowo/enforce-gomod-version@v0.2.0
+        with:
+          modules: |
+            github.com/ethereum/go-ethereum => v1.11.5
