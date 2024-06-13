@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "github.com/blndgs/model/gen/go/proto/v1"
+	"github.com/bufbuild/protovalidate-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
@@ -29,6 +30,45 @@ func mockSignature() []byte {
 	}
 
 	return signature
+}
+
+func TestIntentsWithInvalidSender(t *testing.T) {
+	intentJSON := mockIntentJSON()
+
+	var intent = new(pb.Intent)
+
+	if err := protojson.Unmarshal([]byte(intentJSON), intent); err != nil {
+		panic(err)
+	}
+
+	tt := []struct {
+		name   string
+		sender string
+	}{
+		{
+			name:   "less than 42 chars",
+			sender: "random string",
+		},
+		{
+			name:   "more than 42 chars",
+			sender: "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" + "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+		},
+		{
+			name:   "length correct but invalid format",
+			sender: "0x0A7199a96fdf0252E09F76545c1eF2be3692F46-",
+		},
+	}
+
+	for _, v := range tt {
+		t.Run(v.name, func(t *testing.T) {
+			intent.Sender = v.sender
+
+			v, err := protovalidate.New()
+			require.NoError(t, err)
+
+			require.Error(t, v.Validate(intent))
+		})
+	}
 }
 
 func mockIntentJSON() string {
