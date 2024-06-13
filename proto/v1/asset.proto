@@ -69,7 +69,7 @@ message Stake {
   option (buf.validate.message).cel = {
     id: "chainid-not-empty",
     message: "chain id cannot be empty. It must be present",
-    expression: "has(this.amount)"
+    expression: "has(this.chain_id)"
   };
 }
 
@@ -95,7 +95,7 @@ message Loan {
   option (buf.validate.message).cel = {
     id: "chainid-not-empty",
     message: "chain id cannot be empty. It must be present",
-    expression: "has(this.amount)"
+    expression: "has(this.chain_id)"
   };
 }
 
