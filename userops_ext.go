@@ -186,8 +186,9 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 		return intentJSON, true
 	}
 
-	if op.HasSignatureExact() {
-		jsonData := op.Signature[op.GetSignatureEndIdx():]
+	signatureEndIndex := op.GetSignatureEndIdx()
+	if op.HasSignature() && signatureEndIndex < len(op.Signature) {
+		jsonData := op.Signature[signatureEndIndex:]
 		if intentJSON, ok := ExtractJSONFromField(string(jsonData)); ok {
 			return intentJSON, true
 		}
@@ -248,7 +249,7 @@ func (op *UserOperation) HasSignature() bool {
 }
 
 // GetSignatureEndIdx returns the end index of the signature value in the UserOperation's Signature field.
-func (op *UserOperation) GetSignatureEndIdx() uint {
+func (op *UserOperation) GetSignatureEndIdx() int {
 	// valid signature does not have a '0x' prefix
 	if no0xPrefix(op.Signature) {
 		// chk kernel signature
