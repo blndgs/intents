@@ -138,7 +138,7 @@ func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	}
 
 	// Conventional userOp? empty CallData without signature value.
-	if len(op.CallData) == 0 && op.HasSignature() && len(op.Signature) == SignatureLength {
+	if len(op.CallData) == 0 && op.HasSignatureExact() {
 		return ConventionalUserOp, nil
 	}
 
@@ -146,11 +146,11 @@ func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	if _, callDataErr := hexutil.Decode(string(op.CallData)); callDataErr != nil {
 		// not solved, check if there is a valid Intent JSON
 		_, validIntent := ExtractJSONFromField(string(op.CallData))
-		if validIntent && (len(op.Signature) == SignatureLength && no0xPrefix(op.Signature) || len(op.Signature) == 0) {
+		if validIntent && (op.HasSignatureExact() || len(op.Signature) == 0) {
 			// valid intent json in calldata (Unsolved) and not defined again in signature
 			return UnsolvedUserOp, nil
 		}
-		if validIntent && len(op.Signature) > SignatureLength {
+		if validIntent && len(op.Signature) > KernelSignatureLength {
 			// both unsolved (No calldata value) status and likely intent json in the signature
 			return UnknownUserOp, ErrDoubleIntentDef
 		}
@@ -186,8 +186,8 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 		return intentJSON, true
 	}
 
-	if len(op.Signature) > SignatureLength {
-		jsonData := op.Signature[SignatureLength:]
+	if op.HasSignatureExact() {
+		jsonData := op.Signature[op.GetSignatureEndIdx():]
 		if intentJSON, ok := ExtractJSONFromField(string(jsonData)); ok {
 			return intentJSON, true
 		}
@@ -226,7 +226,6 @@ func (op *UserOperation) HasIntent() bool {
 // signature value either a conventional or a kernel with or without Intent.
 func (op *UserOperation) HasSignature() bool {
 	// valid signature does not have a '0x' prefix
-	lenSig := len(op.Signature)
 	if no0xPrefix(op.Signature) {
 		// chk kernel signature
 		lenSig := len(op.Signature)
@@ -243,6 +242,57 @@ func (op *UserOperation) HasSignature() bool {
 		if lenSig >= SimpleSignatureLength {
 			return true
 		}
+	}
+
+	return false
+}
+
+// GetSignatureEndIdx returns the end index of the signature value in the UserOperation's Signature field.
+func (op *UserOperation) GetSignatureEndIdx() uint {
+	// valid signature does not have a '0x' prefix
+	if no0xPrefix(op.Signature) {
+		// chk kernel signature
+		lenSig := len(op.Signature)
+		if lenSig == KernelSignatureLength {
+			// cannot have a simple signature length fitting a kernel signature
+			if sigHasKernelPrefix(op.Signature) {
+				return KernelSignatureLength
+			} else {
+				// matching kernel signature length without a prefix
+				return 0
+			}
+		}
+
+		if lenSig > KernelSignatureLength && sigHasKernelPrefix(op.Signature) {
+			return KernelSignatureLength
+		}
+
+		// chk conventional signature
+		if lenSig >= SimpleSignatureLength {
+			return SimpleSignatureLength
+		}
+	}
+
+	return 0
+}
+
+// HasSignatureExact checks if the signature field contains a fixed length hex-encoded
+// signature value either a conventional or a kernel without Intent.
+func (op *UserOperation) HasSignatureExact() bool {
+	// valid signature does not have a '0x' prefix
+	if no0xPrefix(op.Signature) {
+		// chk kernel signature
+		lenSig := len(op.Signature)
+		if lenSig != KernelSignatureLength && lenSig != SimpleSignatureLength {
+			return false
+		}
+
+		if lenSig == KernelSignatureLength {
+			// cannot have a simple signature length fitting a kernel signature
+			return sigHasKernelPrefix(op.Signature)
+		}
+
+		return true
 	}
 
 	return false
