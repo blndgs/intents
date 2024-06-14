@@ -2,6 +2,7 @@ package model
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -9,11 +10,12 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
 
 func mockCallData() []byte {
@@ -294,7 +296,7 @@ func TestValidateUserOperation(t *testing.T) {
 			name: "Conventional Operation - Empty CallData with Valid Signature",
 			userOp: &UserOperation{
 				CallData:  []byte{},
-				Signature: makeHexEncodedSignature(SignatureLength),
+				Signature: makeHexEncodedSignature(SimpleSignatureLength),
 			},
 			expectedStatus: ConventionalUserOp,
 			expectedError:  nil,
@@ -311,7 +313,7 @@ func TestValidateUserOperation(t *testing.T) {
 			name: "Unknown Operation - Intent JSON in CallData and Signature",
 			userOp: &UserOperation{
 				CallData:  []byte(mockIntentJSON()),
-				Signature: append(makeHexEncodedSignature(SignatureLength), mockIntentJSON()...),
+				Signature: append(makeHexEncodedSignature(SimpleSignatureLength), mockIntentJSON()...),
 			},
 			expectedStatus: UnknownUserOp,
 			expectedError:  ErrDoubleIntentDef,
@@ -320,7 +322,7 @@ func TestValidateUserOperation(t *testing.T) {
 			name: "Solved Operation - Valid CallData and Signature",
 			userOp: &UserOperation{
 				CallData:  mockCallData(),
-				Signature: makeHexEncodedSignature(SignatureLength),
+				Signature: makeHexEncodedSignature(SimpleSignatureLength),
 			},
 			expectedStatus: SolvedUserOp,
 			expectedError:  nil,
@@ -349,11 +351,11 @@ func TestValidateUserOperation(t *testing.T) {
 // Helper function to create a hex-encoded signature of a specific length
 func makeHexEncodedSignature(length int) []byte {
 	sig := mockSignature()
-	if length <= SignatureLength {
+	if length <= SimpleSignatureLength {
 		return sig[:length]
 	}
 
-	plus := length - SignatureLength
+	plus := length - SimpleSignatureLength
 	sigExtra := make([]byte, plus)
 	for i := range sigExtra {
 		sigExtra[i] = byte(i % 16)
@@ -363,8 +365,8 @@ func makeHexEncodedSignature(length int) []byte {
 }
 
 func TestValidateUserOperation_Conventional(t *testing.T) {
-	userOp := &UserOperation{}                                                                 // Empty CallData and no Signature
-	userOpWithSignature := &UserOperation{Signature: makeHexEncodedSignature(SignatureLength)} // Empty CallData and valid Signature
+	userOp := &UserOperation{}                                                                       // Empty CallData and no Signature
+	userOpWithSignature := &UserOperation{Signature: makeHexEncodedSignature(SimpleSignatureLength)} // Empty CallData and valid Signature
 
 	status, err := userOp.Validate()
 	if status != ConventionalUserOp || err != nil {

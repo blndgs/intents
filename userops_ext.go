@@ -121,7 +121,7 @@ var KernelSignaturePrefixValues = map[KernelSignaturePrefix][]byte{
 
 const (
 	KernelSignatureLength = 69
-	SignatureLength       = 65
+	SimpleSignatureLength = 65
 )
 
 // Validate checks the status of the UserOperation and returns
