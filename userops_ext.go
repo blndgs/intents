@@ -167,7 +167,7 @@ func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 }
 
 func no0xPrefix(value []byte) bool {
-	return value[0] != '0' || value[1] != 'x'
+	return len(value) > 1 && (value[0] != '0' || value[1] != 'x')
 }
 
 // extractIntentJSON attempts to extract the Intent JSON from either the CallData
