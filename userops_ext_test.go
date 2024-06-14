@@ -791,3 +791,94 @@ func TestUserOperationRawJSON(t *testing.T) {
 	require.Len(t, body.UserOps, 1, "There should be one user operation")
 	require.Len(t, body.UserOpsExt, 1, "There should be one user operation extension")
 }
+
+func TestUserOperation_GetSignatureValue(t *testing.T) {
+	type uo struct {
+		Signature []byte
+	}
+	tests := []struct {
+		name   string
+		fields uo
+		want   []byte
+	}{
+		{
+			name: "Simple signature with prefix 0",
+			fields: uo{
+				Signature: common.FromHex("0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5"),
+			},
+			want: common.FromHex("0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5"),
+		},
+		{
+			name: "Kernel signature with prefix 0",
+			fields: uo{
+				Signature: common.FromHex("0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: common.FromHex("0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "Kernel signature with prefix 1",
+			fields: uo{
+				Signature: common.FromHex("0x00000001745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: common.FromHex("0x00000001745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "Kernel signature with prefix 2",
+			fields: uo{
+				Signature: common.FromHex("0x00000002745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: common.FromHex("0x00000002745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "Simple signature appearing like a kernel signature - prefix 3",
+			fields: uo{
+				Signature: common.FromHex("0x00000003745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: nil,
+		},
+		{
+			name: "Simple signature alone",
+			fields: uo{
+				Signature: common.FromHex("0x745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: common.FromHex("0x745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "Partial simple signature -1 byte -2 digits ",
+			fields: uo{
+				Signature: common.FromHex("745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f27796"),
+			},
+			want: nil,
+		},
+		{
+			name: "Simple signature +1 byte +2 digits ",
+			fields: uo{
+				Signature: common.FromHex("745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c00"),
+			},
+			want: common.FromHex("745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "No signature",
+			fields: uo{
+				Signature: common.FromHex(""),
+			},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := &UserOperation{
+				Signature: tt.fields.Signature,
+			}
+
+			// print to the console the signature value as a hex string
+			t.Logf("Signature value: %s", hex.EncodeToString(op.Signature))
+
+			got := op.GetSignatureValue()
+			t.Logf("Got Signature value: %s", hex.EncodeToString(op.Signature))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetSignatureValue() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

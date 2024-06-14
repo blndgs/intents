@@ -314,7 +314,60 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 		return nil
 	}
 
-	op.Signature = append(op.Signature[:SignatureLength], []byte(intentJSON)...)
+	op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
+
+	return nil
+}
+
+// sigHasKernelPrefix checks if the provided signature has a Kernel prefix.
+func sigHasKernelPrefix(signature []byte) bool {
+	sigLen := len(signature)
+	if sigLen < KernelSignatureLength {
+		return false
+	}
+
+	kernelPrefix := KernelSignaturePrefixValues[KernelSignaturePrefix(signature[3])]
+	// HasPrefix gives false positive result for nil prefix
+	if kernelPrefix == nil {
+		return false
+	}
+
+	return bytes.HasPrefix(signature, kernelPrefix)
+}
+
+// GetSignatureValue retrieves the signature value from a UserOperation.
+//
+// This function supports three use cases:
+//
+//  1. No, or invalid signature value: It returns nil.
+//
+//  2. If the UserOperation has a Kernel signature (identified by a specific prefix),
+//     and the length of the signature is greater than or equal to the KernelSignatureLength,
+//     it returns the signature up to the KernelSignatureLength.
+//
+//  3. Treated as a fallback if the UserOperation has a sufficient length for a conventional signature,
+//     it returns the signature up to the SignatureLength.
+//
+// Otherwise, it returns an error.
+func (op *UserOperation) GetSignatureValue() []byte {
+	if no0xPrefix(op.Signature) {
+
+		lenSig := len(op.Signature)
+
+		hasKernelPrefix := sigHasKernelPrefix(op.Signature)
+		if lenSig >= KernelSignatureLength && hasKernelPrefix {
+			return op.Signature[:KernelSignatureLength]
+		}
+
+		if lenSig == KernelSignatureLength {
+			// cannot have a simple signature length fitting a kernel signature length without a prefix
+			return nil
+		}
+
+		if lenSig >= SimpleSignatureLength {
+			return op.Signature[:SimpleSignatureLength]
+		}
+	}
 
 	return nil
 }
@@ -353,7 +406,8 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 			// Need a signed userOp to append the Intent JSON to the signature value.
 			return ErrNoSignatureValue
 		}
-		op.Signature = append(op.Signature[:SignatureLength], []byte(intentJSON)...)
+
+		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
 		// Clear the Intent JSON from CallData as it's now moved to Signature.
 	}
 
