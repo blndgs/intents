@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"reflect"
 	"testing"
 	"time"
@@ -22,7 +24,7 @@ func mockCallData() []byte {
 	return []byte("0xb61d27f60000000000000000000000009d34f236bddf1b9de014312599d9c9ec8af1bc48000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000008b4bfcada627647e8280523984c78ce505c56fbe0000000000000000000000000000000000000000000000000000082f79cd9000")
 }
 
-func mockSignature() []byte {
+func mockSimpleSignature() []byte {
 	hexSign := "0xf53516700206e168fa905dde88789b0e8cb1c0cc212d8d5f0eac09a4665aa41f148124867ba15f3d38d0fbd6d5a9d2f6671e5258ec40b463af810a0a1299c8f81c"
 	signature, err := hexutil.Decode(hexSign)
 	if err != nil {
@@ -31,6 +33,37 @@ func mockSignature() []byte {
 	}
 
 	return signature
+}
+
+func mockKernelSignature(prefix KernelSignaturePrefix) []byte {
+	hexSign := "0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"
+
+	signature, err := hexutil.Decode(hexSign)
+	if err != nil {
+		// sig literal is not valid hex
+		panic(err)
+	}
+
+	// set requested prefix
+	signature[7] = byte(prefix)
+
+	return signature
+}
+
+func mockSignature() []byte {
+	// randomize seed
+	random := rand.Intn(4)
+
+	switch random {
+	case 0:
+		return mockKernelSignature(Prefix0)
+	case 1:
+		return mockKernelSignature(Prefix1)
+	case 2:
+		return mockKernelSignature(Prefix2)
+	default:
+		return mockSimpleSignature()
+	}
 }
 
 func mockIntentJSON() string {
