@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -37,16 +38,13 @@ func mockSimpleSignature() []byte {
 }
 
 func mockKernelSignature(prefix KernelSignaturePrefix) []byte {
-	hexSign := "0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"
+	hexSign := "0x0000000" + strconv.Itoa(int(prefix)) + "745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"
 
 	signature, err := hexutil.Decode(hexSign)
 	if err != nil {
 		// sig literal is not valid hex
 		panic(err)
 	}
-
-	// set requested prefix
-	signature[7] = byte(prefix)
 
 	return signature
 }
@@ -193,18 +191,27 @@ func TestUserOperation_GetIntentJSON(t *testing.T) {
 		if err != nil {
 			t.Errorf("GetIntentJSON() with intent in CallData returned error: %v", err)
 		}
-		assert.JSONEq(t, val, mockIntentJSON())
+		assert.JSONEq(t, mockIntentJSON(), val)
 
-		_, err = uoWithIntentInSignature.GetIntentJSON()
+		val, err = uoWithIntentInSignature.GetIntentJSON()
 		if err != nil {
 			t.Errorf("GetIntentJSON() with intent in Signature returned error: %v", err)
 		}
+		assert.JSONEq(t, mockIntentJSON(), val)
 
-		_, err = uoWithoutIntent.GetIntentJSON()
+		val, err = uoWithoutIntent.GetIntentJSON()
 		if err == nil {
 			t.Errorf("GetIntentJSON() without intent did not return error")
 		}
+		assert.Equal(t, "", val)
 	}
+}
+
+func assertJSON(t *testing.T, i *pb.Intent, expected string) {
+	t.Helper()
+	b, err := protojson.Marshal(i)
+	require.NoError(t, err)
+	assert.JSONEq(t, expected, string(b))
 }
 
 func TestUserOperation_GetIntent(t *testing.T) {
@@ -215,59 +222,69 @@ func TestUserOperation_GetIntent(t *testing.T) {
 		uoWithCallDataWithIntent := mockUserOperationWithCallData(true)
 
 		val, err := uoWithIntentInCallData.GetIntent()
-
 		if err != nil {
 			t.Errorf("GetIntent() with intent in CallData returned error: %v", err)
 		}
-		assert.JSONEq(t, val.String(), mockIntentJSON())
+		assertJSON(t, val, mockIntentJSON())
 
-		_, err = uoWithIntentInSignature.GetIntent()
+		val, err = uoWithIntentInSignature.GetIntent()
 		if err != nil {
 			t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
 		}
+		assertJSON(t, val, mockIntentJSON())
 
-		_, err = uoWithCallDataWoutIntent.GetIntent()
+		val, err = uoWithCallDataWoutIntent.GetIntent()
 		if err == nil {
 			t.Errorf("GetIntent() without intent did not return error")
 		}
-		_, err = uoWithCallDataWithIntent.GetIntent()
+		assert.Nil(t, val)
+
+		val, err = uoWithCallDataWithIntent.GetIntent()
 		if err != nil {
 			t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
 		}
+		assertJSON(t, val, mockIntentJSON())
 
-		_, err = uoWithIntentInCallData.GetEVMInstructions()
+		valBytes, err := uoWithIntentInCallData.GetEVMInstructions()
 		if err == nil {
 			t.Errorf("GetIntent() without Evm instruction did not return error: %v", err)
 		}
+		assert.Nil(t, valBytes)
 
-		_, err = uoWithIntentInSignature.GetEVMInstructions()
+		valBytes, err = uoWithIntentInSignature.GetEVMInstructions()
 		if err != nil {
 			t.Errorf("GetIntent() with Calldata returned error: %v", err)
 		}
+		assert.Equal(t, mockCallData(), valBytes)
 
-		_, err = uoWithCallDataWoutIntent.GetEVMInstructions()
+		valBytes, err = uoWithCallDataWoutIntent.GetEVMInstructions()
 		if err != nil {
 			t.Errorf("GetIntent() with Calldata returned error: %v", err)
 		}
-		_, err = uoWithCallDataWithIntent.GetEVMInstructions()
+		assert.Equal(t, mockCallData(), valBytes)
+
+		valBytes, err = uoWithCallDataWithIntent.GetEVMInstructions()
 		if err != nil {
 			t.Errorf("GetIntent() with Calldata returned error: %v", err)
 		}
+		assert.Equal(t, mockCallData(), valBytes)
 	}
 }
 
 func TestUserOperation_GetCallData(t *testing.T) {
-	uoWithIntent := mockUserOperationWithCallData(true)
-	uoWithoutIntent := mockUserOperationWithCallData(false)
+	for i := 0; i < 4; i++ {
+		uoWithIntent := mockUserOperationWithCallData(true)
+		uoWithoutIntent := mockUserOperationWithCallData(false)
 
-	callData, err := uoWithIntent.GetEVMInstructions()
-	if err != nil || !bytes.Equal(callData, mockCallData()) {
-		t.Errorf("GetEVMInstructions() with intent did not return expected callData")
-	}
+		callData, err := uoWithIntent.GetEVMInstructions()
+		if err != nil || !bytes.Equal(callData, mockCallData()) {
+			t.Errorf("GetEVMInstructions() with intent did not return expected callData")
+		}
 
-	callData, err = uoWithoutIntent.GetEVMInstructions()
-	if err != nil || !bytes.Equal(callData, mockCallData()) {
-		t.Errorf("GetEVMInstructions() without intent did not return expected callData")
+		callData, err = uoWithoutIntent.GetEVMInstructions()
+		if err != nil || !bytes.Equal(callData, mockCallData()) {
+			t.Errorf("GetEVMInstructions() without intent did not return expected callData")
+		}
 	}
 }
 
