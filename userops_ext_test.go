@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -320,29 +319,17 @@ func TestUserOperation_GetIntent(t *testing.T) {
 		}
 		assertJSON(t, val, mockIntentJSON())
 
-		valBytes, err := uoWithIntentInCallData.GetEVMInstructions()
-		if err == nil {
-			t.Errorf("GetIntent() without Evm instruction did not return error: %v", err)
-		}
+		valBytes := uoWithIntentInCallData.CallData
+		assert.JSONEq(t, mockIntentJSON(), string(valBytes))
+
+		valBytes = uoWithIntentInSignature.CallData
 		assert.Equal(t, mockCallData, valBytes)
 
-		valBytes, err = uoWithIntentInSignature.GetEVMInstructions()
-		if err != nil {
-			t.Errorf("GetIntent() with Calldata returned error: %v", err)
-		}
-		assert.Equal(t, mockCallData(), valBytes)
-
-		valBytes, err = uoWithCallDataWoutIntent.GetEVMInstructions()
+		valBytes = uoWithCallDataWoutIntent.CallData
 		assert.Equal(t, mockCallData, valBytes)
-			t.Errorf("GetIntent() with Calldata returned error: %v", err)
-		}
-		assert.Equal(t, mockCallData(), valBytes)
 
-		valBytes, err = uoWithCallDataWithIntent.GetEVMInstructions()
+		valBytes = uoWithCallDataWithIntent.CallData
 		assert.Equal(t, mockCallData, valBytes)
-			t.Errorf("GetIntent() with Calldata returned error: %v", err)
-		}
-		assert.Equal(t, mockCallData(), valBytes)
 	}
 }
 
@@ -356,7 +343,7 @@ func TestUserOperation_GetCallData(t *testing.T) {
 			t.Errorf("GetEVMInstructions() with intent did not return expected callData")
 		}
 
-		callData, err = uoWithoutIntent.GetEVMInstructions()
+		callData = uoWithoutIntent.CallData
 		if !bytes.Equal(callData, mockCallData) {
 			t.Errorf("GetEVMInstructions() without intent did not return expected callData")
 		}

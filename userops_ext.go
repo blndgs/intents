@@ -319,17 +319,6 @@ func (op *UserOperation) GetIntent() (*pb.Intent, error) {
 	return &intent, nil
 }
 
-// GetEVMInstructions returns the Ethereum EVM instructions from the CallData field.
-// It returns an error if the EVM instructions value does not
-// exist or is not a valid hex encoded string.
-func (op *UserOperation) GetEVMInstructions() ([]byte, error) {
-	if _, err := hexutil.Decode(string(op.CallData)); err != nil {
-		return nil, ErrInvalidCallData
-	}
-
-	return op.CallData, nil
-}
-
 // SetIntent sets the Intent JSON in the appropriate field of the UserOperation
 // based on the operation's solution state. The function first validates the
 // Intent JSON.
