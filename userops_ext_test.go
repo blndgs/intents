@@ -13,13 +13,14 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/blndgs/model/gen/go/proto/v1"
+	"github.com/bufbuild/protovalidate-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
-
-	pb "github.com/blndgs/model/gen/go/proto/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func mockCallData() []byte {
@@ -64,6 +65,66 @@ func mockSignature() []byte {
 	}
 }
 
+func TestIntentsWithCreationDateInFuture(t *testing.T) {
+	intentJSON := mockIntentJSON()
+
+	var intent = new(pb.Intent)
+
+	if err := protojson.Unmarshal([]byte(intentJSON), intent); err != nil {
+		panic(err)
+	}
+
+	intent.CreatedAt = timestamppb.New(time.Now().Add(time.Hour))
+
+	v, err := protovalidate.New()
+	require.NoError(t, err)
+
+	require.Error(t, v.Validate(intent))
+}
+
+func TestIntentsWithInvalidSender(t *testing.T) {
+	intentJSON := mockIntentJSON()
+
+	var intent = new(pb.Intent)
+
+	if err := protojson.Unmarshal([]byte(intentJSON), intent); err != nil {
+		panic(err)
+	}
+
+	tt := []struct {
+		name   string
+		sender string
+	}{
+		{
+			name:   "less than 42 chars",
+			sender: "random string",
+		},
+		{
+			name:   "more than 42 chars",
+			sender: "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b" + "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+		},
+		{
+			name:   "no 0x prefix",
+			sender: "0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+		},
+		{
+			name:   "length correct but invalid format",
+			sender: "0x0A7199a96fdf0252E09F76545c1eF2be3692F46-",
+		},
+	}
+
+	for _, v := range tt {
+		t.Run(v.name, func(t *testing.T) {
+			intent.GetFromAsset().Address = v.sender
+
+			v, err := protovalidate.New()
+			require.NoError(t, err)
+
+			require.Error(t, v.Validate(intent))
+		})
+	}
+}
+
 func mockIntentJSON() string {
 
 	fromInt, err := FromBigInt(big.NewInt(100))
@@ -104,7 +165,7 @@ func mockIntentJSON() string {
 
 	var (
 		intentJSON = fmt.Sprintf(`
-		{"sender":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+		{
 		"fromAsset":{"address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
 		"toAsset":{"address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
 		"extraData":{"partiallyFillable":false},
@@ -545,7 +606,6 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	require.NoError(t, json.NewEncoder(chainIDBuffer).Encode(chainID))
 
 	rawJSON := fmt.Sprintf(`{
-		"sender": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 		"fromAsset": {
 			"address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
 			"amount": %s,
@@ -825,7 +885,7 @@ func TestUserOperationRawJSON(t *testing.T) {
                 "sender": "0x66C0AeE289c4D332302dda4DeD0c0Cdc3784939A",
                 "nonce": "0xf",
                 "initCode": "0x7b2273656e646572223a22307830413731393961393666646630323532453039463736353435633165463262653336393246343662222c226b696e64223a2273776170222c2268617368223a22222c2273656c6c546f6b656e223a22546f6b656e41222c22627579546f6b656e223a22546f6b656e42222c2273656c6c416d6f756e74223a31302c22627579416d6f756e74223a352c227061727469616c6c7946696c6c61626c65223a66616c73652c22737461747573223a225265636569766564222c22637265617465644174223a302c2265787069726174696f6e4174223a307d",
-                "CallData": "{\"sender\":\"0x66C0AeE289c4D332302dda4DeD0c0Cdc3784939A\",\"fromAsset\":{\"address\":\"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE\",\"amount\":{\"value\":\"BQ==\"},\"chain_id\":{\"value\":\"AQ==\"}},\"toStake\":{\"address\":\"0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84\",\"amount\":{\"value\":\"Mj==\"},\"chain_id\":{\"value\":\"AQ==\"}}}",
+                "CallData": "{\"fromAsset\":{\"address\":\"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE\",\"amount\":{\"value\":\"BQ==\"},\"chain_id\":{\"value\":\"AQ==\"}},\"toStake\":{\"address\":\"0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84\",\"amount\":{\"value\":\"Mj==\"},\"chain_id\":{\"value\":\"AQ==\"}}}",
                 "callGasLimit": "0x2f24",
                 "verificationGasLimit": "0xe4e0",
                 "preVerificationGas": "0xbb7c",

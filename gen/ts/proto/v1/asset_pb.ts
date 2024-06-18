@@ -348,13 +348,6 @@ export class ExtraData extends Message<ExtraData> {
  */
 export class Intent extends Message<Intent> {
   /**
-   * The sender of the intent.
-   *
-   * @generated from field: string sender = 1;
-   */
-  sender = "";
-
-  /**
    * Oneof field representing the asset being sent.
    *
    * @generated from oneof proto.v1.Intent.from
@@ -452,7 +445,6 @@ export class Intent extends Message<Intent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.v1.Intent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "sender", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "fromAsset", kind: "message", T: Asset, oneof: "from" },
     { no: 3, name: "fromStake", kind: "message", T: Stake, oneof: "from" },
     { no: 4, name: "fromLoan", kind: "message", T: Loan, oneof: "from" },

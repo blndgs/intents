@@ -760,8 +760,6 @@ func (m *Intent) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Sender
-
 	if all {
 		switch v := interface{}(m.GetExtraData()).(type) {
 		case interface{ ValidateAll() error }:
