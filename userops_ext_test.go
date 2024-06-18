@@ -21,10 +21,21 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
 
-func mockCallData() []byte {
-	return []byte("0xb61d27f60000000000000000000000009d34f236bddf1b9de014312599d9c9ec8af1bc48000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000008b4bfcada627647e8280523984c78ce505c56fbe0000000000000000000000000000000000000000000000000000082f79cd9000")
+var mockCallData []byte
+
+func init() {
+	callData := []byte("0xb61d27f60000000000000000000000009d34f236bddf1b9de014312599d9c9ec8af1bc48000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000008b4bfcada627647e8280523984c78ce505c56fbe0000000000000000000000000000000000000000000000000000082f79cd9000")
+	tempUo := new(UserOperation)
+	err := tempUo.SetEVMInstructions(callData)
+	if err != nil {
+		panic(err)
+	}
+	// Set to byte-level representation as per SetEVMInstructions() logic
+	mockCallData = callData
 }
 
 func mockSimpleSignature() []byte {
@@ -201,7 +212,7 @@ func mockUserOperationWithCallData(withIntent bool) *UserOperation {
 	userOp := new(UserOperation)
 	intentJSON := mockIntentJSON()
 
-	userOp.CallData = mockCallData()
+	userOp.CallData = mockCallData
 	if !withIntent {
 		userOp.Signature = mockSignature()
 		return userOp
@@ -215,8 +226,11 @@ func mockUserOperationWithCallData(withIntent bool) *UserOperation {
 
 func mockUserOperationWithIntentInSignature(withIntent bool) *UserOperation {
 	userOp := &UserOperation{
-		CallData:  mockCallData(),
 		Signature: mockSignature(),
+	}
+	err := userOp.SetEVMInstructions(mockCallData)
+	if err != nil {
+		panic(err)
 	}
 	if !withIntent {
 		return userOp
@@ -310,7 +324,7 @@ func TestUserOperation_GetIntent(t *testing.T) {
 		if err == nil {
 			t.Errorf("GetIntent() without Evm instruction did not return error: %v", err)
 		}
-		assert.Nil(t, valBytes)
+		assert.Equal(t, mockCallData, valBytes)
 
 		valBytes, err = uoWithIntentInSignature.GetEVMInstructions()
 		if err != nil {
@@ -319,13 +333,13 @@ func TestUserOperation_GetIntent(t *testing.T) {
 		assert.Equal(t, mockCallData(), valBytes)
 
 		valBytes, err = uoWithCallDataWoutIntent.GetEVMInstructions()
-		if err != nil {
+		assert.Equal(t, mockCallData, valBytes)
 			t.Errorf("GetIntent() with Calldata returned error: %v", err)
 		}
 		assert.Equal(t, mockCallData(), valBytes)
 
 		valBytes, err = uoWithCallDataWithIntent.GetEVMInstructions()
-		if err != nil {
+		assert.Equal(t, mockCallData, valBytes)
 			t.Errorf("GetIntent() with Calldata returned error: %v", err)
 		}
 		assert.Equal(t, mockCallData(), valBytes)
@@ -337,13 +351,13 @@ func TestUserOperation_GetCallData(t *testing.T) {
 		uoWithIntent := mockUserOperationWithCallData(true)
 		uoWithoutIntent := mockUserOperationWithCallData(false)
 
-		callData, err := uoWithIntent.GetEVMInstructions()
-		if err != nil || !bytes.Equal(callData, mockCallData()) {
+		callData := uoWithIntent.CallData
+		if !bytes.Equal(callData, mockCallData) {
 			t.Errorf("GetEVMInstructions() with intent did not return expected callData")
 		}
 
 		callData, err = uoWithoutIntent.GetEVMInstructions()
-		if err != nil || !bytes.Equal(callData, mockCallData()) {
+		if !bytes.Equal(callData, mockCallData) {
 			t.Errorf("GetEVMInstructions() without intent did not return expected callData")
 		}
 	}
@@ -439,7 +453,7 @@ func TestValidateUserOperation(t *testing.T) {
 		{
 			name: "Solved Operation - Valid CallData and Signature",
 			userOp: &UserOperation{
-				CallData:  mockCallData(),
+				CallData:  mockCallData,
 				Signature: makeHexEncodedSignature(SimpleSignatureLength),
 			},
 			expectedStatus: SolvedUserOp,
@@ -448,7 +462,7 @@ func TestValidateUserOperation(t *testing.T) {
 		{
 			name: "Solved Operation Missing Signature",
 			userOp: &UserOperation{
-				CallData: mockCallData(),
+				CallData: mockCallData,
 			},
 			expectedStatus: SolvedUserOp,
 			expectedError:  ErrNoSignatureValue,
@@ -502,7 +516,7 @@ func TestUserOperation_SetCallData(t *testing.T) {
 	uo := &UserOperation{}
 
 	// Test setting valid CallData
-	validCallData := mockCallData()
+	validCallData := mockCallData
 	if err := uo.SetEVMInstructions(validCallData); err != nil {
 		t.Errorf("SetEVMInstructions() returned error: %v", err)
 	}
