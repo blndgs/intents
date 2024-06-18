@@ -24,17 +24,15 @@ import (
 	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
 
-var mockCallData []byte
+const mockEvmSolution = "0xb61d27f60000000000000000000000009d34f236bddf1b9de014312599d9c9ec8af1bc48000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000008b4bfcada627647e8280523984c78ce505c56fbe0000000000000000000000000000000000000000000000000000082f79cd9000"
+
+var mockCallDataBytesValue []byte
 
 func init() {
-	callData := []byte("0xb61d27f60000000000000000000000009d34f236bddf1b9de014312599d9c9ec8af1bc48000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000008b4bfcada627647e8280523984c78ce505c56fbe0000000000000000000000000000000000000000000000000000082f79cd9000")
-	tempUo := new(UserOperation)
-	err := tempUo.SetEVMInstructions(callData)
-	if err != nil {
-		panic(err)
-	}
-	// Set to byte-level representation as per SetEVMInstructions() logic
-	mockCallData = callData
+	t := new(UserOperation)
+	_ = t.SetEVMInstructions([]byte(mockEvmSolution))
+	// Set to SetEVMInstructions() representation
+	mockCallDataBytesValue = t.CallData
 }
 
 func mockSimpleSignature() []byte {
@@ -211,7 +209,7 @@ func mockUserOperationWithCallData(withIntent bool) *UserOperation {
 	userOp := new(UserOperation)
 	intentJSON := mockIntentJSON()
 
-	userOp.CallData = mockCallData
+	userOp.CallData = mockCallDataBytesValue
 	if !withIntent {
 		userOp.Signature = mockSignature()
 		return userOp
@@ -227,7 +225,7 @@ func mockUserOperationWithIntentInSignature(withIntent bool) *UserOperation {
 	userOp := &UserOperation{
 		Signature: mockSignature(),
 	}
-	err := userOp.SetEVMInstructions(mockCallData)
+	err := userOp.SetEVMInstructions(mockCallDataBytesValue)
 	if err != nil {
 		panic(err)
 	}
@@ -323,13 +321,13 @@ func TestUserOperation_GetIntent(t *testing.T) {
 		assert.JSONEq(t, mockIntentJSON(), string(valBytes))
 
 		valBytes = uoWithIntentInSignature.CallData
-		assert.Equal(t, mockCallData, valBytes)
+		assert.Equal(t, mockCallDataBytesValue, valBytes)
 
 		valBytes = uoWithCallDataWoutIntent.CallData
-		assert.Equal(t, mockCallData, valBytes)
+		assert.Equal(t, mockCallDataBytesValue, valBytes)
 
 		valBytes = uoWithCallDataWithIntent.CallData
-		assert.Equal(t, mockCallData, valBytes)
+		assert.Equal(t, mockCallDataBytesValue, valBytes)
 	}
 }
 
@@ -339,12 +337,12 @@ func TestUserOperation_GetCallData(t *testing.T) {
 		uoWithoutIntent := mockUserOperationWithCallData(false)
 
 		callData := uoWithIntent.CallData
-		if !bytes.Equal(callData, mockCallData) {
+		if !bytes.Equal(callData, mockCallDataBytesValue) {
 			t.Errorf("GetEVMInstructions() with intent did not return expected callData")
 		}
 
 		callData = uoWithoutIntent.CallData
-		if !bytes.Equal(callData, mockCallData) {
+		if !bytes.Equal(callData, mockCallDataBytesValue) {
 			t.Errorf("GetEVMInstructions() without intent did not return expected callData")
 		}
 	}
@@ -440,7 +438,7 @@ func TestValidateUserOperation(t *testing.T) {
 		{
 			name: "Solved Operation - Valid CallData and Signature",
 			userOp: &UserOperation{
-				CallData:  mockCallData,
+				CallData:  mockCallDataBytesValue,
 				Signature: makeHexEncodedSignature(SimpleSignatureLength),
 			},
 			expectedStatus: SolvedUserOp,
@@ -449,7 +447,7 @@ func TestValidateUserOperation(t *testing.T) {
 		{
 			name: "Solved Operation Missing Signature",
 			userOp: &UserOperation{
-				CallData: mockCallData,
+				CallData: mockCallDataBytesValue,
 			},
 			expectedStatus: SolvedUserOp,
 			expectedError:  ErrNoSignatureValue,
@@ -503,12 +501,100 @@ func TestUserOperation_SetCallData(t *testing.T) {
 	uo := &UserOperation{}
 
 	// Test setting valid CallData
-	validCallData := mockCallData
+	validCallData := mockCallDataBytesValue
 	if err := uo.SetEVMInstructions(validCallData); err != nil {
 		t.Errorf("SetEVMInstructions() returned error: %v", err)
 	}
 	if string(uo.CallData) != string(validCallData) {
 		t.Errorf("SetEVMInstructions() did not set CallData correctly")
+	}
+}
+
+func TestUserOperation_SetEVMInstructions(t *testing.T) {
+	tests := []struct {
+		name               string
+		userOp             *UserOperation
+		callDataValueToSet []byte
+		expectedCallData   []byte
+		expectedError      error
+		expectedStatus     UserOpSolvedStatus
+	}{
+		{
+			name: "Conventional userOp setting valid calldata",
+			userOp: &UserOperation{
+				CallData:  []byte{},
+				Signature: mockSignature(),
+			},
+			callDataValueToSet: mockCallDataBytesValue,
+			expectedCallData:   mockCallDataBytesValue,
+			expectedError:      nil,
+			expectedStatus:     SolvedUserOp,
+		},
+		{
+			name: "Solve Intent userOp with valid call data and signature",
+			userOp: &UserOperation{
+				CallData:  []byte(mockIntentJSON()),
+				Signature: mockSignature(),
+			},
+			callDataValueToSet: mockCallDataBytesValue,
+			expectedError:      nil,
+			expectedStatus:     SolvedUserOp,
+		},
+		{
+			name: "Unsolved operation with valid call data and no signature",
+			userOp: &UserOperation{
+				CallData:  []byte(mockIntentJSON()),
+				Signature: []byte{},
+			},
+			callDataValueToSet: []byte{0x01, 0x02, 0x03},
+			expectedError:      ErrNoSignatureValue,
+			expectedStatus:     UnsolvedUserOp,
+		},
+		{
+			name: "Solve operation with valid call data",
+			userOp: &UserOperation{
+				CallData:  []byte(mockIntentJSON()),
+				Signature: mockSignature(),
+			},
+			callDataValueToSet: mockCallDataBytesValue,
+			expectedError:      nil,
+			expectedStatus:     SolvedUserOp,
+		},
+		{
+			name: "Unsolved operation with invalid hex-encoded call data",
+			userOp: &UserOperation{
+				CallData:  []byte(mockIntentJSON()),
+				Signature: mockSignature(),
+			},
+			callDataValueToSet: []byte("0xinvalid"),
+			expectedError:      errors.New("invalid hex encoding of calldata: invalid hex string"),
+			expectedStatus:     UnsolvedUserOp,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.userOp.SetEVMInstructions(test.callDataValueToSet)
+			if err != nil && err.Error() != test.expectedError.Error() {
+				t.Errorf("SetEVMInstructions() error = %v, expectedError %v", err, test.expectedError)
+			}
+
+			status, err := test.userOp.Validate()
+			if err != nil {
+				t.Errorf("SetEVMInstructions() returned error: %v", err)
+			}
+			if status != test.expectedStatus {
+				t.Errorf("SetEVMInstructions() status = %v, expectedStatus %v", status, test.expectedStatus)
+			}
+
+			if test.expectedError == nil {
+				hexutil.Encode(test.userOp.CallData)
+				if !bytes.Equal(test.callDataValueToSet, test.userOp.CallData) {
+					// if !bytes.Equal(test.userOp.CallData, test.callDataValueToSet) {
+					t.Errorf("SetEVMInstructions() callData = %v, expectedCallData %v", test.userOp.CallData, test.callDataValueToSet)
+				}
+			}
+		})
 	}
 }
 

@@ -77,9 +77,9 @@ type UserOpSolvedStatus int
 
 const (
 	UnsolvedUserOp UserOpSolvedStatus = iota
-	SolvedUserOp
-	// ConventionalUserOp indicates that the UserOperation does not contain Intent JSON and follows conventional
-	// processing without Intent handling.
+	SolvedUserOp                      // Intent Json values may or may not be present
+	// ConventionalUserOp indicates that the UserOperation does not contain Intent JSON and
+	// must have a valid EVM calldata value. Both conventional and Intent userOps apply.
 	ConventionalUserOp
 	// UnknownUserOp indicates that the UserOperation's state is unknown or ambiguous.
 	UnknownUserOp
@@ -400,15 +400,18 @@ func (op *UserOperation) GetSignatureValue() []byte {
 	return nil
 }
 
-// SetEVMInstructions sets the EVM instructions in the CallData field of the UserOperation.
-// It appropriately handles the Intent JSON based on the operation's solution state.
-// The function first checks the solved status of the operation. For solved operations,
-// it ensures that the signature has the required length. For unsolved operations, it moves
-// the Intent JSON to the Signature field if present and valid, and then sets the provided
-// EVM instructions in the CallData field.
+// SetEVMInstructions sets the EVM instructions in the CallData field of the
+// UserOperation in the byte-level representation.
+// It handles the Intent JSON based on the operation's solution state.
+// The function checks the solved status of the operation:
+// For solved
+// operations, it ensures that the signature has the required length.
+// For unsolved
+// operations, it moves the Intent JSON to the Signature field if present and valid,
+// and then sets the provided EVM instructions in the CallData field.
 //
 // Parameters:
-//   - callDataValue: A hex-encoded or byte-level representation containing the
+//   - callDataValueToSet: A hex-encoded or byte-level representation containing the
 //     EVM instructions to be set in the CallData field.
 //
 // Returns:
@@ -417,6 +420,15 @@ func (op *UserOperation) GetSignatureValue() []byte {
 //     Otherwise, nil is returned, indicating successful setting of the EVM instructions in byte-level
 //     representation.
 func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
+	if len(callDataValue) >= 2 && callDataValue[0] == '0' && callDataValue[1] == 'x' {
+		// `Decode` allows using the source as the destination
+		var err error
+		callDataValue, err = hexutil.Decode(string(callDataValue))
+		if err != nil {
+			return fmt.Errorf("invalid hex encoding of calldata: %w", err)
+		}
+	}
+
 	status, err := op.Validate()
 	if err != nil {
 		return err
@@ -437,14 +449,6 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 
 		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
 		// Clear the Intent JSON from CallData as it's now moved to Signature.
-	}
-
-	if len(callDataValue) >= 2 && callDataValue[0] == '0' && callDataValue[1] == 'x' {
-		// `Decode` allows using the source as the destination
-		callDataValue, err = hexutil.Decode(string(callDataValue))
-		if err != nil {
-			return fmt.Errorf("invalid hex data: %w", err)
-		}
 	}
 
 	// Assign byte-level representation
