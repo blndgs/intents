@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
 
 func submitHandler(c *gin.Context) {
@@ -60,7 +61,6 @@ func TestSubmitHandler(t *testing.T) {
 	// Setup
 	gin.SetMode(gin.TestMode)
 	router := setupRouter()
-	const senderAddress = "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b"
 	const validTokenAddressFrom = "0x0000000000000000000000000000000000000001"
 	const validTokenAddressTo = "0x0000000000000000000000000000000000000002"
 
