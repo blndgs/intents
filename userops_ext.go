@@ -133,12 +133,7 @@ const (
 //   - error: An error if there's an issue with the operation's state, contents.
 func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	// Conventional userOp? empty CallData without signature value.
-	if len(op.CallData) == 0 && len(op.Signature) == 0 {
-		return ConventionalUserOp, nil
-	}
-
-	// Conventional userOp? empty CallData without signature value.
-	if len(op.CallData) == 0 && op.HasSignatureExact() {
+	if len(op.CallData) == 0 && (len(op.Signature) == 0 || op.HasSignatureExact()) {
 		return ConventionalUserOp, nil
 	}
 
@@ -277,8 +272,9 @@ func (op *UserOperation) GetSignatureEndIdx() int {
 	return 0
 }
 
-// HasSignatureExact checks if the signature field contains a fixed length hex-encoded
-// signature value either a conventional or a kernel without Intent.
+// HasSignatureExact checks for an exact match of the signature length and the
+// signature field contains a fixed length hex-encoded signature value either a
+// conventional or a kernel without Intent.
 func (op *UserOperation) HasSignatureExact() bool {
 	// valid signature does not have a '0x' prefix
 	if no0xPrefix(op.Signature) {
@@ -372,18 +368,12 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 
 // sigHasKernelPrefix checks if the provided signature has a Kernel prefix.
 func sigHasKernelPrefix(signature []byte) bool {
-	sigLen := len(signature)
-	if sigLen < KernelSignatureLength {
+	if len(signature) < KernelSignatureLength {
 		return false
 	}
 
 	kernelPrefix := KernelSignaturePrefixValues[KernelSignaturePrefix(signature[3])]
-	// HasPrefix gives false positive result for nil prefix
-	if kernelPrefix == nil {
-		return false
-	}
-
-	return bytes.HasPrefix(signature, kernelPrefix)
+	return kernelPrefix != nil && bytes.HasPrefix(signature, kernelPrefix)
 }
 
 // GetSignatureValue retrieves the signature value from a UserOperation.
@@ -404,9 +394,7 @@ func (op *UserOperation) GetSignatureValue() []byte {
 	if no0xPrefix(op.Signature) {
 
 		lenSig := len(op.Signature)
-
-		hasKernelPrefix := sigHasKernelPrefix(op.Signature)
-		if lenSig >= KernelSignatureLength && hasKernelPrefix {
+		if lenSig >= KernelSignatureLength && sigHasKernelPrefix(op.Signature) {
 			return op.Signature[:KernelSignatureLength]
 		}
 
