@@ -1,5 +1,8 @@
 # Model
 
+![NPM Version](https://img.shields.io/npm/v/blndgs-model)
+![Go Release](https://img.shields.io/github/v/release/blndgs/model?logo=go)
+
 Reusing data types, domain model or `Shared Kernel` in DDD parlance.
 This uses Protobuf definitions and holds the equivalent code for both
 Golang and Typescript that can be used in userland code.
