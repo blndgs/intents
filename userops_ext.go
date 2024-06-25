@@ -11,14 +11,16 @@
 package model
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
-	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/goccy/go-json"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
 
 // BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
@@ -75,9 +77,9 @@ type UserOpSolvedStatus int
 
 const (
 	UnsolvedUserOp UserOpSolvedStatus = iota
-	SolvedUserOp
-	// ConventionalUserOp indicates that the UserOperation does not contain Intent JSON and follows conventional
-	// processing without Intent handling.
+	SolvedUserOp                      // Intent Json values may or may not be present
+	// ConventionalUserOp indicates that the UserOperation does not contain Intent JSON and
+	// must have a valid EVM calldata value. Both conventional and Intent userOps apply.
 	ConventionalUserOp
 	// UnknownUserOp indicates that the UserOperation's state is unknown or ambiguous.
 	UnknownUserOp
@@ -103,7 +105,24 @@ const (
 	ErrDoubleIntentDef   userOperationError = "intent JSON is set in both calldata and signature fields"
 )
 
-const SignatureLength = 65
+type KernelSignaturePrefix int
+
+const (
+	Prefix0 KernelSignaturePrefix = iota
+	Prefix1
+	Prefix2
+)
+
+var KernelSignaturePrefixValues = map[KernelSignaturePrefix][]byte{
+	Prefix0: []byte{0, 0, 0, 0},
+	Prefix1: []byte{0, 0, 0, 1},
+	Prefix2: []byte{0, 0, 0, 2},
+}
+
+const (
+	KernelSignatureLength = 69
+	SimpleSignatureLength = 65
+)
 
 // Validate checks the status of the UserOperation and returns
 // its userOpSolvedStatus. It determines if the operation is conventional,
@@ -114,12 +133,7 @@ const SignatureLength = 65
 //   - error: An error if there's an issue with the operation's state, contents.
 func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	// Conventional userOp? empty CallData without signature value.
-	if len(op.CallData) == 0 && len(op.Signature) == 0 {
-		return ConventionalUserOp, nil
-	}
-
-	// Conventional userOp? empty CallData without signature value.
-	if len(op.CallData) == 0 && op.HasSignature() && len(op.Signature) == SignatureLength {
+	if len(op.CallData) == 0 && (len(op.Signature) == 0 || op.HasSignatureExact()) {
 		return ConventionalUserOp, nil
 	}
 
@@ -127,11 +141,11 @@ func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	if _, callDataErr := hexutil.Decode(string(op.CallData)); callDataErr != nil {
 		// not solved, check if there is a valid Intent JSON
 		_, validIntent := ExtractJSONFromField(string(op.CallData))
-		if validIntent && (len(op.Signature) == SignatureLength && no0xPrefix(op.Signature) || len(op.Signature) == 0) {
+		if validIntent && (op.HasSignatureExact() || len(op.Signature) == 0) {
 			// valid intent json in calldata (Unsolved) and not defined again in signature
 			return UnsolvedUserOp, nil
 		}
-		if validIntent && len(op.Signature) > SignatureLength {
+		if validIntent && len(op.Signature) > KernelSignatureLength {
 			// both unsolved (No calldata value) status and likely intent json in the signature
 			return UnknownUserOp, ErrDoubleIntentDef
 		}
@@ -148,7 +162,7 @@ func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 }
 
 func no0xPrefix(value []byte) bool {
-	return value[0] != '0' || value[1] != 'x'
+	return len(value) > 1 && (value[0] != '0' || value[1] != 'x')
 }
 
 // extractIntentJSON attempts to extract the Intent JSON from either the CallData
@@ -167,8 +181,9 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 		return intentJSON, true
 	}
 
-	if len(op.Signature) > SignatureLength {
-		jsonData := op.Signature[SignatureLength:]
+	signatureEndIndex := op.GetSignatureEndIdx()
+	if op.HasSignature() && signatureEndIndex < len(op.Signature) {
+		jsonData := op.Signature[signatureEndIndex:]
 		if intentJSON, ok := ExtractJSONFromField(string(jsonData)); ok {
 			return intentJSON, true
 		}
@@ -204,10 +219,76 @@ func (op *UserOperation) HasIntent() bool {
 }
 
 // HasSignature checks if the signature field contains a fixed length hex-encoded
-// signature value that is hex-encoded.
+// signature value either a conventional or a kernel with or without Intent.
 func (op *UserOperation) HasSignature() bool {
 	// valid signature does not have a '0x' prefix
-	if len(op.Signature) >= SignatureLength && no0xPrefix(op.Signature) {
+	if no0xPrefix(op.Signature) {
+		// chk kernel signature
+		lenSig := len(op.Signature)
+		if lenSig == KernelSignatureLength {
+			// cannot have a simple signature length fitting a kernel signature
+			return sigHasKernelPrefix(op.Signature)
+		}
+
+		if lenSig > KernelSignatureLength && sigHasKernelPrefix(op.Signature) {
+			return true
+		}
+
+		// chk conventional signature
+		if lenSig >= SimpleSignatureLength {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetSignatureEndIdx returns the end index of the signature value in the UserOperation's Signature field.
+func (op *UserOperation) GetSignatureEndIdx() int {
+	// valid signature does not have a '0x' prefix
+	if no0xPrefix(op.Signature) {
+		// chk kernel signature
+		lenSig := len(op.Signature)
+		if lenSig == KernelSignatureLength {
+			// cannot have a simple signature length fitting a kernel signature
+			if sigHasKernelPrefix(op.Signature) {
+				return KernelSignatureLength
+			} else {
+				// matching kernel signature length without a prefix
+				return 0
+			}
+		}
+
+		if lenSig > KernelSignatureLength && sigHasKernelPrefix(op.Signature) {
+			return KernelSignatureLength
+		}
+
+		// chk conventional signature
+		if lenSig >= SimpleSignatureLength {
+			return SimpleSignatureLength
+		}
+	}
+
+	return 0
+}
+
+// HasSignatureExact checks for an exact match of the signature length and the
+// signature field contains a fixed length hex-encoded signature value either a
+// conventional or a kernel without Intent.
+func (op *UserOperation) HasSignatureExact() bool {
+	// valid signature does not have a '0x' prefix
+	if no0xPrefix(op.Signature) {
+		// chk kernel signature
+		lenSig := len(op.Signature)
+		if lenSig != KernelSignatureLength && lenSig != SimpleSignatureLength {
+			return false
+		}
+
+		if lenSig == KernelSignatureLength {
+			// cannot have a simple signature length fitting a kernel signature
+			return sigHasKernelPrefix(op.Signature)
+		}
+
 		return true
 	}
 
@@ -236,17 +317,6 @@ func (op *UserOperation) GetIntent() (*pb.Intent, error) {
 		return nil, ErrIntentInvalidJSON
 	}
 	return &intent, nil
-}
-
-// GetEVMInstructions returns the Ethereum EVM instructions from the CallData field.
-// It returns an error if the EVM instructions value does not
-// exist or is not a valid hex encoded string.
-func (op *UserOperation) GetEVMInstructions() ([]byte, error) {
-	if _, err := hexutil.Decode(string(op.CallData)); err != nil {
-		return nil, ErrInvalidCallData
-	}
-
-	return op.CallData, nil
 }
 
 // SetIntent sets the Intent JSON in the appropriate field of the UserOperation
@@ -280,20 +350,68 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 		return nil
 	}
 
-	op.Signature = append(op.Signature[:SignatureLength], []byte(intentJSON)...)
+	op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
 
 	return nil
 }
 
-// SetEVMInstructions sets the EVM instructions in the CallData field of the UserOperation.
-// It appropriately handles the Intent JSON based on the operation's solution state.
-// The function first checks the solved status of the operation. For solved operations,
-// it ensures that the signature has the required length. For unsolved operations, it moves
-// the Intent JSON to the Signature field if present and valid, and then sets the provided
-// EVM instructions in the CallData field.
+// sigHasKernelPrefix checks if the provided signature has a Kernel prefix.
+func sigHasKernelPrefix(signature []byte) bool {
+	if len(signature) < KernelSignatureLength {
+		return false
+	}
+
+	kernelPrefix := KernelSignaturePrefixValues[KernelSignaturePrefix(signature[3])]
+	return kernelPrefix != nil && bytes.HasPrefix(signature, kernelPrefix)
+}
+
+// GetSignatureValue retrieves the signature value from a UserOperation.
+//
+// This function supports three use cases:
+//
+//  1. No, or invalid signature value: It returns nil.
+//
+//  2. If the UserOperation has a Kernel signature (identified by a specific prefix),
+//     and the length of the signature is greater than or equal to the KernelSignatureLength,
+//     it returns the signature up to the KernelSignatureLength.
+//
+//  3. Treated as a fallback if the UserOperation has a sufficient length for a conventional signature,
+//     it returns the signature up to the SignatureLength.
+//
+// Otherwise, it returns an error.
+func (op *UserOperation) GetSignatureValue() []byte {
+	if no0xPrefix(op.Signature) {
+
+		lenSig := len(op.Signature)
+		if lenSig >= KernelSignatureLength && sigHasKernelPrefix(op.Signature) {
+			return op.Signature[:KernelSignatureLength]
+		}
+
+		if lenSig == KernelSignatureLength {
+			// cannot have a simple signature length fitting a kernel signature length without a prefix
+			return nil
+		}
+
+		if lenSig >= SimpleSignatureLength {
+			return op.Signature[:SimpleSignatureLength]
+		}
+	}
+
+	return nil
+}
+
+// SetEVMInstructions sets the EVM instructions in the CallData field of the
+// UserOperation in the byte-level representation.
+// It handles the Intent JSON based on the operation's solution state.
+// The function checks the solved status of the operation:
+// For solved
+// operations, it ensures that the signature has the required length.
+// For unsolved
+// operations, it moves the Intent JSON to the Signature field if present and valid,
+// and then sets the provided EVM instructions in the CallData field.
 //
 // Parameters:
-//   - callDataValue: A hex-encoded or byte-level representation containing the
+//   - callDataValueToSet: A hex-encoded or byte-level representation containing the
 //     EVM instructions to be set in the CallData field.
 //
 // Returns:
@@ -302,6 +420,15 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 //     Otherwise, nil is returned, indicating successful setting of the EVM instructions in byte-level
 //     representation.
 func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
+	if len(callDataValue) >= 2 && callDataValue[0] == '0' && callDataValue[1] == 'x' {
+		// `Decode` allows using the source as the destination
+		var err error
+		callDataValue, err = hexutil.Decode(string(callDataValue))
+		if err != nil {
+			return fmt.Errorf("invalid hex encoding of calldata: %w", err)
+		}
+	}
+
 	status, err := op.Validate()
 	if err != nil {
 		return err
@@ -315,20 +442,13 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 	// Unsolved operation, move the Intent JSON to the Signature field if it exists.
 	intentJSON, hasIntent := op.extractIntentJSON()
 	if hasIntent {
-		if len(op.Signature) < SignatureLength {
+		if !op.HasSignature() {
 			// Need a signed userOp to append the Intent JSON to the signature value.
 			return ErrNoSignatureValue
 		}
-		op.Signature = append(op.Signature[:SignatureLength], []byte(intentJSON)...)
-		// Clear the Intent JSON from CallData as it's now moved to Signature.
-	}
 
-	if len(callDataValue) >= 2 && callDataValue[0] == '0' && callDataValue[1] == 'x' {
-		// `Decode` allows using the source as the destination
-		callDataValue, err = hexutil.Decode(string(callDataValue))
-		if err != nil {
-			return fmt.Errorf("invalid hex data: %w", err)
-		}
+		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
+		// Clear the Intent JSON from CallData as it's now moved to Signature.
 	}
 
 	// Assign byte-level representation

@@ -26,3 +26,6 @@ tmp
 launch.json
 
 dist/
+
+# Coverage artifact
+coverage.html

@@ -2,27 +2,40 @@ package model
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
-	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
 
-func mockCallData() []byte {
-	return []byte("0xb61d27f60000000000000000000000009d34f236bddf1b9de014312599d9c9ec8af1bc48000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000008b4bfcada627647e8280523984c78ce505c56fbe0000000000000000000000000000000000000000000000000000082f79cd9000")
+const mockEvmSolution = "0xb61d27f60000000000000000000000009d34f236bddf1b9de014312599d9c9ec8af1bc48000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000008b4bfcada627647e8280523984c78ce505c56fbe0000000000000000000000000000000000000000000000000000082f79cd9000"
+
+var mockCallDataBytesValue []byte
+
+func init() {
+	t := new(UserOperation)
+	_ = t.SetEVMInstructions([]byte(mockEvmSolution))
+	// Set to SetEVMInstructions() representation
+	mockCallDataBytesValue = t.CallData
 }
 
-func mockSignature() []byte {
+func mockSimpleSignature() []byte {
 	hexSign := "0xf53516700206e168fa905dde88789b0e8cb1c0cc212d8d5f0eac09a4665aa41f148124867ba15f3d38d0fbd6d5a9d2f6671e5258ec40b463af810a0a1299c8f81c"
 	signature, err := hexutil.Decode(hexSign)
 	if err != nil {
@@ -31,6 +44,33 @@ func mockSignature() []byte {
 	}
 
 	return signature
+}
+
+func mockKernelSignature(prefix KernelSignaturePrefix) []byte {
+	hexSign := "0x0000000" + strconv.Itoa(int(prefix)) + "745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"
+
+	signature, err := hexutil.Decode(hexSign)
+	if err != nil {
+		// sig literal is not valid hex
+		panic(err)
+	}
+
+	return signature
+}
+
+func mockSignature() []byte {
+	var randomizer = rand.Intn(4)
+
+	switch randomizer {
+	case 0:
+		return mockKernelSignature(Prefix0)
+	case 1:
+		return mockKernelSignature(Prefix1)
+	case 2:
+		return mockKernelSignature(Prefix2)
+	default:
+		return mockSimpleSignature()
+	}
 }
 
 func TestIntentsWithCreationDateInFuture(t *testing.T) {
@@ -169,7 +209,7 @@ func mockUserOperationWithCallData(withIntent bool) *UserOperation {
 	userOp := new(UserOperation)
 	intentJSON := mockIntentJSON()
 
-	userOp.CallData = mockCallData()
+	userOp.CallData = mockCallDataBytesValue
 	if !withIntent {
 		userOp.Signature = mockSignature()
 		return userOp
@@ -183,8 +223,11 @@ func mockUserOperationWithCallData(withIntent bool) *UserOperation {
 
 func mockUserOperationWithIntentInSignature(withIntent bool) *UserOperation {
 	userOp := &UserOperation{
-		CallData:  mockCallData(),
 		Signature: mockSignature(),
+	}
+	err := userOp.SetEVMInstructions(mockCallDataBytesValue)
+	if err != nil {
+		panic(err)
 	}
 	if !withIntent {
 		return userOp
@@ -197,97 +240,111 @@ func mockUserOperationWithIntentInSignature(withIntent bool) *UserOperation {
 }
 
 func TestUserOperation_HasIntent(t *testing.T) {
-	uoWithIntentInCallData := mockUserOperationWithIntentInCallData()
-	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
-	uoWithoutIntent := mockUserOperationWithoutIntent()
+	for i := 0; i < 4; i++ {
+		uoWithIntentInCallData := mockUserOperationWithIntentInCallData()
+		uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
+		uoWithoutIntent := mockUserOperationWithoutIntent()
+		if !uoWithIntentInCallData.HasIntent() || !uoWithIntentInSignature.HasIntent() {
+			t.Errorf("HasIntent() = false; want true for user operation with intent")
+		}
 
-	if !uoWithIntentInCallData.HasIntent() || !uoWithIntentInSignature.HasIntent() {
-		t.Errorf("HasIntent() = false; want true for user operation with intent")
-	}
-
-	if uoWithoutIntent.HasIntent() {
-		t.Errorf("HasIntent() = true; want false for user operation without intent")
+		if uoWithoutIntent.HasIntent() {
+			t.Errorf("HasIntent() = true; want false for user operation without intent")
+		}
 	}
 }
 
 func TestUserOperation_GetIntentJSON(t *testing.T) {
-	uoWithIntentInCallData := mockUserOperationWithIntentInCallData()
-	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
-	uoWithoutIntent := mockUserOperationWithCallData(false)
-	_, err := uoWithIntentInCallData.GetIntentJSON()
-	if err != nil {
-		t.Errorf("GetIntentJSON() with intent in CallData returned error: %v", err)
-	}
+	for i := 0; i < 4; i++ {
+		uoWithIntentInCallData := mockUserOperationWithIntentInCallData()
+		uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
+		uoWithoutIntent := mockUserOperationWithCallData(false)
+		val, err := uoWithIntentInCallData.GetIntentJSON()
+		if err != nil {
+			t.Errorf("GetIntentJSON() with intent in CallData returned error: %v", err)
+		}
+		assert.JSONEq(t, mockIntentJSON(), val)
 
-	_, err = uoWithIntentInSignature.GetIntentJSON()
-	if err != nil {
-		t.Errorf("GetIntentJSON() with intent in Signature returned error: %v", err)
-	}
+		val, err = uoWithIntentInSignature.GetIntentJSON()
+		if err != nil {
+			t.Errorf("GetIntentJSON() with intent in Signature returned error: %v", err)
+		}
+		assert.JSONEq(t, mockIntentJSON(), val)
 
-	_, err = uoWithoutIntent.GetIntentJSON()
-	if err == nil {
-		t.Errorf("GetIntentJSON() without intent did not return error")
+		val, err = uoWithoutIntent.GetIntentJSON()
+		if err == nil {
+			t.Errorf("GetIntentJSON() without intent did not return error")
+		}
+		assert.Equal(t, "", val)
 	}
 }
 
+func assertJSON(t *testing.T, i *pb.Intent, expected string) {
+	t.Helper()
+	b, err := protojson.Marshal(i)
+	require.NoError(t, err)
+	assert.JSONEq(t, expected, string(b))
+}
+
 func TestUserOperation_GetIntent(t *testing.T) {
-	uoWithIntentInCallData := mockUserOperationWithIntentInCallData()
-	uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
-	uoWithCallDataWoutIntent := mockUserOperationWithCallData(false)
-	uoWithCallDataWithIntent := mockUserOperationWithCallData(true)
+	for i := 0; i < 4; i++ {
+		uoWithIntentInCallData := mockUserOperationWithIntentInCallData()
+		uoWithIntentInSignature := mockUserOperationWithIntentInSignature(true)
+		uoWithCallDataWoutIntent := mockUserOperationWithCallData(false)
+		uoWithCallDataWithIntent := mockUserOperationWithCallData(true)
 
-	_, err := uoWithIntentInCallData.GetIntent()
+		val, err := uoWithIntentInCallData.GetIntent()
+		if err != nil {
+			t.Errorf("GetIntent() with intent in CallData returned error: %v", err)
+		}
+		assertJSON(t, val, mockIntentJSON())
 
-	if err != nil {
-		t.Errorf("GetIntent() with intent in CallData returned error: %v", err)
-	}
+		val, err = uoWithIntentInSignature.GetIntent()
+		if err != nil {
+			t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
+		}
+		assertJSON(t, val, mockIntentJSON())
 
-	_, err = uoWithIntentInSignature.GetIntent()
-	if err != nil {
-		t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
-	}
+		val, err = uoWithCallDataWoutIntent.GetIntent()
+		if err == nil {
+			t.Errorf("GetIntent() without intent did not return error")
+		}
+		assert.Nil(t, val)
 
-	_, err = uoWithCallDataWoutIntent.GetIntent()
-	if err == nil {
-		t.Errorf("GetIntent() without intent did not return error")
-	}
-	_, err = uoWithCallDataWithIntent.GetIntent()
-	if err != nil {
-		t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
-	}
+		val, err = uoWithCallDataWithIntent.GetIntent()
+		if err != nil {
+			t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
+		}
+		assertJSON(t, val, mockIntentJSON())
 
-	_, err = uoWithIntentInCallData.GetEVMInstructions()
-	if err == nil {
-		t.Errorf("GetIntent() without Evm instruction did not return error: %v", err)
-	}
+		valBytes := uoWithIntentInCallData.CallData
+		assert.JSONEq(t, mockIntentJSON(), string(valBytes))
 
-	_, err = uoWithIntentInSignature.GetEVMInstructions()
-	if err != nil {
-		t.Errorf("GetIntent() with Calldata returned error: %v", err)
-	}
+		valBytes = uoWithIntentInSignature.CallData
+		assert.Equal(t, mockCallDataBytesValue, valBytes)
 
-	_, err = uoWithCallDataWoutIntent.GetEVMInstructions()
-	if err != nil {
-		t.Errorf("GetIntent() with Calldata returned error: %v", err)
-	}
-	_, err = uoWithCallDataWithIntent.GetEVMInstructions()
-	if err != nil {
-		t.Errorf("GetIntent() with Calldata returned error: %v", err)
+		valBytes = uoWithCallDataWoutIntent.CallData
+		assert.Equal(t, mockCallDataBytesValue, valBytes)
+
+		valBytes = uoWithCallDataWithIntent.CallData
+		assert.Equal(t, mockCallDataBytesValue, valBytes)
 	}
 }
 
 func TestUserOperation_GetCallData(t *testing.T) {
-	uoWithIntent := mockUserOperationWithCallData(true)
-	uoWithoutIntent := mockUserOperationWithCallData(false)
+	for i := 0; i < 4; i++ {
+		uoWithIntent := mockUserOperationWithCallData(true)
+		uoWithoutIntent := mockUserOperationWithCallData(false)
 
-	callData, err := uoWithIntent.GetEVMInstructions()
-	if err != nil || !bytes.Equal(callData, mockCallData()) {
-		t.Errorf("GetEVMInstructions() with intent did not return expected callData")
-	}
+		callData := uoWithIntent.CallData
+		if !bytes.Equal(callData, mockCallDataBytesValue) {
+			t.Errorf("GetEVMInstructions() with intent did not return expected callData")
+		}
 
-	callData, err = uoWithoutIntent.GetEVMInstructions()
-	if err != nil || !bytes.Equal(callData, mockCallData()) {
-		t.Errorf("GetEVMInstructions() without intent did not return expected callData")
+		callData = uoWithoutIntent.CallData
+		if !bytes.Equal(callData, mockCallDataBytesValue) {
+			t.Errorf("GetEVMInstructions() without intent did not return expected callData")
+		}
 	}
 }
 
@@ -356,7 +413,7 @@ func TestValidateUserOperation(t *testing.T) {
 			name: "Conventional Operation - Empty CallData with Valid Signature",
 			userOp: &UserOperation{
 				CallData:  []byte{},
-				Signature: makeHexEncodedSignature(SignatureLength),
+				Signature: makeHexEncodedSignature(SimpleSignatureLength),
 			},
 			expectedStatus: ConventionalUserOp,
 			expectedError:  nil,
@@ -373,7 +430,7 @@ func TestValidateUserOperation(t *testing.T) {
 			name: "Unknown Operation - Intent JSON in CallData and Signature",
 			userOp: &UserOperation{
 				CallData:  []byte(mockIntentJSON()),
-				Signature: append(makeHexEncodedSignature(SignatureLength), mockIntentJSON()...),
+				Signature: append(makeHexEncodedSignature(SimpleSignatureLength), mockIntentJSON()...),
 			},
 			expectedStatus: UnknownUserOp,
 			expectedError:  ErrDoubleIntentDef,
@@ -381,8 +438,8 @@ func TestValidateUserOperation(t *testing.T) {
 		{
 			name: "Solved Operation - Valid CallData and Signature",
 			userOp: &UserOperation{
-				CallData:  mockCallData(),
-				Signature: makeHexEncodedSignature(SignatureLength),
+				CallData:  mockCallDataBytesValue,
+				Signature: makeHexEncodedSignature(SimpleSignatureLength),
 			},
 			expectedStatus: SolvedUserOp,
 			expectedError:  nil,
@@ -390,7 +447,7 @@ func TestValidateUserOperation(t *testing.T) {
 		{
 			name: "Solved Operation Missing Signature",
 			userOp: &UserOperation{
-				CallData: mockCallData(),
+				CallData: mockCallDataBytesValue,
 			},
 			expectedStatus: SolvedUserOp,
 			expectedError:  ErrNoSignatureValue,
@@ -400,7 +457,7 @@ func TestValidateUserOperation(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			status, err := test.userOp.Validate()
-			if status != test.expectedStatus || err != test.expectedError {
+			if status != test.expectedStatus || !errors.Is(err, test.expectedError) {
 				status, err := test.userOp.Validate()
 				t.Errorf("Test: %s, Expected status: %v, got: %v, Expected error: %v, got: %v", test.name, test.expectedStatus, status, test.expectedError, err)
 			}
@@ -411,11 +468,11 @@ func TestValidateUserOperation(t *testing.T) {
 // Helper function to create a hex-encoded signature of a specific length
 func makeHexEncodedSignature(length int) []byte {
 	sig := mockSignature()
-	if length <= SignatureLength {
+	if length <= SimpleSignatureLength {
 		return sig[:length]
 	}
 
-	plus := length - SignatureLength
+	plus := length - SimpleSignatureLength
 	sigExtra := make([]byte, plus)
 	for i := range sigExtra {
 		sigExtra[i] = byte(i % 16)
@@ -425,8 +482,8 @@ func makeHexEncodedSignature(length int) []byte {
 }
 
 func TestValidateUserOperation_Conventional(t *testing.T) {
-	userOp := &UserOperation{}                                                                 // Empty CallData and no Signature
-	userOpWithSignature := &UserOperation{Signature: makeHexEncodedSignature(SignatureLength)} // Empty CallData and valid Signature
+	userOp := &UserOperation{}                                                                       // Empty CallData and no Signature
+	userOpWithSignature := &UserOperation{Signature: makeHexEncodedSignature(SimpleSignatureLength)} // Empty CallData and valid Signature
 
 	status, err := userOp.Validate()
 	if status != ConventionalUserOp || err != nil {
@@ -444,12 +501,100 @@ func TestUserOperation_SetCallData(t *testing.T) {
 	uo := &UserOperation{}
 
 	// Test setting valid CallData
-	validCallData := mockCallData()
+	validCallData := mockCallDataBytesValue
 	if err := uo.SetEVMInstructions(validCallData); err != nil {
 		t.Errorf("SetEVMInstructions() returned error: %v", err)
 	}
 	if string(uo.CallData) != string(validCallData) {
 		t.Errorf("SetEVMInstructions() did not set CallData correctly")
+	}
+}
+
+func TestUserOperation_SetEVMInstructions(t *testing.T) {
+	tests := []struct {
+		name               string
+		userOp             *UserOperation
+		callDataValueToSet []byte
+		expectedCallData   []byte
+		expectedError      error
+		expectedStatus     UserOpSolvedStatus
+	}{
+		{
+			name: "Conventional userOp setting valid calldata",
+			userOp: &UserOperation{
+				CallData:  []byte{},
+				Signature: mockSignature(),
+			},
+			callDataValueToSet: mockCallDataBytesValue,
+			expectedCallData:   mockCallDataBytesValue,
+			expectedError:      nil,
+			expectedStatus:     SolvedUserOp,
+		},
+		{
+			name: "Solve Intent userOp with valid call data and signature",
+			userOp: &UserOperation{
+				CallData:  []byte(mockIntentJSON()),
+				Signature: mockSignature(),
+			},
+			callDataValueToSet: mockCallDataBytesValue,
+			expectedError:      nil,
+			expectedStatus:     SolvedUserOp,
+		},
+		{
+			name: "Unsolved operation with valid call data and no signature",
+			userOp: &UserOperation{
+				CallData:  []byte(mockIntentJSON()),
+				Signature: []byte{},
+			},
+			callDataValueToSet: []byte{0x01, 0x02, 0x03},
+			expectedError:      ErrNoSignatureValue,
+			expectedStatus:     UnsolvedUserOp,
+		},
+		{
+			name: "Solve operation with valid call data",
+			userOp: &UserOperation{
+				CallData:  []byte(mockIntentJSON()),
+				Signature: mockSignature(),
+			},
+			callDataValueToSet: mockCallDataBytesValue,
+			expectedError:      nil,
+			expectedStatus:     SolvedUserOp,
+		},
+		{
+			name: "Unsolved operation with invalid hex-encoded call data",
+			userOp: &UserOperation{
+				CallData:  []byte(mockIntentJSON()),
+				Signature: mockSignature(),
+			},
+			callDataValueToSet: []byte("0xinvalid"),
+			expectedError:      errors.New("invalid hex encoding of calldata: invalid hex string"),
+			expectedStatus:     UnsolvedUserOp,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.userOp.SetEVMInstructions(test.callDataValueToSet)
+			if err != nil && err.Error() != test.expectedError.Error() {
+				t.Errorf("SetEVMInstructions() error = %v, expectedError %v", err, test.expectedError)
+			}
+
+			status, err := test.userOp.Validate()
+			if err != nil {
+				t.Errorf("SetEVMInstructions() returned error: %v", err)
+			}
+			if status != test.expectedStatus {
+				t.Errorf("SetEVMInstructions() status = %v, expectedStatus %v", status, test.expectedStatus)
+			}
+
+			if test.expectedError == nil {
+				hexutil.Encode(test.userOp.CallData)
+				if !bytes.Equal(test.callDataValueToSet, test.userOp.CallData) {
+					// if !bytes.Equal(test.userOp.CallData, test.callDataValueToSet) {
+					t.Errorf("SetEVMInstructions() callData = %v, expectedCallData %v", test.userOp.CallData, test.callDataValueToSet)
+				}
+			}
+		})
 	}
 }
 
@@ -851,4 +996,95 @@ func TestUserOperationRawJSON(t *testing.T) {
 
 	require.Len(t, body.UserOps, 1, "There should be one user operation")
 	require.Len(t, body.UserOpsExt, 1, "There should be one user operation extension")
+}
+
+func TestUserOperation_GetSignatureValue(t *testing.T) {
+	type uo struct {
+		Signature []byte
+	}
+	tests := []struct {
+		name   string
+		fields uo
+		want   []byte
+	}{
+		{
+			name: "Simple signature with prefix 0",
+			fields: uo{
+				Signature: common.FromHex("0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5"),
+			},
+			want: common.FromHex("0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5"),
+		},
+		{
+			name: "Kernel signature with prefix 0",
+			fields: uo{
+				Signature: common.FromHex("0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: common.FromHex("0x00000000745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "Kernel signature with prefix 1",
+			fields: uo{
+				Signature: common.FromHex("0x00000001745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: common.FromHex("0x00000001745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "Kernel signature with prefix 2",
+			fields: uo{
+				Signature: common.FromHex("0x00000002745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: common.FromHex("0x00000002745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "Simple signature appearing like a kernel signature - prefix 3",
+			fields: uo{
+				Signature: common.FromHex("0x00000003745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: nil,
+		},
+		{
+			name: "Simple signature alone",
+			fields: uo{
+				Signature: common.FromHex("0x745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+			},
+			want: common.FromHex("0x745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "Partial simple signature -1 byte -2 digits ",
+			fields: uo{
+				Signature: common.FromHex("745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f27796"),
+			},
+			want: nil,
+		},
+		{
+			name: "Simple signature +1 byte +2 digits ",
+			fields: uo{
+				Signature: common.FromHex("745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c00"),
+			},
+			want: common.FromHex("745cff695691260a2fb4d819d801637be9a434cf28c57d70c077a740d6d6b03d32e4ae751ba278b46f68989ee9da72d5dfb46a2ea21decc55f918edeb5f277961c"),
+		},
+		{
+			name: "No signature",
+			fields: uo{
+				Signature: common.FromHex(""),
+			},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := &UserOperation{
+				Signature: tt.fields.Signature,
+			}
+
+			// print to the console the signature value as a hex string
+			t.Logf("Signature value: %s", hex.EncodeToString(op.Signature))
+
+			got := op.GetSignatureValue()
+			t.Logf("Got Signature value: %s", hex.EncodeToString(op.Signature))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetSignatureValue() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
