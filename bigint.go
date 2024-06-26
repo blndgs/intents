@@ -9,10 +9,14 @@ import (
 
 // ToBigInt converts a protobuf BigInt message to a *big.Int.
 func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
+	if b == nil || len(b.GetValue()) == 0 {
+		return nil, errors.New("input cannot be nil or empty")
+	}
+
 	result := new(big.Int)
 	result = result.SetBytes(b.GetValue())
 
-	if len(result.Bits()) == 0 {
+	if result.Sign() == 0 {
 		return nil, errors.New("amount cannot be a zero amount")
 	}
 
