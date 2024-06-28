@@ -32,7 +32,7 @@ func FromBigInt(i *big.Int) (*protov1.BigInt, error) {
 	}
 
 	return &protov1.BigInt{
-		Value:    i.Abs(i).Bytes(), // Always use positive bytes
-		Negative: i.Sign() < 0,     // But preserve sign information
+		Value: i.Bytes(),
+		// Negative: i.Sign() < 0,     // Redundant
 	}, nil
 }
