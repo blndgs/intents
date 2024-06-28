@@ -13,12 +13,7 @@ func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
 		return nil, errors.New("input cannot be nil or empty")
 	}
 
-	result := new(big.Int)
-	// SetBytes interprets the slice as a big-endian integer
-	result.SetBytes(b.GetValue())
-
-	// Check after setting bytes
-	if result.Sign() <= 0 {
+	if b.Negative {
 		return nil, errors.New("amount cannot be a zero or negative amount")
 	}
 
@@ -32,6 +27,7 @@ func FromBigInt(i *big.Int) (*protov1.BigInt, error) {
 	}
 
 	return &protov1.BigInt{
-		Value: i.Bytes(),
+		Value:    i.Abs(i).Bytes(), // Always use positive bytes
+		Negative: i.Sign() < 0,     // But preserve sign information
 	}, nil
 }

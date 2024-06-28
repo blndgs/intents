@@ -23,6 +23,7 @@ enum ProcessingStatus {
 // BigInt represents a large number
 message BigInt {
   bytes value = 1;
+  bool negative = 2;
 }
 
 // Message representing the details of an asset.
