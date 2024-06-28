@@ -9,7 +9,7 @@ import (
 
 // ToBigInt converts a protobuf BigInt message to a *big.Int.
 func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
-	if b == nil || len(b.GetValue()) == 0 {
+	if b == nil || b.Value == nil || len(b.Value) == 0 || b.Value[0] == 0 {
 		return nil, errors.New("input cannot be nil or empty")
 	}
 
