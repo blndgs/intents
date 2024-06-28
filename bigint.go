@@ -17,13 +17,18 @@ func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
 		return nil, errors.New("amount cannot be a zero or negative amount")
 	}
 
-	return result, nil
+	// Copies only unsigned bytes
+	return new(big.Int).SetBytes(b.Value), nil
 }
 
 // FromBigInt converts a *big.Int to a protobuf BigInt message.
 func FromBigInt(i *big.Int) (*protov1.BigInt, error) {
 	if i == nil {
 		return nil, errors.New("big.Int value cannot be nil")
+	}
+
+	if i.Sign() <= 0 {
+		return nil, errors.New("amount cannot be a zero or negative amount")
 	}
 
 	return &protov1.BigInt{
