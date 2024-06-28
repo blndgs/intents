@@ -14,10 +14,12 @@ func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
 	}
 
 	result := new(big.Int)
-	result = result.SetBytes(b.GetValue())
+	// SetBytes interprets the slice as a big-endian integer
+	result.SetBytes(b.GetValue())
 
-	if result.Sign() == 0 {
-		return nil, errors.New("amount cannot be a zero amount")
+	// Check after setting bytes
+	if result.Sign() <= 0 {
+		return nil, errors.New("amount cannot be a zero or negative amount")
 	}
 
 	return result, nil
