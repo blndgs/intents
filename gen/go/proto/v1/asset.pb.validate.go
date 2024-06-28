@@ -58,6 +58,8 @@ func (m *BigInt) validate(all bool) error {
 
 	// no validation rules for Value
 
+	// no validation rules for Negative
+
 	if len(errors) > 0 {
 		return BigIntMultiError(errors)
 	}

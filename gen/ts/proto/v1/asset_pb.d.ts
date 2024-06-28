@@ -80,6 +80,11 @@ export declare class BigInt extends Message<BigInt> {
    */
   value: Uint8Array;
 
+  /**
+   * @generated from field: bool negative = 2;
+   */
+  negative: boolean;
+
   constructor(data?: PartialMessage<BigInt>);
 
   static readonly runtime: typeof proto3;
