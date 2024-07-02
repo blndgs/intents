@@ -33,10 +33,6 @@ func FromBigInt(i *big.Int) (*protov1.BigInt, error) {
 		return nil, errors.New("big.Int value cannot be nil")
 	}
 
-	if i.Sign() <= 0 {
-		return nil, errors.New("amount cannot be a zero or negative amount")
-	}
-
 	return &protov1.BigInt{
 		Value: i.Bytes(),
 		// Negative: i.Sign() < 0,     // Redundant

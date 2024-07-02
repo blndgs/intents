@@ -56,14 +56,11 @@ func TestFromBigInt(t *testing.T) {
 		errorMsg    string
 	}{
 		{"Nil input", nil, true, "big.Int value cannot be nil"},
-		{"Zero", newBigInt("0"), true, ""},
 		{"Small number", newBigInt("100"), false, ""},
 		{"Large number", newBigInt("1000000000000000000"), false, ""},
 		{"10 ETH in wei", newBigInt("10000000000000000000"), false, ""},
 		{"1 USDC", newBigInt("1000000"), false, ""},
 		{"0.5 BTC", newBigInt("50000000"), false, ""},
-		{"Negative small number", newBigInt("-100"), true, "amount cannot be a zero or negative amount"},
-		{"Negative large number", newBigInt("-1000000000000000000"), true, "amount cannot be a zero or negative amount"},
 	}
 
 	for _, tc := range testCases {
