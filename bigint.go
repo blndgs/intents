@@ -9,16 +9,22 @@ import (
 
 // ToBigInt converts a protobuf BigInt message to a *big.Int.
 func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
-	if b == nil || b.Value == nil || len(b.Value) == 0 || b.Value[0] == 0 {
-		return nil, errors.New("input cannot be nil or empty")
+	if b == nil {
+		return nil, errors.New("input is nil")
 	}
-
+	if b.Value == nil || len(b.Value) == 0 {
+		return nil, errors.New("input byte array cannot be nil or empty")
+	}
 	if b.Negative {
-		return nil, errors.New("amount cannot be a zero or negative amount")
+		return nil, errors.New("negative amounts are not allowed")
 	}
 
-	// Copies only unsigned bytes
-	return new(big.Int).SetBytes(b.Value), nil
+	result := new(big.Int).SetBytes(b.Value)
+	if result.Sign() == 0 { // This check ensures that the byte array does not represent a zero value
+		return nil, errors.New("amount cannot be zero")
+	}
+
+	return result, nil
 }
 
 // FromBigInt converts a *big.Int to a protobuf BigInt message.
