@@ -30,8 +30,6 @@ func TestToBigInt(t *testing.T) {
 		{"10 ETH in wei", &protov1.BigInt{Value: newBigInt("10000000000000000000").Bytes()}, newBigInt("10000000000000000000"), false},
 		{"1 USDC", &protov1.BigInt{Value: newBigInt("1000000").Bytes()}, newBigInt("1000000"), false},
 		{"0.5 BTC", &protov1.BigInt{Value: newBigInt("50000000").Bytes()}, newBigInt("50000000"), false},
-		{"Negative small number", &protov1.BigInt{Value: newBigInt("-1").Bytes(), Negative: true}, nil, true},
-		{"Negative large number", &protov1.BigInt{Value: newBigInt("-1000000000000000000").Bytes(), Negative: true}, nil, true},
 	}
 
 	for _, tc := range testCases {

@@ -15,12 +15,10 @@ func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
 	if b.Value == nil || len(b.Value) == 0 {
 		return nil, errors.New("input byte array cannot be nil or empty")
 	}
-	if b.Negative {
-		return nil, errors.New("negative amounts are not allowed")
-	}
 
 	result := new(big.Int).SetBytes(b.Value)
-	if result.Sign() == 0 { // This check ensures that the byte array does not represent a zero value
+
+	if result.Sign() <= 0 {
 		return nil, errors.New("amount cannot be zero")
 	}
 
@@ -35,6 +33,5 @@ func FromBigInt(i *big.Int) (*protov1.BigInt, error) {
 
 	return &protov1.BigInt{
 		Value: i.Bytes(),
-		// Negative: i.Sign() < 0,     // Redundant
 	}, nil
 }

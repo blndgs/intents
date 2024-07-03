@@ -91,11 +91,6 @@ export class BigInt extends Message<BigInt> {
    */
   value = new Uint8Array(0);
 
-  /**
-   * @generated from field: bool negative = 2;
-   */
-  negative = false;
-
   constructor(data?: PartialMessage<BigInt>) {
     super();
     proto3.util.initPartial(data, this);
@@ -105,7 +100,6 @@ export class BigInt extends Message<BigInt> {
   static readonly typeName = "proto.v1.BigInt";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "value", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 2, name: "negative", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BigInt {
