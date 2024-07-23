@@ -31,7 +31,7 @@ jobs:
             go
 
       - name: Exit if diff exists
-        run: exit 1 ## fail this if the committed artifact does not match the generated one
+        run: exit 1
         if: env.GIT_DIFF
 
       - name: Notify Slack
