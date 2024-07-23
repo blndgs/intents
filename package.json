@@ -2,7 +2,7 @@
   "name": "blndgs-model",
   "version": "0.37.0",
   "description": "Protobuf definitions for Intents",
-  "main": "./dist/proto/v1/asset.js",
+  "main": "./dist/asset_pb.js",
   "types": "./dist/asset_pb.d.ts",
   "private": false,
   "scripts": {
