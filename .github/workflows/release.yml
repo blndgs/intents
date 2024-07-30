@@ -21,16 +21,7 @@ jobs:
         check-latest: true
 
     - name: Run tests
-      run: go test ./... -coverprofile=coverage.txt
-
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v4.0.1
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage.txt
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: true
+      run: go test ./...
 
     - name: Create GitHub App Token
       uses: actions/create-github-app-token@v1
