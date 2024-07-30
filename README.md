@@ -1,5 +1,6 @@
 # Model
 
+[![codecov](https://codecov.io/gh/blndgs/model/graph/badge.svg?token=HMDSOJQMR4)](https://codecov.io/gh/blndgs/model)
 ![NPM Version](https://img.shields.io/npm/v/blndgs-model)
 ![Go Release](https://img.shields.io/github/v/release/blndgs/model?logo=go)
 

@@ -23,6 +23,18 @@ jobs:
       - name: Generate code
         run: buf generate
 
+      - name: Run tests
+        run: go test ./... -coverprofile=coverage.txt
+  
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.txt
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
+
       - name: Check Diff
         uses: technote-space/get-diff-action@v6
         with:
