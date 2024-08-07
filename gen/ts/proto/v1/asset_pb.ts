@@ -410,30 +410,37 @@ export class Intent extends Message<Intent> {
   } | { case: undefined; value?: undefined } = { case: undefined };
 
   /**
+   * The recipient of the transfer, if different from the default
+   *
+   * @generated from field: optional string recipient = 8;
+   */
+  recipient?: string;
+
+  /**
    * Additional data for the intent.
    *
-   * @generated from field: proto.v1.ExtraData extra_data = 8;
+   * @generated from field: proto.v1.ExtraData extra_data = 9;
    */
   extraData?: ExtraData;
 
   /**
    * The processing status of the intent.
    *
-   * @generated from field: proto.v1.ProcessingStatus status = 9;
+   * @generated from field: proto.v1.ProcessingStatus status = 10;
    */
   status = ProcessingStatus.UNSPECIFIED;
 
   /**
    * The creation timestamp of the intent.
    *
-   * @generated from field: google.protobuf.Timestamp created_at = 10;
+   * @generated from field: google.protobuf.Timestamp created_at = 11;
    */
   createdAt?: Timestamp;
 
   /**
    * when this intent expires
    *
-   * @generated from field: google.protobuf.Timestamp expiration_at = 11;
+   * @generated from field: google.protobuf.Timestamp expiration_at = 12;
    */
   expirationAt?: Timestamp;
 
@@ -451,10 +458,11 @@ export class Intent extends Message<Intent> {
     { no: 5, name: "toAsset", kind: "message", T: Asset, oneof: "to" },
     { no: 6, name: "toStake", kind: "message", T: Stake, oneof: "to" },
     { no: 7, name: "toLoan", kind: "message", T: Loan, oneof: "to" },
-    { no: 8, name: "extra_data", kind: "message", T: ExtraData },
-    { no: 9, name: "status", kind: "enum", T: proto3.getEnumType(ProcessingStatus) },
-    { no: 10, name: "created_at", kind: "message", T: Timestamp },
-    { no: 11, name: "expiration_at", kind: "message", T: Timestamp },
+    { no: 8, name: "recipient", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "extra_data", kind: "message", T: ExtraData },
+    { no: 10, name: "status", kind: "enum", T: proto3.getEnumType(ProcessingStatus) },
+    { no: 11, name: "created_at", kind: "message", T: Timestamp },
+    { no: 12, name: "expiration_at", kind: "message", T: Timestamp },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Intent {

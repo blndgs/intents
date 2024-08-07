@@ -1104,6 +1104,10 @@ func (m *Intent) validate(all bool) error {
 		_ = v // ensures v is used
 	}
 
+	if m.Recipient != nil {
+		// no validation rules for Recipient
+	}
+
 	if len(errors) > 0 {
 		return IntentMultiError(errors)
 	}

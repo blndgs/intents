@@ -79,17 +79,20 @@ message Intent {
     Stake toStake = 6; // The stake being received.
     Loan toLoan = 7; // The loan being received.
   }
+  
+  // The recipient of the transfer, if different from the default
+  optional string recipient = 8 [(buf.validate.field).string = { pattern: "^0x[a-fA-F0-9]{40}$"}];
 
-  ExtraData extra_data = 8; // Additional data for the intent.
-  ProcessingStatus status = 9; // The processing status of the intent.
+  ExtraData extra_data = 9; // Additional data for the intent.
+  ProcessingStatus status = 10; // The processing status of the intent.
 
   // The creation timestamp of the intent.
-  google.protobuf.Timestamp created_at = 10 [(buf.validate.field).cel = {
+  google.protobuf.Timestamp created_at = 11 [(buf.validate.field).cel = {
     id: "blndgs.timestamp_gte",
     expression: "this >= now ? \'value must be greater than or equal to now\' : \'\'"
   }];
   // when this intent expires
-  google.protobuf.Timestamp expiration_at = 11;
+  google.protobuf.Timestamp expiration_at = 12;
 }
 
 // Message representing a body of intents.

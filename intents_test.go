@@ -63,6 +63,8 @@ func TestSubmitHandler(t *testing.T) {
 	router := setupRouter()
 	const validTokenAddressFrom = "0x0000000000000000000000000000000000000001"
 	const validTokenAddressTo = "0x0000000000000000000000000000000000000002"
+	const validRecipientAddr = "0x0000000000000000000000000000000000000003"
+	const inValidRecipientAddr = "0x0000000000000000000000000x"
 
 	fromInt, err := FromBigInt(big.NewInt(100))
 	require.NoError(t, err)
@@ -254,6 +256,62 @@ func TestSubmitHandler(t *testing.T) {
 			},
 			expectCode: http.StatusOK,
 		},
+		{
+			description: "Valid Operation - Correct Recipient",
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
+					{
+						From: &pb.Intent_FromStake{
+							FromStake: &pb.Stake{
+								Address: validTokenAddressTo,
+								Amount:  fromInt,
+								ChainId: chainID,
+							},
+						},
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.Asset{
+								Address: validTokenAddressFrom,
+								ChainId: chainID,
+							},
+						},
+						Recipient: stringPtr(validRecipientAddr),
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+						// add 10 minutes
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
+					},
+				},
+			},
+			expectCode: http.StatusOK,
+		},
+		{
+			description: "Invalid Operation - Incorrect Recipient",
+			payload: &pb.Body{
+				Intents: []*pb.Intent{
+					{
+						From: &pb.Intent_FromStake{
+							FromStake: &pb.Stake{
+								Address: validTokenAddressTo,
+								Amount:  fromInt,
+								ChainId: chainID,
+							},
+						},
+						To: &pb.Intent_ToAsset{
+							ToAsset: &pb.Asset{
+								Address: validTokenAddressFrom,
+								ChainId: chainID,
+							},
+						},
+						Recipient: stringPtr(inValidRecipientAddr),
+						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
+						CreatedAt: timestamppb.Now(),
+						// add 10 minutes
+						ExpirationAt: timestamppb.New(time.Now().AddDate(0, 0, 10)),
+					},
+				},
+			},
+			expectCode: http.StatusBadRequest,
+		},
 	}
 
 	// Run test cases
@@ -274,4 +332,9 @@ func TestSubmitHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+// stringPtr string to pointer helper.
+func stringPtr(s string) *string {
+	return &s
 }
