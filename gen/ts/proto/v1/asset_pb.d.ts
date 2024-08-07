@@ -327,30 +327,37 @@ export declare class Intent extends Message<Intent> {
   } | { case: undefined; value?: undefined };
 
   /**
+   * The recipient of the transfer, if different from the default
+   *
+   * @generated from field: optional string recipient = 8;
+   */
+  recipient?: string;
+
+  /**
    * Additional data for the intent.
    *
-   * @generated from field: proto.v1.ExtraData extra_data = 8;
+   * @generated from field: proto.v1.ExtraData extra_data = 9;
    */
   extraData?: ExtraData;
 
   /**
    * The processing status of the intent.
    *
-   * @generated from field: proto.v1.ProcessingStatus status = 9;
+   * @generated from field: proto.v1.ProcessingStatus status = 10;
    */
   status: ProcessingStatus;
 
   /**
    * The creation timestamp of the intent.
    *
-   * @generated from field: google.protobuf.Timestamp created_at = 10;
+   * @generated from field: google.protobuf.Timestamp created_at = 11;
    */
   createdAt?: Timestamp;
 
   /**
    * when this intent expires
    *
-   * @generated from field: google.protobuf.Timestamp expiration_at = 11;
+   * @generated from field: google.protobuf.Timestamp expiration_at = 12;
    */
   expirationAt?: Timestamp;
 
