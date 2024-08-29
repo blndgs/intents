@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
@@ -86,21 +85,18 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []*pb.Intent{
 					{
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.Asset{
+							FromAsset: &pb.FromAsset{
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.Asset{
+							ToAsset: &pb.ToAsset{
 								Address: validTokenAddressTo,
 								Amount:  toInt,
 								ChainId: chainID,
 							},
-						},
-						ExtraData: &pb.ExtraData{
-							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 						CreatedAt: timestamppb.Now(),
@@ -117,21 +113,18 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []*pb.Intent{
 					{
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.Asset{
+							FromAsset: &pb.FromAsset{
 								Address: "InvalidTokenAddressFrom",
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.Asset{
+							ToAsset: &pb.ToAsset{
 								Address: validTokenAddressTo,
 								Amount:  toInt,
 								ChainId: chainID,
 							},
-						},
-						ExtraData: &pb.ExtraData{
-							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 						CreatedAt: timestamppb.Now(),
@@ -148,20 +141,17 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []*pb.Intent{
 					{
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.Asset{
+							FromAsset: &pb.FromAsset{
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.Asset{
+							ToAsset: &pb.ToAsset{
 								Address: validTokenAddressTo,
 								ChainId: chainID,
 							},
-						},
-						ExtraData: &pb.ExtraData{
-							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 						CreatedAt: timestamppb.Now(),
@@ -176,21 +166,18 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []*pb.Intent{
 					{
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.Asset{
+							FromAsset: &pb.FromAsset{
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
 								ChainId: chainID,
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.Asset{
+							ToAsset: &pb.ToAsset{
 								Address: validTokenAddressTo,
 								Amount:  toInt,
 								ChainId: chainID,
 							},
-						},
-						ExtraData: &pb.ExtraData{
-							PartiallyFillable: &wrapperspb.BoolValue{Value: false},
 						},
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 						CreatedAt: timestamppb.Now(),
@@ -207,7 +194,7 @@ func TestSubmitHandler(t *testing.T) {
 				Intents: []*pb.Intent{
 					{
 						From: &pb.Intent_FromAsset{
-							FromAsset: &pb.Asset{
+							FromAsset: &pb.FromAsset{
 								Address: validTokenAddressFrom,
 								Amount:  fromInt,
 								ChainId: chainID,
@@ -242,7 +229,7 @@ func TestSubmitHandler(t *testing.T) {
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.Asset{
+							ToAsset: &pb.ToAsset{
 								Address: validTokenAddressFrom,
 								ChainId: chainID,
 							},
@@ -269,12 +256,12 @@ func TestSubmitHandler(t *testing.T) {
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.Asset{
-								Address: validTokenAddressFrom,
-								ChainId: chainID,
+							ToAsset: &pb.ToAsset{
+								Address:   validTokenAddressFrom,
+								ChainId:   chainID,
+								Recipient: stringPtr(validRecipientAddr),
 							},
 						},
-						Recipient: stringPtr(validRecipientAddr),
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 						CreatedAt: timestamppb.Now(),
 						// add 10 minutes
@@ -297,12 +284,13 @@ func TestSubmitHandler(t *testing.T) {
 							},
 						},
 						To: &pb.Intent_ToAsset{
-							ToAsset: &pb.Asset{
-								Address: validTokenAddressFrom,
-								ChainId: chainID,
+							ToAsset: &pb.ToAsset{
+								Address:   validTokenAddressFrom,
+								ChainId:   chainID,
+								Recipient: stringPtr(inValidRecipientAddr),
 							},
 						},
-						Recipient: stringPtr(inValidRecipientAddr),
+
 						Status:    pb.ProcessingStatus_PROCESSING_STATUS_RECEIVED,
 						CreatedAt: timestamppb.Now(),
 						// add 10 minutes

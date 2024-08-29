@@ -176,7 +176,6 @@ func mockIntentJSON() string {
 		{
 		"fromAsset":{"address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
 		"toAsset":{"address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
-		"extraData":{"partiallyFillable":false},
 		"status":"PROCESSING_STATUS_RECEIVED"}
 		`, fromB, chainIDBuffer, chainIDBuffer, toB)
 		intent pb.Intent
@@ -633,12 +632,49 @@ func TestUserOperation_UnmarshalJSON(t *testing.T) {
 }
 
 func TestIntentUserOperation_UnmarshalJSON(t *testing.T) {
+	now := time.Now().Format(time.RFC3339)
+	expirationDate := time.Now().Add(time.Hour).Format(time.RFC3339)
+
+	fromInt, err := FromBigInt(big.NewInt(100))
+	require.NoError(t, err)
+
+	toInt, err := FromBigInt(big.NewInt(50))
+	require.NoError(t, err)
+
+	var fromB = bytes.NewBuffer(nil)
+
+	require.NoError(t, json.NewEncoder(fromB).Encode(fromInt))
+
+	var toB = bytes.NewBuffer(nil)
+
+	require.NoError(t, json.NewEncoder(toB).Encode(toInt))
+
+	chainID, err := FromBigInt(big.NewInt(1))
+	require.NoError(t, err)
+
+	var chainIDBuffer = bytes.NewBuffer(nil)
+	require.NoError(t, json.NewEncoder(chainIDBuffer).Encode(chainID))
+	rawJSON := fmt.Sprintf(`{
+		"fromAsset": {
+			"address": "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+			"amount": %s,
+			"chainId": %s
+		},
+		"toAsset": {
+			"address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
+			"amount": %s,
+			"chainId": %s
+		},
+		"status": "PROCESSING_STATUS_RECEIVED",
+		"createdAt": "%s",
+		"expirationAt": "%s"
+	}`, fromB, chainIDBuffer, toB, chainIDBuffer, now, expirationDate)
 	// Create an Intent UserOperation
 	originalOp := &UserOperation{
 		Sender:               common.HexToAddress("0x3068c2408c01bECde4BcCB9f246b56651BE1d12D"),
 		Nonce:                big.NewInt(15),
 		InitCode:             []byte("init code"),
-		CallData:             []byte(`{"sender":"0x66C0AeE289c4D332302dda4DeD0c0Cdc3784939A","from":{"type":"ASSET_KIND_TOKEN","address":"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE","amount":"5","chainId":"1"},"to":{"type":"ASSET_KIND_STAKE","address":"0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84","chainId":"1"}}`),
+		CallData:             []byte(rawJSON),
 		CallGasLimit:         big.NewInt(12068),
 		VerificationGasLimit: big.NewInt(58592),
 		PreVerificationGas:   big.NewInt(47996),
@@ -702,9 +738,6 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 			"address": "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
 			"amount": %s,
 			"chainId": %s
-		},
-		"extraData": {
-			"partiallyFillable": false
 		},
 		"status": "PROCESSING_STATUS_RECEIVED",
 		"createdAt": "%s",
