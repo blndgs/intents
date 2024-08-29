@@ -4,7 +4,7 @@
 // @ts-nocheck
 
 import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialMessage, PlainMessage } from "@bufbuild/protobuf";
-import { BoolValue, Message, proto3, Timestamp } from "@bufbuild/protobuf";
+import { Message, proto3, Timestamp } from "@bufbuild/protobuf";
 
 /**
  * Enum representing the processing status of an intent.
@@ -122,9 +122,9 @@ export class BigInt extends Message<BigInt> {
 /**
  * Message representing the details of an asset.
  *
- * @generated from message proto.v1.Asset
+ * @generated from message proto.v1.FromAsset
  */
-export class Asset extends Message<Asset> {
+export class FromAsset extends Message<FromAsset> {
   /**
    * The address of the asset.
    *
@@ -148,33 +148,100 @@ export class Asset extends Message<Asset> {
    */
   chainId?: BigInt;
 
-  constructor(data?: PartialMessage<Asset>) {
+  constructor(data?: PartialMessage<FromAsset>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "proto.v1.Asset";
+  static readonly typeName = "proto.v1.FromAsset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "amount", kind: "message", T: BigInt },
     { no: 3, name: "chain_id", kind: "message", T: BigInt },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Asset {
-    return new Asset().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FromAsset {
+    return new FromAsset().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Asset {
-    return new Asset().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): FromAsset {
+    return new FromAsset().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Asset {
-    return new Asset().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): FromAsset {
+    return new FromAsset().fromJsonString(jsonString, options);
   }
 
-  static equals(a: Asset | PlainMessage<Asset> | undefined, b: Asset | PlainMessage<Asset> | undefined): boolean {
-    return proto3.util.equals(Asset, a, b);
+  static equals(a: FromAsset | PlainMessage<FromAsset> | undefined, b: FromAsset | PlainMessage<FromAsset> | undefined): boolean {
+    return proto3.util.equals(FromAsset, a, b);
+  }
+}
+
+/**
+ * Message representing the details of an asset.
+ *
+ * @generated from message proto.v1.ToAsset
+ */
+export class ToAsset extends Message<ToAsset> {
+  /**
+   * The address of the asset.
+   *
+   * @generated from field: string address = 1;
+   */
+  address = "";
+
+  /**
+   * The amount of the asset.
+   * In cases of AssetType being used as the to field, it doesn't have to provided
+   * and can be left empty
+   *
+   * @generated from field: proto.v1.BigInt amount = 2;
+   */
+  amount?: BigInt;
+
+  /**
+   * The chain ID where the asset resides.
+   *
+   * @generated from field: proto.v1.BigInt chain_id = 3;
+   */
+  chainId?: BigInt;
+
+  /**
+   * The recipient of the transfer, if different from the default
+   *
+   * @generated from field: optional string recipient = 4;
+   */
+  recipient?: string;
+
+  constructor(data?: PartialMessage<ToAsset>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "proto.v1.ToAsset";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "amount", kind: "message", T: BigInt },
+    { no: 3, name: "chain_id", kind: "message", T: BigInt },
+    { no: 4, name: "recipient", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ToAsset {
+    return new ToAsset().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ToAsset {
+    return new ToAsset().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ToAsset {
+    return new ToAsset().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: ToAsset | PlainMessage<ToAsset> | undefined, b: ToAsset | PlainMessage<ToAsset> | undefined): boolean {
+    return proto3.util.equals(ToAsset, a, b);
   }
 }
 
@@ -301,47 +368,6 @@ export class Loan extends Message<Loan> {
 }
 
 /**
- * Message representing additional data for an intent.
- *
- * @generated from message proto.v1.ExtraData
- */
-export class ExtraData extends Message<ExtraData> {
-  /**
-   * Indicates if the intent is partially fillable.
-   *
-   * @generated from field: google.protobuf.BoolValue partially_fillable = 1;
-   */
-  partiallyFillable?: boolean;
-
-  constructor(data?: PartialMessage<ExtraData>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
-
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "proto.v1.ExtraData";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "partially_fillable", kind: "message", T: BoolValue },
-  ]);
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExtraData {
-    return new ExtraData().fromBinary(bytes, options);
-  }
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ExtraData {
-    return new ExtraData().fromJson(jsonValue, options);
-  }
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ExtraData {
-    return new ExtraData().fromJsonString(jsonString, options);
-  }
-
-  static equals(a: ExtraData | PlainMessage<ExtraData> | undefined, b: ExtraData | PlainMessage<ExtraData> | undefined): boolean {
-    return proto3.util.equals(ExtraData, a, b);
-  }
-}
-
-/**
  * Message representing an intent with various types of transactions.
  *
  * @generated from message proto.v1.Intent
@@ -356,9 +382,9 @@ export class Intent extends Message<Intent> {
     /**
      * The asset being sent.
      *
-     * @generated from field: proto.v1.Asset fromAsset = 2;
+     * @generated from field: proto.v1.FromAsset fromAsset = 2;
      */
-    value: Asset;
+    value: FromAsset;
     case: "fromAsset";
   } | {
     /**
@@ -387,9 +413,9 @@ export class Intent extends Message<Intent> {
     /**
      * The token being received.
      *
-     * @generated from field: proto.v1.Asset toAsset = 5;
+     * @generated from field: proto.v1.ToAsset toAsset = 5;
      */
-    value: Asset;
+    value: ToAsset;
     case: "toAsset";
   } | {
     /**
@@ -410,37 +436,23 @@ export class Intent extends Message<Intent> {
   } | { case: undefined; value?: undefined } = { case: undefined };
 
   /**
-   * The recipient of the transfer, if different from the default
-   *
-   * @generated from field: optional string recipient = 8;
-   */
-  recipient?: string;
-
-  /**
-   * Additional data for the intent.
-   *
-   * @generated from field: proto.v1.ExtraData extra_data = 9;
-   */
-  extraData?: ExtraData;
-
-  /**
    * The processing status of the intent.
    *
-   * @generated from field: proto.v1.ProcessingStatus status = 10;
+   * @generated from field: proto.v1.ProcessingStatus status = 98;
    */
   status = ProcessingStatus.UNSPECIFIED;
 
   /**
    * The creation timestamp of the intent.
    *
-   * @generated from field: google.protobuf.Timestamp created_at = 11;
+   * @generated from field: google.protobuf.Timestamp created_at = 9;
    */
   createdAt?: Timestamp;
 
   /**
    * when this intent expires
    *
-   * @generated from field: google.protobuf.Timestamp expiration_at = 12;
+   * @generated from field: google.protobuf.Timestamp expiration_at = 10;
    */
   expirationAt?: Timestamp;
 
@@ -452,17 +464,15 @@ export class Intent extends Message<Intent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.v1.Intent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "fromAsset", kind: "message", T: Asset, oneof: "from" },
+    { no: 2, name: "fromAsset", kind: "message", T: FromAsset, oneof: "from" },
     { no: 3, name: "fromStake", kind: "message", T: Stake, oneof: "from" },
     { no: 4, name: "fromLoan", kind: "message", T: Loan, oneof: "from" },
-    { no: 5, name: "toAsset", kind: "message", T: Asset, oneof: "to" },
+    { no: 5, name: "toAsset", kind: "message", T: ToAsset, oneof: "to" },
     { no: 6, name: "toStake", kind: "message", T: Stake, oneof: "to" },
     { no: 7, name: "toLoan", kind: "message", T: Loan, oneof: "to" },
-    { no: 8, name: "recipient", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
-    { no: 9, name: "extra_data", kind: "message", T: ExtraData },
-    { no: 10, name: "status", kind: "enum", T: proto3.getEnumType(ProcessingStatus) },
-    { no: 11, name: "created_at", kind: "message", T: Timestamp },
-    { no: 12, name: "expiration_at", kind: "message", T: Timestamp },
+    { no: 98, name: "status", kind: "enum", T: proto3.getEnumType(ProcessingStatus) },
+    { no: 9, name: "created_at", kind: "message", T: Timestamp },
+    { no: 10, name: "expiration_at", kind: "message", T: Timestamp },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Intent {

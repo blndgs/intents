@@ -98,9 +98,9 @@ export declare class BigInt extends Message<BigInt> {
 /**
  * Message representing the details of an asset.
  *
- * @generated from message proto.v1.Asset
+ * @generated from message proto.v1.FromAsset
  */
-export declare class Asset extends Message<Asset> {
+export declare class FromAsset extends Message<FromAsset> {
   /**
    * The address of the asset.
    *
@@ -124,19 +124,70 @@ export declare class Asset extends Message<Asset> {
    */
   chainId?: BigInt;
 
-  constructor(data?: PartialMessage<Asset>);
+  constructor(data?: PartialMessage<FromAsset>);
 
   static readonly runtime: typeof proto3;
-  static readonly typeName = "proto.v1.Asset";
+  static readonly typeName = "proto.v1.FromAsset";
   static readonly fields: FieldList;
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Asset;
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FromAsset;
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Asset;
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): FromAsset;
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Asset;
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): FromAsset;
 
-  static equals(a: Asset | PlainMessage<Asset> | undefined, b: Asset | PlainMessage<Asset> | undefined): boolean;
+  static equals(a: FromAsset | PlainMessage<FromAsset> | undefined, b: FromAsset | PlainMessage<FromAsset> | undefined): boolean;
+}
+
+/**
+ * Message representing the details of an asset.
+ *
+ * @generated from message proto.v1.ToAsset
+ */
+export declare class ToAsset extends Message<ToAsset> {
+  /**
+   * The address of the asset.
+   *
+   * @generated from field: string address = 1;
+   */
+  address: string;
+
+  /**
+   * The amount of the asset.
+   * In cases of AssetType being used as the to field, it doesn't have to provided
+   * and can be left empty
+   *
+   * @generated from field: proto.v1.BigInt amount = 2;
+   */
+  amount?: BigInt;
+
+  /**
+   * The chain ID where the asset resides.
+   *
+   * @generated from field: proto.v1.BigInt chain_id = 3;
+   */
+  chainId?: BigInt;
+
+  /**
+   * The recipient of the transfer, if different from the default
+   *
+   * @generated from field: optional string recipient = 4;
+   */
+  recipient?: string;
+
+  constructor(data?: PartialMessage<ToAsset>);
+
+  static readonly runtime: typeof proto3;
+  static readonly typeName = "proto.v1.ToAsset";
+  static readonly fields: FieldList;
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ToAsset;
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ToAsset;
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ToAsset;
+
+  static equals(a: ToAsset | PlainMessage<ToAsset> | undefined, b: ToAsset | PlainMessage<ToAsset> | undefined): boolean;
 }
 
 /**
@@ -231,34 +282,6 @@ export declare class Loan extends Message<Loan> {
 }
 
 /**
- * Message representing additional data for an intent.
- *
- * @generated from message proto.v1.ExtraData
- */
-export declare class ExtraData extends Message<ExtraData> {
-  /**
-   * Indicates if the intent is partially fillable.
-   *
-   * @generated from field: google.protobuf.BoolValue partially_fillable = 1;
-   */
-  partiallyFillable?: boolean;
-
-  constructor(data?: PartialMessage<ExtraData>);
-
-  static readonly runtime: typeof proto3;
-  static readonly typeName = "proto.v1.ExtraData";
-  static readonly fields: FieldList;
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExtraData;
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ExtraData;
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ExtraData;
-
-  static equals(a: ExtraData | PlainMessage<ExtraData> | undefined, b: ExtraData | PlainMessage<ExtraData> | undefined): boolean;
-}
-
-/**
  * Message representing an intent with various types of transactions.
  *
  * @generated from message proto.v1.Intent
@@ -273,9 +296,9 @@ export declare class Intent extends Message<Intent> {
     /**
      * The asset being sent.
      *
-     * @generated from field: proto.v1.Asset fromAsset = 2;
+     * @generated from field: proto.v1.FromAsset fromAsset = 2;
      */
-    value: Asset;
+    value: FromAsset;
     case: "fromAsset";
   } | {
     /**
@@ -304,9 +327,9 @@ export declare class Intent extends Message<Intent> {
     /**
      * The token being received.
      *
-     * @generated from field: proto.v1.Asset toAsset = 5;
+     * @generated from field: proto.v1.ToAsset toAsset = 5;
      */
-    value: Asset;
+    value: ToAsset;
     case: "toAsset";
   } | {
     /**
@@ -327,37 +350,23 @@ export declare class Intent extends Message<Intent> {
   } | { case: undefined; value?: undefined };
 
   /**
-   * The recipient of the transfer, if different from the default
-   *
-   * @generated from field: optional string recipient = 8;
-   */
-  recipient?: string;
-
-  /**
-   * Additional data for the intent.
-   *
-   * @generated from field: proto.v1.ExtraData extra_data = 9;
-   */
-  extraData?: ExtraData;
-
-  /**
    * The processing status of the intent.
    *
-   * @generated from field: proto.v1.ProcessingStatus status = 10;
+   * @generated from field: proto.v1.ProcessingStatus status = 98;
    */
   status: ProcessingStatus;
 
   /**
    * The creation timestamp of the intent.
    *
-   * @generated from field: google.protobuf.Timestamp created_at = 11;
+   * @generated from field: google.protobuf.Timestamp created_at = 9;
    */
   createdAt?: Timestamp;
 
   /**
    * when this intent expires
    *
-   * @generated from field: google.protobuf.Timestamp expiration_at = 12;
+   * @generated from field: google.protobuf.Timestamp expiration_at = 10;
    */
   expirationAt?: Timestamp;
 
