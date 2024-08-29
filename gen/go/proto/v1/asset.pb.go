@@ -214,7 +214,7 @@ type ToAsset struct {
 	// and can be left empty
 	Amount  *BigInt `protobuf:"bytes,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	ChainId *BigInt `protobuf:"bytes,3,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"` // The chain ID where the asset resides.
-	// The recipient of the transfer, if different from the default
+	// The recipient address is the address of asset reciever.
 	Recipient *string `protobuf:"bytes,4,opt,name=recipient,proto3,oneof" json:"recipient,omitempty"`
 }
 

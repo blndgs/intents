@@ -48,7 +48,7 @@ message ToAsset {
   // and can be left empty
   BigInt amount = 2;
   BigInt chain_id = 3; // The chain ID where the asset resides.
-  // The recipient of the transfer, if different from the default
+  // The recipient address is the address of asset reciever.
     optional string recipient = 4 [(buf.validate.field).string = { pattern: "^0x[a-fA-F0-9]{40}$"}];
 }
 

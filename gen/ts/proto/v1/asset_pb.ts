@@ -208,7 +208,7 @@ export class ToAsset extends Message<ToAsset> {
   chainId?: BigInt;
 
   /**
-   * The recipient of the transfer, if different from the default
+   * The recipient address is the address of asset reciever.
    *
    * @generated from field: optional string recipient = 4;
    */
