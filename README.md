@@ -53,3 +53,16 @@ For the test run the following command:
 go test ./...
 
 ```
+
+## Release
+
+| Version | Release Notes |
+|---------|---------------|
+
+## Contributing
+
+Contributions to the Protocol Registry Package are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request on the GitHub repository.
+
+## License
+
+This project is licensed under the terms of the license file in the root directory. See the [LICENSE](./LICENSE) file for details.
