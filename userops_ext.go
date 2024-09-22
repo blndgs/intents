@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -525,6 +526,9 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 // encodeCrossChainCallData encodes the call data in the cross-chain format
 // [2 bytes opType (0xFFFF)] + [2 bytes callDataLength] + [callData] + [32 bytes otherChainHash]
 func (op *UserOperation) encodeCrossChainCallData(callData []byte) ([]byte, error) {
+	if len(callData) > math.MaxUint16 {
+		return nil, fmt.Errorf("callData length exceeds maximum uint16 value: %d", len(callData))
+	}
 	intent, err := op.GetIntent()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get intent: %w", err)

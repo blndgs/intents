@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -1130,6 +1131,7 @@ func TestUserOperation_GetSignatureValue(t *testing.T) {
 	}
 }
 
+// TestUserOperation_IsCrossChainIntent test IsCrossChainIntent function.
 func TestUserOperation_IsCrossChainIntent(t *testing.T) {
 	t.Run("Cross-chain intent", func(t *testing.T) {
 		uop := new(UserOperation)
@@ -1151,6 +1153,7 @@ func TestUserOperation_IsCrossChainIntent(t *testing.T) {
 	})
 }
 
+// TestUserOperation_SetEVMInstructions_CrossChain SetEVMInstructions for cross chain.
 func TestUserOperation_SetEVMInstructions_CrossChain(t *testing.T) {
 	t.Run("Set EVM instructions for cross-chain operation", func(t *testing.T) {
 		uop := mockUserOperationWithCrossChainIntentInCallData()
@@ -1165,6 +1168,7 @@ func TestUserOperation_SetEVMInstructions_CrossChain(t *testing.T) {
 	})
 }
 
+// TestValidateUserOperation_CrossChain test Validate for cross chain intent.
 func TestValidateUserOperation_CrossChain(t *testing.T) {
 	t.Run("Validate cross-chain UserOperation", func(t *testing.T) {
 		uop := mockUserOperationWithCrossChainIntentInCallData()
@@ -1172,4 +1176,249 @@ func TestValidateUserOperation_CrossChain(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, UnsolvedUserOp, status)
 	})
+}
+
+// TestUserOperation_IsCrossChainIntents test cross chain intent cases.
+func TestUserOperation_IsCrossChainIntents(t *testing.T) {
+	tests := []struct {
+		name           string
+		setupIntent    func() *pb.Intent
+		expectedResult bool
+		expectedError  error
+	}{
+		{
+			name: "Cross-chain intent",
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{
+					From: &pb.Intent_FromAsset{
+						FromAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+						},
+					},
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(56).Bytes()},
+						},
+					},
+				}
+			},
+			expectedResult: true,
+			expectedError:  nil,
+		},
+		{
+			name: "Same-chain intent",
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{
+					From: &pb.Intent_FromAsset{
+						FromAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+						},
+					},
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+						},
+					},
+				}
+			},
+			expectedResult: false,
+			expectedError:  nil,
+		},
+		{
+			name: "Unsupported intent type",
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{
+					From: &pb.Intent_FromAsset{
+						FromAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+						},
+					},
+					To: nil,
+				}
+			},
+			expectedResult: false,
+			expectedError:  ErrUnsupportedIntentType,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := &UserOperation{}
+			intent := tt.setupIntent()
+			op.CallData, _ = protojson.Marshal(intent)
+
+			// Execute
+			result, err := op.IsCrossChainIntent()
+
+			// Assert
+			if tt.expectedError != nil {
+				require.ErrorIs(t, err, tt.expectedError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResult, result)
+			}
+		})
+	}
+}
+
+// TestUserOperation_encodeCrossChainCallData tests encodeCrossChainCallData function.
+func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
+	tests := []struct {
+		name           string
+		callData       []byte
+		setupIntent    func() *pb.Intent
+		expectedResult func([]byte) []byte
+		expectedError  string
+	}{
+		{
+			name:     "Successful encoding",
+			callData: []byte("test call data"),
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(56).Bytes()},
+						},
+					},
+				}
+			},
+			expectedResult: func(callData []byte) []byte {
+				result := make([]byte, OpTypeLength+CallDataLengthSize+len(callData)+HashLength)
+				binary.BigEndian.PutUint16(result[:OpTypeLength], CrossChainMarker)
+				binary.BigEndian.PutUint16(result[OpTypeLength:OpTypeLength+CallDataLengthSize], uint16(len(callData)))
+				copy(result[OpTypeLength+CallDataLengthSize:], callData)
+				copy(result[len(result)-HashLength:], common.BigToHash(big.NewInt(56)).Bytes())
+				return result
+			},
+			expectedError: "",
+		},
+		{
+			name:     "CallData exceeds max uint16",
+			callData: make([]byte, math.MaxUint16+1),
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+						},
+					},
+				}
+			},
+			expectedResult: nil,
+			expectedError:  "callData length exceeds maximum uint16 value",
+		},
+		{
+			name:     "Invalid intent",
+			callData: []byte("test call data"),
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{} // Invalid intent with no 'To' field
+			},
+			expectedResult: nil,
+			expectedError:  "failed to extract destination chain ID: unsupported intent type",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			op := &UserOperation{}
+			intent := tt.setupIntent()
+			intentJSON, err := protojson.Marshal(intent)
+			require.NoError(t, err)
+			op.CallData = intentJSON
+
+			result, err := op.encodeCrossChainCallData(tt.callData)
+
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+			} else {
+				require.NoError(t, err)
+				expectedResult := tt.expectedResult(tt.callData)
+				assert.Equal(t, expectedResult, result)
+
+				// Additional checks on the structure of the result
+				assert.Equal(t, CrossChainMarker, binary.BigEndian.Uint16(result[:OpTypeLength]))
+				assert.Equal(t, uint16(len(tt.callData)), binary.BigEndian.Uint16(result[OpTypeLength:OpTypeLength+CallDataLengthSize]))
+				assert.Equal(t, tt.callData, result[OpTypeLength+CallDataLengthSize:len(result)-HashLength])
+				assert.Equal(t, common.BigToHash(big.NewInt(56)).Bytes(), result[len(result)-HashLength:])
+			}
+		})
+	}
+}
+
+// TestUserOperation_encodeCrossChainCallData_EdgeCases test encodeCrossChainCallData edge cases.
+func TestUserOperation_encodeCrossChainCallData_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name           string
+		callData       []byte
+		setupIntent    func() *pb.Intent
+		expectedResult func([]byte) []byte
+		expectedError  string
+	}{
+		{
+			name:     "Empty call data",
+			callData: []byte{},
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+						},
+					},
+				}
+			},
+			expectedResult: func(callData []byte) []byte {
+				result := make([]byte, OpTypeLength+CallDataLengthSize+HashLength)
+				binary.BigEndian.PutUint16(result[:OpTypeLength], CrossChainMarker)
+				binary.BigEndian.PutUint16(result[OpTypeLength:OpTypeLength+CallDataLengthSize], 0)
+				copy(result[len(result)-HashLength:], common.BigToHash(big.NewInt(1)).Bytes())
+				return result
+			},
+			expectedError: "",
+		},
+		{
+			name:     "Maximum valid call data length",
+			callData: make([]byte, math.MaxUint16),
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+						},
+					},
+				}
+			},
+			expectedResult: func(callData []byte) []byte {
+				result := make([]byte, OpTypeLength+CallDataLengthSize+len(callData)+HashLength)
+				binary.BigEndian.PutUint16(result[:OpTypeLength], CrossChainMarker)
+				binary.BigEndian.PutUint16(result[OpTypeLength:OpTypeLength+CallDataLengthSize], uint16(len(callData)))
+				copy(result[OpTypeLength+CallDataLengthSize:], callData)
+				copy(result[len(result)-HashLength:], common.BigToHash(big.NewInt(1)).Bytes())
+				return result
+			},
+			expectedError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := &UserOperation{}
+			intent := tt.setupIntent()
+			intentJSON, err := protojson.Marshal(intent)
+			require.NoError(t, err)
+			op.CallData = intentJSON
+
+			result, err := op.encodeCrossChainCallData(tt.callData)
+
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+			} else {
+				require.NoError(t, err)
+				expectedResult := tt.expectedResult(tt.callData)
+				assert.Equal(t, expectedResult, result)
+			}
+		})
+	}
 }
