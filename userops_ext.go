@@ -12,6 +12,7 @@ package model
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -21,6 +22,14 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "github.com/blndgs/model/gen/go/proto/v1"
+)
+
+// constants for cross-chain operations
+const (
+	CrossChainMarker   uint16 = 0xFFFF
+	OpTypeLength              = 2
+	CallDataLengthSize        = 2
+	HashLength                = 32
 )
 
 // BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
@@ -95,14 +104,16 @@ func (e userOperationError) Error() string {
 
 // Define error constants
 const (
-	ErrNoIntentFound     userOperationError = "no Intent found"
-	ErrIntentInvalidJSON userOperationError = "invalid Intent JSON"
-	ErrNoSignatureValue  userOperationError = "signature value is not found"
-	ErrNoCallData        userOperationError = "no CallData found"
-	ErrInvalidCallData   userOperationError = "invalid hex-encoded CallData"
-	ErrInvalidSignature  userOperationError = "invalid hex-encoded signature"
-	ErrInvalidUserOp     userOperationError = "ambiguous UserOperation solved state"
-	ErrDoubleIntentDef   userOperationError = "intent JSON is set in both calldata and signature fields"
+	ErrNoIntentFound         userOperationError = "no Intent found"
+	ErrIntentInvalidJSON     userOperationError = "invalid Intent JSON"
+	ErrNoSignatureValue      userOperationError = "signature value is not found"
+	ErrNoCallData            userOperationError = "no CallData found"
+	ErrInvalidCallData       userOperationError = "invalid hex-encoded CallData"
+	ErrInvalidSignature      userOperationError = "invalid hex-encoded signature"
+	ErrInvalidUserOp         userOperationError = "ambiguous UserOperation solved state"
+	ErrDoubleIntentDef       userOperationError = "intent JSON is set in both calldata and signature fields"
+	ErrUnsupportedIntentType userOperationError = "unsupported intent type"
+	ErrInvalidChainID        userOperationError = "invalid chain ID"
 )
 
 type KernelSignaturePrefix int
@@ -304,6 +315,26 @@ func (op *UserOperation) GetIntentJSON() (string, error) {
 	return intentJSON, nil
 }
 
+// IsCrossChainIntent checks if the UserOperation represents a cross-chain intent.
+func (op *UserOperation) IsCrossChainIntent() (bool, error) {
+	intent, err := op.GetIntent()
+	if err != nil {
+		return false, err
+	}
+
+	srcChainID, err := ExtractSourceChainID(intent)
+	if err != nil {
+		return false, err
+	}
+
+	destChainID, err := ExtractDestinationChainID(intent)
+	if err != nil {
+		return false, err
+	}
+	// not equal chain ids.
+	return srcChainID.Cmp(destChainID) != 0, nil
+}
+
 // GetIntent takes the Intent Type from the CallData or Signature field, decodes it into
 // an Intent struct, and returns the struct.
 func (op *UserOperation) GetIntent() (*pb.Intent, error) {
@@ -403,6 +434,7 @@ func (op *UserOperation) GetSignatureValue() []byte {
 // SetEVMInstructions sets the EVM instructions in the CallData field of the
 // UserOperation in the byte-level representation.
 // It handles the Intent JSON based on the operation's solution state.
+// It handles both conventional and cross-chain UserOperations.
 // The function checks the solved status of the operation:
 // For solved
 // operations, it ensures that the signature has the required length.
@@ -421,7 +453,6 @@ func (op *UserOperation) GetSignatureValue() []byte {
 //     representation.
 func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 	if len(callDataValue) >= 2 && callDataValue[0] == '0' && callDataValue[1] == 'x' {
-		// `Decode` allows using the source as the destination
 		var err error
 		callDataValue, err = hexutil.Decode(string(callDataValue))
 		if err != nil {
@@ -434,8 +465,21 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 		return err
 	}
 
+	isCrossChain, err := op.IsCrossChainIntent()
+	if err != nil {
+		return fmt.Errorf("failed to determine if operation is cross-chain: %w", err)
+	}
+
 	if status == SolvedUserOp || status == ConventionalUserOp {
-		op.CallData = callDataValue
+		if isCrossChain {
+			// Preserve the cross-chain format
+			op.CallData, err = op.encodeCrossChainCallData(callDataValue)
+			if err != nil {
+				return fmt.Errorf("failed to encode cross-chain call data: %w", err)
+			}
+		} else {
+			op.CallData = callDataValue
+		}
 		return nil
 	}
 
@@ -449,12 +493,44 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 
 		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
 		// Clear the Intent JSON from CallData as it's now moved to Signature.
+		op.CallData = nil
+	}
+	// Assign byte-level representation
+	if isCrossChain {
+		// Encode the call data in cross-chain format
+		op.CallData, err = op.encodeCrossChainCallData(callDataValue)
+		if err != nil {
+			return fmt.Errorf("failed to encode cross-chain call data: %w", err)
+		}
+	} else {
+		op.CallData = callDataValue
 	}
 
-	// Assign byte-level representation
-	op.CallData = callDataValue
-
 	return nil
+}
+
+// encodeCrossChainCallData encodes the call data in the cross-chain format
+// [2 bytes opType (0xFFFF)] + [2 bytes callDataLength] + [callData] + [32 bytes otherChainHash]
+func (op *UserOperation) encodeCrossChainCallData(callData []byte) ([]byte, error) {
+	intent, err := op.GetIntent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get intent: %w", err)
+	}
+
+	otherChainID, err := ExtractDestinationChainID(intent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract destination chain ID: %w", err)
+	}
+
+	otherChainHash := common.BigToHash(otherChainID).Bytes()
+
+	crossChainCallData := make([]byte, OpTypeLength+CallDataLengthSize+len(callData)+HashLength)
+	binary.BigEndian.PutUint16(crossChainCallData[:OpTypeLength], CrossChainMarker)
+	binary.BigEndian.PutUint16(crossChainCallData[OpTypeLength:OpTypeLength+CallDataLengthSize], uint16(len(callData)))
+	copy(crossChainCallData[OpTypeLength+CallDataLengthSize:], callData)
+	copy(crossChainCallData[len(crossChainCallData)-HashLength:], otherChainHash)
+
+	return crossChainCallData, nil
 }
 
 // UnmarshalJSON does the reverse of the provided bundler custom

@@ -2,6 +2,7 @@ package model
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -134,7 +135,6 @@ func TestIntentsWithInvalidSender(t *testing.T) {
 }
 
 func mockIntentJSON() string {
-
 	fromInt, err := FromBigInt(big.NewInt(100))
 	if err != nil {
 		panic(err)
@@ -145,17 +145,11 @@ func mockIntentJSON() string {
 		panic(err)
 	}
 
-	var fromB = bytes.NewBuffer(nil)
-
-	err = json.NewEncoder(fromB).Encode(fromInt)
-	if err != nil {
+	var fromB, toB bytes.Buffer
+	if err := json.NewEncoder(&fromB).Encode(fromInt); err != nil {
 		panic(err)
 	}
-
-	var toB = bytes.NewBuffer(nil)
-
-	err = json.NewEncoder(toB).Encode(toInt)
-	if err != nil {
+	if err := json.NewEncoder(&toB).Encode(toInt); err != nil {
 		panic(err)
 	}
 
@@ -164,27 +158,65 @@ func mockIntentJSON() string {
 		panic(err)
 	}
 
-	var chainIDBuffer = bytes.NewBuffer(nil)
+	var chainIDBuffer bytes.Buffer
+	if err := json.NewEncoder(&chainIDBuffer).Encode(chainID); err != nil {
+		panic(err)
+	}
 
-	err = json.NewEncoder(chainIDBuffer).Encode(chainID)
+	intentJSON := fmt.Sprintf(`
+    {
+    "fromAsset":{"address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
+    "toAsset":{"address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
+    "extraData":{"partiallyFillable":false},
+    "status":"PROCESSING_STATUS_RECEIVED"}
+    `, fromB.String(), chainIDBuffer.String(), toB.String(), chainIDBuffer.String())
+
+	return intentJSON
+}
+
+func mockCrossChainIntentJSON() string {
+	fromInt, err := FromBigInt(big.NewInt(100))
 	if err != nil {
 		panic(err)
 	}
 
-	var (
-		intentJSON = fmt.Sprintf(`
-		{
-		"fromAsset":{"address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
-		"toAsset":{"address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
-		"extraData":{"partiallyFillable":false},
-		"status":"PROCESSING_STATUS_RECEIVED"}
-		`, fromB, chainIDBuffer, chainIDBuffer, toB)
-		intent pb.Intent
-	)
-	if err := protojson.Unmarshal([]byte(intentJSON), &intent); err != nil {
-		// signal when intent JSON is no longer valid
+	toInt, err := FromBigInt(big.NewInt(50))
+	if err != nil {
 		panic(err)
 	}
+
+	var fromB, toB bytes.Buffer
+	if err := json.NewEncoder(&fromB).Encode(fromInt); err != nil {
+		panic(err)
+	}
+	if err := json.NewEncoder(&toB).Encode(toInt); err != nil {
+		panic(err)
+	}
+
+	fromChainID, err := FromBigInt(big.NewInt(1))
+	if err != nil {
+		panic(err)
+	}
+	toChainID, err := FromBigInt(big.NewInt(56)) // Different chain ID
+	if err != nil {
+		panic(err)
+	}
+
+	var fromChainIDBuffer, toChainIDBuffer bytes.Buffer
+	if err := json.NewEncoder(&fromChainIDBuffer).Encode(fromChainID); err != nil {
+		panic(err)
+	}
+	if err := json.NewEncoder(&toChainIDBuffer).Encode(toChainID); err != nil {
+		panic(err)
+	}
+
+	intentJSON := fmt.Sprintf(`
+    {
+    "fromAsset":{"address":"0x0A7199a96fdf0252E09F76545c1eF2be3692F46b","amount":%s,"chainId":%s},
+    "toAsset":{"address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
+    "extraData":{"partiallyFillable":false},
+    "status":"PROCESSING_STATUS_RECEIVED"}
+    `, fromB.String(), fromChainIDBuffer.String(), toB.String(), toChainIDBuffer.String())
 
 	return intentJSON
 }
@@ -192,6 +224,15 @@ func mockIntentJSON() string {
 func mockUserOperationWithIntentInCallData() *UserOperation {
 	userOp := new(UserOperation)
 	intentJSON := mockIntentJSON()
+
+	userOp.CallData = []byte(intentJSON)
+	userOp.Signature = mockSignature()
+	return userOp
+}
+
+func mockUserOperationWithCrossChainIntentInCallData() *UserOperation {
+	userOp := new(UserOperation)
+	intentJSON := mockCrossChainIntentJSON()
 
 	userOp.CallData = []byte(intentJSON)
 	userOp.Signature = mockSignature()
@@ -1087,4 +1128,48 @@ func TestUserOperation_GetSignatureValue(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUserOperation_IsCrossChainIntent(t *testing.T) {
+	t.Run("Cross-chain intent", func(t *testing.T) {
+		uop := new(UserOperation)
+		uop.CallData = []byte(mockCrossChainIntentJSON())
+		uop.Signature = mockSignature()
+
+		isCrossChain, err := uop.IsCrossChainIntent()
+		require.NoError(t, err)
+		require.True(t, isCrossChain, "Expected cross-chain intent")
+	})
+
+	t.Run("Non-cross-chain intent", func(t *testing.T) {
+		uop := new(UserOperation)
+		uop.CallData = []byte(mockIntentJSON())
+		uop.Signature = mockSignature()
+		isCrossChain, err := uop.IsCrossChainIntent()
+		require.NoError(t, err)
+		require.False(t, isCrossChain, "Expected non-cross-chain intent")
+	})
+}
+
+func TestUserOperation_SetEVMInstructions_CrossChain(t *testing.T) {
+	t.Run("Set EVM instructions for cross-chain operation", func(t *testing.T) {
+		uop := mockUserOperationWithCrossChainIntentInCallData()
+		newCallData := []byte{0x01, 0x02, 0x03, 0x04}
+		err := uop.SetEVMInstructions(newCallData)
+		require.NoError(t, err)
+
+		// Verify that the cross-chain format is preserved
+		require.Equal(t, uint16(CrossChainMarker), binary.BigEndian.Uint16(uop.CallData[:OpTypeLength]))
+		require.Equal(t, uint16(len(newCallData)), binary.BigEndian.Uint16(uop.CallData[OpTypeLength:OpTypeLength+CallDataLengthSize]))
+		require.Equal(t, newCallData, uop.CallData[OpTypeLength+CallDataLengthSize:len(uop.CallData)-HashLength])
+	})
+}
+
+func TestValidateUserOperation_CrossChain(t *testing.T) {
+	t.Run("Validate cross-chain UserOperation", func(t *testing.T) {
+		uop := mockUserOperationWithCrossChainIntentInCallData()
+		status, err := uop.Validate()
+		require.NoError(t, err)
+		require.Equal(t, UnsolvedUserOp, status)
+	})
 }
