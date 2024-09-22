@@ -431,27 +431,37 @@ func (op *UserOperation) GetSignatureValue() []byte {
 	return nil
 }
 
-// SetEVMInstructions sets the EVM instructions in the CallData field of the
-// UserOperation in the byte-level representation.
-// It handles the Intent JSON based on the operation's solution state.
-// It handles both conventional and cross-chain UserOperations.
-// The function checks the solved status of the operation:
-// For solved
-// operations, it ensures that the signature has the required length.
-// For unsolved
-// operations, it moves the Intent JSON to the Signature field if present and valid,
-// and then sets the provided EVM instructions in the CallData field.
+// SetEVMInstructions sets the EVM instructions in the CallData field of the UserOperation.
+// It handles both conventional and cross-chain UserOperations, as well as solved and unsolved states.
+//
+// The function performs the following steps:
+// 1. Decodes hex-encoded calldata if necessary.
+// 2. Validates the UserOperation's current state.
+// 3. Extracts any existing intent.
+// 4. Checks if the operation is cross-chain (if an intent is present).
+// 5. For solved or conventional operations:
+//   - Encodes cross-chain calldata if applicable, or
+//   - Sets the calldata directly.
+//
+// 6. For unsolved operations:
+//   - Moves any existing intent to the Signature field.
+//   - Encodes cross-chain calldata if applicable, or
+//   - Sets the calldata directly.
 //
 // Parameters:
-//   - callDataValueToSet: A hex-encoded or byte-level representation containing the
-//     EVM instructions to be set in the CallData field.
+//   - callDataValue: Byte slice containing the EVM instructions to be set in the CallData field.
+//     Can be hex-encoded (with '0x' prefix) or raw bytes.
 //
 // Returns:
-//   - error: An error is returned if the operation's status is invalid, if there is no signature
-//     in the UserOperation when required, or if any other issue arises during the process.
-//     Otherwise, nil is returned, indicating successful setting of the EVM instructions in byte-level
-//     representation.
+//   - error: An error if:
+//   - The calldata is invalid hex (if hex-encoded).
+//   - The operation's status is invalid.
+//   - There's no signature when required for unsolved operations.
+//   - Encoding of cross-chain calldata fails.
+//   - Any other issue arises during the process.
+//   - nil: If the EVM instructions are set successfully.
 func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
+	// Decode hex-encoded calldata if necessary
 	if len(callDataValue) >= 2 && callDataValue[0] == '0' && callDataValue[1] == 'x' {
 		var err error
 		callDataValue, err = hexutil.Decode(string(callDataValue))
@@ -460,19 +470,27 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 		}
 	}
 
+	// Validate the UserOperation's current state
 	status, err := op.Validate()
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid UserOperation state: %w", err)
 	}
 
-	isCrossChain, err := op.IsCrossChainIntent()
-	if err != nil {
-		return fmt.Errorf("failed to determine if operation is cross-chain: %w", err)
+	// Extract any existing intent
+	intentJSON, hasIntent := op.extractIntentJSON()
+
+	// Check if the operation is cross-chain (only if an intent is present)
+	var isCrossChain bool
+	if hasIntent {
+		isCrossChain, err = op.IsCrossChainIntent()
+		if err != nil {
+			return fmt.Errorf("failed to determine if operation is cross-chain: %w", err)
+		}
 	}
 
+	// Handle solved or conventional operations
 	if status == SolvedUserOp || status == ConventionalUserOp {
 		if isCrossChain {
-			// Preserve the cross-chain format
 			op.CallData, err = op.encodeCrossChainCallData(callDataValue)
 			if err != nil {
 				return fmt.Errorf("failed to encode cross-chain call data: %w", err)
@@ -483,21 +501,16 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 		return nil
 	}
 
-	// Unsolved operation, move the Intent JSON to the Signature field if it exists.
-	intentJSON, hasIntent := op.extractIntentJSON()
+	// Handle unsolved operations
 	if hasIntent {
 		if !op.HasSignature() {
-			// Need a signed userOp to append the Intent JSON to the signature value.
 			return ErrNoSignatureValue
 		}
-
 		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
-		// Clear the Intent JSON from CallData as it's now moved to Signature.
 		op.CallData = nil
 	}
-	// Assign byte-level representation
+
 	if isCrossChain {
-		// Encode the call data in cross-chain format
 		op.CallData, err = op.encodeCrossChainCallData(callDataValue)
 		if err != nil {
 			return fmt.Errorf("failed to encode cross-chain call data: %w", err)
