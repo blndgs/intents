@@ -580,8 +580,14 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	// temporarily add this here
+	// will be replaced beneath regardless
+	// but this is useful so we can be call
+	// the extractIntentJSON that covers all usecases
+	op.CallData = []byte(aux.CallData)
+
 	// Check if CallData is JSON (indicating Intent); otherwise, decode as hex.
-	if intentJSON, ok := ExtractJSONFromField(aux.CallData); ok {
+	if intentJSON, ok := op.extractIntentJSON(); ok {
 		op.CallData = []byte(intentJSON)
 	} else {
 		var err error
@@ -650,8 +656,9 @@ func (op *UserOperation) String() string {
 	}
 	formatCallData := func(callDataBytes []byte) string {
 		// Directly return string if it's intended to be JSON (Intent)
-		if _, ok := ExtractJSONFromField(string(callDataBytes)); ok {
-			return string(callDataBytes)
+		// Handle cross chain intents and format as JSON
+		if intentJSON, ok := op.extractIntentJSON(); ok {
+			return intentJSON
 		}
 		// Otherwise, encode as hex
 		return formatBytes(callDataBytes)
