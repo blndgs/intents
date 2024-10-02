@@ -210,12 +210,11 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 		if len(dataBytes) >= 4+intentLength {
 			intentJSON := string(dataBytes[4 : 4+intentLength])
 
-			if len(intentJSON) >= OpTypeLength && intentJSON[:OpTypeLength] != string(intentLengthBytes) {
-				return "", false
+			if len(dataBytes) > 4+intentLength {
+				return intentJSON, true
 			}
-
-			return intentJSON, true
 		}
+
 		return "", false
 	}
 

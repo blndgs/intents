@@ -173,41 +173,34 @@ func mockIntentJSON() string {
 	return intentJSON
 }
 
-func mockCrossChainIntentJSON() string {
+func mockCrossChainIntentJSON(t *testing.T) string {
 	fromInt, err := FromBigInt(big.NewInt(100))
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	toInt, err := FromBigInt(big.NewInt(50))
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	var fromB, toB bytes.Buffer
-	if err := json.NewEncoder(&fromB).Encode(fromInt); err != nil {
-		panic(err)
-	}
-	if err := json.NewEncoder(&toB).Encode(toInt); err != nil {
-		panic(err)
-	}
 
-	fromChainID, err := FromBigInt(big.NewInt(1))
-	if err != nil {
-		panic(err)
-	}
-	toChainID, err := FromBigInt(big.NewInt(56)) // Different chain ID
-	if err != nil {
-		panic(err)
-	}
+	err = json.NewEncoder(&fromB).Encode(fromInt)
+	require.NoError(t, err)
 
-	var fromChainIDBuffer, toChainIDBuffer bytes.Buffer
-	if err := json.NewEncoder(&fromChainIDBuffer).Encode(fromChainID); err != nil {
-		panic(err)
-	}
-	if err := json.NewEncoder(&toChainIDBuffer).Encode(toChainID); err != nil {
-		panic(err)
-	}
+	err = json.NewEncoder(&toB).Encode(toInt)
+	require.NoError(t, err)
+
+	chainID, err := FromBigInt(big.NewInt(1))
+	require.NoError(t, err)
+
+	var chainIDBuffer bytes.Buffer
+	err = json.NewEncoder(&chainIDBuffer).Encode(chainID)
+	require.NoError(t, err)
+
+	destChainID, err := FromBigInt(big.NewInt(56))
+	require.NoError(t, err)
+
+	var destChainBuffer bytes.Buffer
+	err = json.NewEncoder(&destChainBuffer).Encode(destChainID)
+	require.NoError(t, err)
 
 	intentJSON := fmt.Sprintf(`
     {
@@ -215,7 +208,7 @@ func mockCrossChainIntentJSON() string {
     "toAsset":{"address":"0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47","amount":%s,"chainId":%s},
     "extraData":{"partiallyFillable":false},
     "status":"PROCESSING_STATUS_RECEIVED"}
-    `, fromB.String(), fromChainIDBuffer.String(), toB.String(), toChainIDBuffer.String())
+    `, fromB.String(), chainIDBuffer.String(), toB.String(), destChainBuffer.String())
 
 	return intentJSON
 }
@@ -230,14 +223,21 @@ func mockUserOperationWithIntentInCallData() *UserOperation {
 }
 
 func mockUserOperationWithCrossChainIntentInCallData(t *testing.T) *UserOperation {
+	t.Helper()
+
 	userOp := new(UserOperation)
-	intentJSON := mockCrossChainIntentJSON()
+	intentJSON := mockCrossChainIntentJSON(t)
+
+	userOp.CallData = []byte(intentJSON)
 
 	data, err := userOp.encodeCrossChainCallData([]byte(intentJSON))
-	require.Error(t, err)
+	require.NoError(t, err)
+
+	require.NotEqual(t, userOp.CallData, data)
 
 	userOp.CallData = data
 	userOp.Signature = mockSignature()
+
 	return userOp
 }
 
@@ -1136,7 +1136,7 @@ func TestUserOperation_GetSignatureValue(t *testing.T) {
 func TestUserOperation_IsCrossChainIntent(t *testing.T) {
 	t.Run("Cross-chain intent", func(t *testing.T) {
 		uop := new(UserOperation)
-		uop.CallData = []byte(mockCrossChainIntentJSON())
+		uop.CallData = []byte(mockCrossChainIntentJSON(t))
 		uop.Signature = mockSignature()
 
 		isCrossChain, err := uop.IsCrossChainIntent()
@@ -1156,12 +1156,10 @@ func TestUserOperation_IsCrossChainIntent(t *testing.T) {
 
 // TestValidateUserOperation_CrossChain test Validate for cross chain intent.
 func TestValidateUserOperation_CrossChain(t *testing.T) {
-	t.Run("Validate cross-chain UserOperation", func(t *testing.T) {
-		uop := mockUserOperationWithCrossChainIntentInCallData(t)
-		status, err := uop.Validate()
-		require.NoError(t, err)
-		require.Equal(t, UnsolvedUserOp, status)
-	})
+	uop := mockUserOperationWithCrossChainIntentInCallData(t)
+	status, err := uop.Validate()
+	require.NoError(t, err)
+	require.Equal(t, SolvedUserOp, status)
 }
 
 // TestUserOperation_IsCrossChainIntents test cross chain intent cases.
