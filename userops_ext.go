@@ -44,6 +44,7 @@ var (
 	ErrInvalidHashListLength = errors.New("invalid hash list length")
 	ErrInvalidHashListEntry  = errors.New("invalid hash list entry")
 	ErrMissingCrossChainData = errors.New("missing cross-chain data")
+	ErrCrossChainSameChain   = errors.New("destination and source chain cannot be the same")
 )
 
 // BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
@@ -265,10 +266,22 @@ func validateOperationHash(hash []byte) bool {
 
 // isCrossChainOperation checks if the UserOperation is a cross-chain operation
 func (op *UserOperation) isCrossChainOperation() (bool, error) {
-	if len(op.CallData) < OpTypeLength {
-		return false, nil
+	if len(op.CallData) >= OpTypeLength &&
+		binary.BigEndian.Uint16(op.CallData[:OpTypeLength]) == CrossChainMarker {
+		return true, nil
 	}
-	return binary.BigEndian.Uint16(op.CallData[:OpTypeLength]) == CrossChainMarker, nil
+
+	// solved operation has it's cross-chain data in the signature
+	idx := op.GetSignatureEndIdx()
+	if idx > 0 && idx < len(op.Signature) {
+		xData := op.Signature[idx:]
+		if len(xData) >= OpTypeLength &&
+			binary.BigEndian.Uint16(xData[:OpTypeLength]) == CrossChainMarker {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func no0xPrefix(value []byte) bool {
@@ -303,7 +316,11 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 		intentLength := int(binary.BigEndian.Uint16(dataBytes[OpTypeLength : OpTypeLength+CallDataLengthSize]))
 		if len(dataBytes) >= OpTypeLength+CallDataLengthSize+intentLength {
 			intentJSON := string(dataBytes[OpTypeLength+CallDataLengthSize : OpTypeLength+CallDataLengthSize+intentLength])
-			return intentJSON, true
+
+			if intentJSON, ok := ExtractJSONFromField(intentJSON); ok {
+				return intentJSON, true
+			}
+
 		}
 		return "", false
 	}
@@ -360,6 +377,10 @@ func (op *UserOperation) setCrossChainIntent(intentJSON string) error {
 		return err
 	}
 
+	if srcChainID.Cmp(destChainID) == 0 {
+		return ErrCrossChainSameChain
+	}
+
 	crossChainData := make([]byte, OpTypeLength+CallDataLengthSize+len(intentJSON)+HashListLengthSize)
 	binary.BigEndian.PutUint16(crossChainData[:OpTypeLength], CrossChainMarker)
 	binary.BigEndian.PutUint16(crossChainData[OpTypeLength:OpTypeLength+CallDataLengthSize], uint16(len(intentJSON)))
@@ -392,8 +413,12 @@ func (op *UserOperation) IsCrossChainIntent() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	// not equal chain ids.
-	return srcChainID.Cmp(destChainID) != 0, nil
+
+	if srcChainID.Cmp(destChainID) == 0 {
+		return false, ErrCrossChainSameChain
+	}
+
+	return true, nil
 }
 
 // Additional helper functions (ExtractSourceChainID, ExtractDestinationChainID) should be implemented as needed.

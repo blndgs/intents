@@ -1184,7 +1184,7 @@ func TestUserOperation_IsCrossChainIntent(t *testing.T) {
 				}
 			},
 			expectedResult: false,
-			expectedError:  nil,
+			expectedError:  ErrCrossChainSameChain,
 		},
 	}
 
@@ -1198,21 +1198,19 @@ func TestUserOperation_IsCrossChainIntent(t *testing.T) {
 				CallData: intentJSON,
 			}
 
-			if tt.expectedResult {
-				encodedCallData, err := op.encodeCrossChainCallData(intentJSON)
-				require.NoError(t, err)
-				op.CallData = encodedCallData
-			}
+			encodedCallData, err := op.encodeCrossChainCallData(intentJSON)
+			require.NoError(t, err)
 
-			// Execute
+			op.CallData = encodedCallData
+
 			result, err := op.IsCrossChainIntent()
 
-			// Assert
+			require.Equal(t, tt.expectedResult, result)
+
 			if tt.expectedError != nil {
 				require.ErrorIs(t, err, tt.expectedError)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.expectedResult, result)
 			}
 		})
 	}
