@@ -661,16 +661,24 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 		return nil
 	}
 
-	// Unsolved operation, move the Intent JSON to the Signature field if it exists.
-	intentJSON, hasIntent := op.extractIntentJSON()
-	if hasIntent {
-		if !op.HasSignature() {
-			// Need a signed userOp to append the Intent JSON to the signature value.
-			return ErrNoSignatureValue
-		}
+	if !op.HasSignature() {
+		return ErrNoSignatureValue
+	}
 
-		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
-		// Clear the Intent JSON from CallData as it's now moved to Signature.
+	// Check if it's a cross-chain intent
+	switch op.isCrossChainOperation() {
+	case true:
+		// For cross-chain intents, we need to include the whole cross-chain spec in the signature
+		// safe to righfully assert the callData contains the cross-chain spec for unsolved ops
+		crossChainData := op.CallData
+		op.Signature = append(op.GetSignatureValue(), crossChainData...)
+
+	default:
+		// Unsolved operation, move the Intent JSON to the Signature field if it exists.
+		intentJSON, hasIntent := op.extractIntentJSON()
+		if hasIntent {
+			op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
+		}
 	}
 
 	// Assign byte-level representation
