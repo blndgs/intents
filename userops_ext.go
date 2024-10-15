@@ -265,10 +265,10 @@ func validateOperationHash(hash []byte) bool {
 }
 
 // isCrossChainOperation checks if the UserOperation is a cross-chain operation
-func (op *UserOperation) isCrossChainOperation() (bool, error) {
+func (op *UserOperation) isCrossChainOperation() bool {
 	if len(op.CallData) >= OpTypeLength &&
 		binary.BigEndian.Uint16(op.CallData[:OpTypeLength]) == CrossChainMarker {
-		return true, nil
+		return true
 	}
 
 	// solved operation has it's cross-chain data in the signature
@@ -277,11 +277,11 @@ func (op *UserOperation) isCrossChainOperation() (bool, error) {
 		xData := op.Signature[idx:]
 		if len(xData) >= OpTypeLength &&
 			binary.BigEndian.Uint16(xData[:OpTypeLength]) == CrossChainMarker {
-			return true, nil
+			return true
 		}
 	}
 
-	return false, nil
+	return false
 }
 
 func no0xPrefix(value []byte) bool {
@@ -311,7 +311,7 @@ func no0xPrefix(value []byte) bool {
 // or Signature field of a UserOperation.
 func (op *UserOperation) extractIntentJSON() (string, bool) {
 	// Try to check if it is a cross chain calldata
-	if isCrossChain, _ := op.isCrossChainOperation(); isCrossChain {
+	if op.isCrossChainOperation() {
 		dataBytes := op.CallData
 		intentLength := int(binary.BigEndian.Uint16(dataBytes[OpTypeLength : OpTypeLength+CallDataLengthSize]))
 		if len(dataBytes) >= OpTypeLength+CallDataLengthSize+intentLength {
