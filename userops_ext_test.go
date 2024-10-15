@@ -1220,7 +1220,6 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 		name           string
 		setupUserOp    func() *UserOperation
 		expectedResult bool
-		expectedError  error
 	}{
 		{
 			name: "Solved cross-chain operation with a simple signature",
@@ -1260,7 +1259,6 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 				return uop
 			},
 			expectedResult: true,
-			expectedError:  nil,
 		},
 		{
 			name: "Solved cross-chain operation with kernel signature",
@@ -1300,7 +1298,6 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 				return uop
 			},
 			expectedResult: true,
-			expectedError:  nil,
 		},
 		{
 			name: "Unsolved cross-chain operation",
@@ -1334,7 +1331,6 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 				return uop
 			},
 			expectedResult: true,
-			expectedError:  nil,
 		},
 		{
 			name: "Non-cross-chain operation",
@@ -1345,7 +1341,6 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 				return uop
 			},
 			expectedResult: false,
-			expectedError:  nil,
 		},
 		{
 			name: "Unsolved cross-chain operation with same chain IDs",
@@ -1379,7 +1374,6 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 				return uop
 			},
 			expectedResult: true,
-			expectedError:  nil,
 		},
 	}
 
@@ -1387,14 +1381,8 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			op := tt.setupUserOp()
 
-			result, err := op.isCrossChainOperation()
+			result := op.isCrossChainOperation()
 			require.Equal(t, tt.expectedResult, result)
-
-			if tt.expectedError != nil {
-				require.ErrorIs(t, err, tt.expectedError)
-			} else {
-				require.NoError(t, err)
-			}
 		})
 	}
 }
