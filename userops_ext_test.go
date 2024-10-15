@@ -1728,7 +1728,8 @@ func TestDataCopy_SetCrossChainIntent(t *testing.T) {
 	err = op.SetIntent(string(intentJSON))
 	require.NoError(t, err)
 
-	iscrosschain, _ = op.IsCrossChainIntent()
+	iscrosschain, err = op.IsCrossChainIntent()
+	require.NoError(t, err)
 	require.True(t, iscrosschain)
 
 	// Make a copy of the original CallData

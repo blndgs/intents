@@ -207,6 +207,10 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 		return UnknownUserOp, ErrMissingCrossChainData
 	}
 
+	if len(dataBytes) < expectedLength+HashListLengthSize {
+		return UnknownUserOp, ErrMissingCrossChainData
+	}
+
 	hashListLength := int(dataBytes[OpTypeLength+CallDataLengthSize+intentLength])
 	if hashListLength < MinOpCount || hashListLength > MaxOpCount {
 		return UnknownUserOp, ErrInvalidHashListLength
@@ -222,6 +226,10 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 	hashListStart := OpTypeLength + CallDataLengthSize + intentLength + HashListLengthSize
 	for i := 0; i < hashListLength; i++ {
 		entryStart := hashListStart + i*HashListEntrySize
+
+		if len(dataBytes) < entryStart+HashListEntrySize {
+			return UnknownUserOp, ErrInvalidHashListEntry
+		}
 
 		// Validate placeholder
 		placeholder := binary.BigEndian.Uint16(dataBytes[entryStart : entryStart+PlaceholderSize])
@@ -363,6 +371,10 @@ func (op *UserOperation) setCrossChainIntent(intentJSON string) error {
 	intent, err := op.GetIntent()
 	if err != nil {
 		return err
+	}
+
+	if len(intentJSON) > math.MaxUint16 {
+		return fmt.Errorf("intentJSON length exceeds maximum uint16 value: %d", len(intentJSON))
 	}
 
 	srcChainID, err := ExtractSourceChainID(intent)
