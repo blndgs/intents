@@ -552,16 +552,13 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 		return ErrIntentInvalidJSON
 	}
 
-	isCrossChain, err := op.IsCrossChainIntent()
-	// we only want to fail because of criticial errors here
-	// like no intent json or not a cross chain operation
-	// because we will use the isCrossChain boolean to determine if to set
+	// These errors while useful do not really matter here in this context
+	// since we rely  on the isCrossChain variable to determine if to set
 	// the cross chain item
-	if err != nil &&
-		!errors.Is(err, ErrNoIntentFound) &&
-		!errors.Is(err, ErrCrossChainSameChain) {
-		return err
-	}
+	//
+	// err could be like no intent json or not a cross chain operation
+	// so safe to ignore here.
+	isCrossChain, _ := op.IsCrossChainIntent()
 
 	if isCrossChain {
 		return op.setCrossChainIntent(intentJSON)

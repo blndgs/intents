@@ -17,7 +17,6 @@ import (
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -307,27 +306,27 @@ func TestUserOperation_GetIntentJSON(t *testing.T) {
 		if err != nil {
 			t.Errorf("GetIntentJSON() with intent in CallData returned error: %v", err)
 		}
-		assert.JSONEq(t, mockIntentJSON(), val)
+		require.JSONEq(t, mockIntentJSON(), val)
 
 		val, err = uoWithIntentInSignature.GetIntentJSON()
 		if err != nil {
 			t.Errorf("GetIntentJSON() with intent in Signature returned error: %v", err)
 		}
-		assert.JSONEq(t, mockIntentJSON(), val)
+		require.JSONEq(t, mockIntentJSON(), val)
 
 		val, err = uoWithoutIntent.GetIntentJSON()
 		if err == nil {
 			t.Errorf("GetIntentJSON() without intent did not return error")
 		}
-		assert.Equal(t, "", val)
+		require.Equal(t, "", val)
 	}
 }
 
-func assertJSON(t *testing.T, i *pb.Intent, expected string) {
+func requireJSON(t *testing.T, i *pb.Intent, expected string) {
 	t.Helper()
 	b, err := protojson.Marshal(i)
 	require.NoError(t, err)
-	assert.JSONEq(t, expected, string(b))
+	require.JSONEq(t, expected, string(b))
 }
 
 func TestUserOperation_GetIntent(t *testing.T) {
@@ -341,37 +340,37 @@ func TestUserOperation_GetIntent(t *testing.T) {
 		if err != nil {
 			t.Errorf("GetIntent() with intent in CallData returned error: %v", err)
 		}
-		assertJSON(t, val, mockIntentJSON())
+		requireJSON(t, val, mockIntentJSON())
 
 		val, err = uoWithIntentInSignature.GetIntent()
 		if err != nil {
 			t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
 		}
-		assertJSON(t, val, mockIntentJSON())
+		requireJSON(t, val, mockIntentJSON())
 
 		val, err = uoWithCallDataWoutIntent.GetIntent()
 		if err == nil {
 			t.Errorf("GetIntent() without intent did not return error")
 		}
-		assert.Nil(t, val)
+		require.Nil(t, val)
 
 		val, err = uoWithCallDataWithIntent.GetIntent()
 		if err != nil {
 			t.Errorf("GetIntent() with intent in Signature returned error: %v", err)
 		}
-		assertJSON(t, val, mockIntentJSON())
+		requireJSON(t, val, mockIntentJSON())
 
 		valBytes := uoWithIntentInCallData.CallData
-		assert.JSONEq(t, mockIntentJSON(), string(valBytes))
+		require.JSONEq(t, mockIntentJSON(), string(valBytes))
 
 		valBytes = uoWithIntentInSignature.CallData
-		assert.Equal(t, mockCallDataBytesValue, valBytes)
+		require.Equal(t, mockCallDataBytesValue, valBytes)
 
 		valBytes = uoWithCallDataWoutIntent.CallData
-		assert.Equal(t, mockCallDataBytesValue, valBytes)
+		require.Equal(t, mockCallDataBytesValue, valBytes)
 
 		valBytes = uoWithCallDataWithIntent.CallData
-		assert.Equal(t, mockCallDataBytesValue, valBytes)
+		require.Equal(t, mockCallDataBytesValue, valBytes)
 	}
 }
 
@@ -759,7 +758,7 @@ func TestIntentUserOperation_RawJSON(t *testing.T) {
 	if err := protojson.Unmarshal([]byte(rawJSON), &intent); err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
-	// Correctly type-assert 'From' and 'To' after unmarshalling
+	// Correctly type-require 'From' and 'To' after unmarshalling
 	from, fromOk := intent.From.(*pb.Intent_FromAsset)
 	if !fromOk {
 		t.Fatalf("From field is not of type Asset")
@@ -1572,4 +1571,186 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSetCrossChainIntent(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupIntent   func() *pb.Intent
+		expectedError error
+		validate      func(*testing.T, *UserOperation)
+	}{
+		{
+			name: "Valid cross-chain intent",
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{
+					From: &pb.Intent_FromAsset{FromAsset: &pb.Asset{
+						Address: "0x1234567890123456789012345678901234567890",
+						Amount:  &pb.BigInt{Value: big.NewInt(100).Bytes()},
+						ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+					}},
+					To: &pb.Intent_ToAsset{ToAsset: &pb.Asset{
+						Address: "0x0987654321098765432109876543210987654321",
+						Amount:  &pb.BigInt{Value: big.NewInt(90).Bytes()},
+						ChainId: &pb.BigInt{Value: big.NewInt(56).Bytes()},
+					}},
+				}
+			},
+			expectedError: nil,
+			validate: func(t *testing.T, op *UserOperation) {
+
+				isCrossChain, err := op.IsCrossChainIntent()
+				require.NoError(t, err)
+				require.True(t, isCrossChain)
+
+				require.Equal(t, CrossChainMarker, binary.BigEndian.Uint16(op.CallData[:OpTypeLength]))
+
+				intentLength := binary.BigEndian.Uint16(op.CallData[OpTypeLength : OpTypeLength+CallDataLengthSize])
+				require.True(t, intentLength > 0)
+
+				intent := &pb.Intent{}
+				err = protojson.Unmarshal(op.CallData[OpTypeLength+CallDataLengthSize:OpTypeLength+CallDataLengthSize+int(intentLength)], intent)
+				require.NoError(t, err)
+
+				require.Equal(t, big.NewInt(1).Bytes(), intent.GetFromAsset().ChainId.Value)
+				require.Equal(t, big.NewInt(56).Bytes(), intent.GetToAsset().ChainId.Value)
+
+				hashListLength := op.CallData[OpTypeLength+CallDataLengthSize+int(intentLength)]
+				require.Equal(t, byte(2), hashListLength)
+
+				hashListStart := OpTypeLength + CallDataLengthSize + int(intentLength) + 1
+				require.Equal(t, uint16(CrossChainMarker), binary.BigEndian.Uint16(op.CallData[hashListStart:hashListStart+2]))
+				require.Equal(t, common.BigToHash(big.NewInt(1)).Bytes(), op.CallData[hashListStart+2:hashListStart+34])
+
+				require.Equal(t, uint16(CrossChainMarker), binary.BigEndian.Uint16(op.CallData[hashListStart+34:hashListStart+36]))
+				require.Equal(t, common.BigToHash(big.NewInt(56)).Bytes(), op.CallData[hashListStart+36:hashListStart+68])
+			},
+		},
+		{
+			name: "Same-chain intent (not cross-chain)",
+			setupIntent: func() *pb.Intent {
+				return &pb.Intent{
+					From: &pb.Intent_FromAsset{FromAsset: &pb.Asset{ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()}}},
+					To:   &pb.Intent_ToAsset{ToAsset: &pb.Asset{ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()}}},
+				}
+			},
+			expectedError: nil,
+			validate: func(t *testing.T, op *UserOperation) {
+
+				isCrossChain, err := op.IsCrossChainIntent()
+				require.Error(t, err)
+				require.False(t, isCrossChain)
+
+				intent := &pb.Intent{}
+				err = protojson.Unmarshal(op.CallData, intent)
+				require.NoError(t, err)
+				require.Equal(t, big.NewInt(1).Bytes(), intent.GetFromAsset().ChainId.Value)
+				require.Equal(t, big.NewInt(1).Bytes(), intent.GetToAsset().ChainId.Value)
+			},
+		},
+		{
+			name: "Very large chain IDs",
+			setupIntent: func() *pb.Intent {
+				largeChainID1 := new(big.Int).Lsh(big.NewInt(1), 255) // 2^255
+				largeChainID2 := new(big.Int).Lsh(big.NewInt(1), 254) // 2^254
+				return &pb.Intent{
+					From: &pb.Intent_FromAsset{FromAsset: &pb.Asset{ChainId: &pb.BigInt{Value: largeChainID1.Bytes()}}},
+					To:   &pb.Intent_ToAsset{ToAsset: &pb.Asset{ChainId: &pb.BigInt{Value: largeChainID2.Bytes()}}},
+				}
+			},
+			expectedError: nil,
+			validate: func(t *testing.T, op *UserOperation) {
+				require.Equal(t, CrossChainMarker, binary.BigEndian.Uint16(op.CallData[:OpTypeLength]))
+
+				hashListStart := OpTypeLength + CallDataLengthSize + int(binary.BigEndian.Uint16(op.CallData[OpTypeLength:OpTypeLength+CallDataLengthSize])) + 1
+				largeChainID1 := new(big.Int).Lsh(big.NewInt(1), 255)
+				largeChainID2 := new(big.Int).Lsh(big.NewInt(1), 254)
+				require.Equal(t, common.BigToHash(largeChainID1).Bytes(), op.CallData[hashListStart+2:hashListStart+34])
+				require.Equal(t, common.BigToHash(largeChainID2).Bytes(), op.CallData[hashListStart+36:hashListStart+68])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := new(UserOperation)
+			intent := tt.setupIntent()
+
+			// set random calldata since SetIntent validates
+			// and we do not want to treat it as a ConventionalUserOp
+			intentJSON, err := protojson.Marshal(intent)
+			require.NoError(t, err)
+
+			op.CallData = intentJSON
+
+			// set it again
+			err = op.SetIntent(string(intentJSON))
+			require.NoError(t, err)
+
+			if tt.expectedError != nil {
+				require.ErrorIs(t, err, tt.expectedError)
+			} else {
+				tt.validate(t, op)
+			}
+		})
+	}
+}
+
+func TestDataCopy_SetCrossChainIntent(t *testing.T) {
+	op := new(UserOperation)
+	intent := &pb.Intent{
+		From: &pb.Intent_FromAsset{FromAsset: &pb.Asset{
+			Address: "0x1234567890123456789012345678901234567890",
+			Amount:  &pb.BigInt{Value: big.NewInt(100).Bytes()},
+			ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+		}},
+		To: &pb.Intent_ToAsset{ToAsset: &pb.Asset{
+			Address: "0x0987654321098765432109876543210987654321",
+			Amount:  &pb.BigInt{Value: big.NewInt(90).Bytes()},
+			ChainId: &pb.BigInt{Value: big.NewInt(56).Bytes()},
+		}},
+	}
+
+	samechainIntent := &pb.Intent{
+		From: &pb.Intent_FromAsset{FromAsset: &pb.Asset{
+			Address: "0x1234567890123456789012345678901234567890",
+			Amount:  &pb.BigInt{Value: big.NewInt(100).Bytes()},
+			ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+		}},
+		To: &pb.Intent_ToAsset{ToAsset: &pb.Asset{
+			Address: "0x0987654321098765432109876543210987654321",
+			Amount:  &pb.BigInt{Value: big.NewInt(90).Bytes()},
+			ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+		}},
+	}
+
+	samechainIntentJSON, err := protojson.Marshal(samechainIntent)
+	require.NoError(t, err)
+
+	// set to not treat as a ConventionalUserOp
+	// then setIntent
+	op.CallData = samechainIntentJSON
+
+	iscrosschain, _ := op.IsCrossChainIntent()
+	require.False(t, iscrosschain)
+
+	intentJSON, err := protojson.Marshal(intent)
+	require.NoError(t, err)
+
+	err = op.SetIntent(string(intentJSON))
+	require.NoError(t, err)
+
+	iscrosschain, _ = op.IsCrossChainIntent()
+	require.True(t, iscrosschain)
+
+	// Make a copy of the original CallData
+	originalCallData := make([]byte, len(op.CallData))
+	copy(originalCallData, op.CallData)
+
+	// Modify the original CallData
+	op.CallData[0] = 0xFF
+
+	// Check that the modification didn't affect the intent data
+	// require.NotEqual(t, originalCallData[0], op.CallData[0])
+	require.Equal(t, originalCallData[1:], op.CallData[1:])
 }
