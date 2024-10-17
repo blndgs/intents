@@ -12,10 +12,7 @@ package model
 
 import (
 	"bytes"
-	"encoding/binary"
-	"errors"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,31 +23,7 @@ import (
 	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
 
-// constants for cross-chain operations
-const (
-	CrossChainMarker     uint16 = 0xFFFF
-	HashPlaceholder      uint16 = 0xFFFF // 0xFFFF is a placeholder for the userOp hash that will be computed during validation
-	OpTypeLength                = 2
-	IntentJSONLengthSize        = 2
-	HashLength                  = 32
-	HashListLengthSize          = 1
-	MinOpCount                  = 2
-	MaxOpCount                  = 3
-	PlaceholderSize             = 2
-	OperationHashSize           = 32
-	HashListEntrySize           = PlaceholderSize + OperationHashSize
-)
-
-var (
-	EntrypointV06 = common.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
-
-	ErrInvalidHashListLength = errors.New("invalid hash list length")
-	ErrInvalidHashListEntry  = errors.New("invalid hash list entry")
-	ErrPlaceholderNotFound   = errors.New("invalid hash list with missing placeholder")
-	ErrHashListInvalidValue  = errors.New("invalid hash list hash value")
-	ErrMissingCrossChainData = errors.New("missing cross-chain data")
-	ErrCrossChainSameChain   = errors.New("destination and source chain cannot be the same")
-)
+var EntrypointV06 = common.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
 
 // BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
 // It contains slices of UserOperation and UserOperationExt, representing the primary
@@ -197,189 +170,6 @@ func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	return SolvedUserOp, nil
 }
 
-// validateCrossChainOp validates a cross-chain operation
-func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
-	dataBytes := op.CallData
-
-	if len(dataBytes) < OpTypeLength+IntentJSONLengthSize {
-		return UnknownUserOp, ErrMissingCrossChainData
-	}
-
-	intentLength := int(binary.BigEndian.Uint16(dataBytes[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
-	expectedLength := OpTypeLength + IntentJSONLengthSize + intentLength + HashListLengthSize
-
-	if len(dataBytes) < expectedLength {
-		return UnknownUserOp, ErrMissingCrossChainData
-	}
-
-	hashListLength := int(dataBytes[OpTypeLength+IntentJSONLengthSize+intentLength])
-	if hashListLength < MinOpCount || hashListLength > MaxOpCount {
-		return UnknownUserOp, ErrInvalidHashListLength
-	}
-
-	//expectedLength = OpTypeLength + IntentJSONLengthSize + intentLength + HashListLengthSize + OpTypeLength + HashLength*(hashListLength-1)
-	expectedLength += OpTypeLength + HashLength*(hashListLength-1)
-
-	if len(dataBytes) != expectedLength {
-		return UnknownUserOp, ErrInvalidHashListEntry
-	}
-
-	// Validate hash list entries
-	hashListStart := OpTypeLength + IntentJSONLengthSize + intentLength + HashListLengthSize
-	var foundPlaceHolder uint
-	for i := 0; i < hashListLength; i++ {
-		// enough bytes for the placeholder?
-		if len(dataBytes) < hashListStart+OpTypeLength {
-			return UnknownUserOp, ErrInvalidHashListEntry
-		}
-
-		// Validate placeholder
-		placeholder := binary.BigEndian.Uint16(dataBytes[hashListStart : hashListStart+PlaceholderSize])
-		if placeholder != HashPlaceholder {
-			// enough bytes for the hash?
-			if len(dataBytes) < hashListStart+HashLength {
-				return UnknownUserOp, ErrInvalidHashListEntry
-			}
-
-			// Validate operation hash
-			operationHash := dataBytes[hashListStart : hashListStart+HashLength]
-			if !validateOperationHash(operationHash) {
-				return UnknownUserOp, ErrHashListInvalidValue
-			}
-
-			hashListStart += HashLength
-		} else {
-			if foundPlaceHolder > 0 {
-				return UnknownUserOp, ErrInvalidHashListEntry
-			}
-
-			foundPlaceHolder++
-			hashListStart += PlaceholderSize
-		}
-
-		if i == hashListLength-1 && foundPlaceHolder != 1 {
-			return UnknownUserOp, ErrPlaceholderNotFound
-		}
-	}
-
-	if op.HasSignature() {
-		return SolvedUserOp, nil
-	}
-
-	return UnsolvedUserOp, nil
-}
-
-// validateOperationHash checks if the provided operation hash is valid
-func validateOperationHash(hash []byte) bool {
-	// Ensure the hash is exactly 32 bytes long
-	if len(hash) != OperationHashSize {
-		return false
-	}
-
-	// Check if the hash is not all zeros (a simple validity check)
-	isAllZeros := true
-	for _, b := range hash {
-		if b != 0 {
-			isAllZeros = false
-			break
-		}
-	}
-
-	return !isAllZeros
-}
-
-// isCrossChainOperation checks if the UserOperation is a cross-chain operation
-func (op *UserOperation) isCrossChainOperation() bool {
-	// Check CallData first
-	if op.isCallDataCrossChain() {
-		return true
-	}
-
-	// Check Signature for solved operations
-	return op.isSignatureCrossChain()
-}
-
-func isCrossChainData(data []byte, minHashListLength int, maxHashListLength int) bool {
-	minLength := OpTypeLength + IntentJSONLengthSize + 1 + OpTypeLength + HashLength
-
-	if len(data) < minLength {
-		return false
-	}
-
-	if binary.BigEndian.Uint16(data[:OpTypeLength]) != CrossChainMarker {
-		return false
-	}
-
-	intentJSONLength := int(binary.BigEndian.Uint16(data[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
-	expectedMinLength := OpTypeLength + IntentJSONLengthSize + intentJSONLength + 1 + OpTypeLength + HashLength
-
-	if len(data) < expectedMinLength {
-		return false
-	}
-
-	hashListLengthIndex := OpTypeLength + IntentJSONLengthSize + intentJSONLength
-	if len(data) <= hashListLengthIndex {
-		return false
-	}
-
-	hashListLength := int(data[hashListLengthIndex])
-
-	if hashListLength < minHashListLength || (maxHashListLength >= 0 && hashListLength > maxHashListLength) {
-		return false
-	}
-
-	hashListStartIndex := hashListLengthIndex + 1
-
-	for idx := 0; idx < hashListLength; idx++ {
-		if len(data) < hashListStartIndex+OpTypeLength {
-			return false
-		}
-
-		if binary.BigEndian.Uint16(data[hashListStartIndex:hashListStartIndex+OpTypeLength]) != HashPlaceholder {
-			if len(data) < hashListStartIndex+HashLength {
-				return false
-			}
-
-			if !validateOperationHash(data[hashListStartIndex : hashListStartIndex+HashLength]) {
-				return false
-			}
-
-			// Last entry?
-			if idx == hashListLength-1 {
-				return len(data) == hashListStartIndex+HashLength
-			}
-
-			hashListStartIndex += HashLength
-		} else {
-			// Last entry?
-			if idx == hashListLength-1 {
-				return len(data) == hashListStartIndex+OpTypeLength
-			}
-
-			hashListStartIndex += OpTypeLength
-		}
-
-		if len(data) < hashListStartIndex {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (op *UserOperation) isSignatureCrossChain() bool {
-	idx := op.GetSignatureEndIdx()
-	if idx > 0 && idx < len(op.Signature) {
-		xData := op.Signature[idx:]
-		return isCrossChainData(xData, 1, 3)
-	}
-	return false
-}
-
-func (op *UserOperation) isCallDataCrossChain() bool {
-	return isCrossChainData(op.CallData, 2, -1)
-}
-
 func no0xPrefix(value []byte) bool {
 	return len(value) > 1 && (value[0] != '0' || value[1] != 'x')
 }
@@ -406,30 +196,28 @@ func no0xPrefix(value []byte) bool {
 // extractIntentJSON attempts to extract the Intent JSON from either the CallData
 // or Signature field of a UserOperation.
 func (op *UserOperation) extractIntentJSON() (string, bool) {
-	// Try to check if it is a cross chain calldata
-	if op.isCrossChainOperation() {
-		dataBytes := op.CallData
-		intentLength := int(binary.BigEndian.Uint16(dataBytes[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
-		if len(dataBytes) >= OpTypeLength+IntentJSONLengthSize+intentLength {
-			intentJSON := string(dataBytes[OpTypeLength+IntentJSONLengthSize : OpTypeLength+IntentJSONLengthSize+intentLength])
-
-			if intentJSON, ok := ExtractJSONFromField(intentJSON); ok {
-				return intentJSON, true
-			}
-
+	// Try parsing CallData as cross-chain data
+	crossChainData, err := ParseCrossChainData(op.CallData)
+	if err == nil {
+		intentJSON := string(crossChainData.IntentJSON)
+		if _, ok := ExtractJSONFromField(intentJSON); ok {
+			return intentJSON, true
 		}
-		return "", false
-	}
-
-	// Try to extract Intent JSON from CallData field
-	if intentJSON, ok := ExtractJSONFromField(string(op.CallData)); ok {
+	} else if intentJSON, ok := ExtractJSONFromField(string(op.CallData)); ok {
 		return intentJSON, true
 	}
 
+	// Try parsing Signature as cross-chain data
 	signatureEndIndex := op.GetSignatureEndIdx()
 	if op.HasSignature() && signatureEndIndex < len(op.Signature) {
-		jsonData := op.Signature[signatureEndIndex:]
-		if intentJSON, ok := ExtractJSONFromField(string(jsonData)); ok {
+		signatureData := op.Signature[signatureEndIndex:]
+		crossChainData, err := ParseCrossChainData(signatureData)
+		if err == nil {
+			intentJSON := string(crossChainData.IntentJSON)
+			if _, ok := ExtractJSONFromField(intentJSON); ok {
+				return intentJSON, true
+			}
+		} else if intentJSON, ok := ExtractJSONFromField(string(signatureData)); ok {
 			return intentJSON, true
 		}
 	}
@@ -455,97 +243,6 @@ func ExtractJSONFromField(fieldData string) (string, bool) {
 	}
 	return "", false
 }
-
-// setCrossChainIntent sets the Intent JSON for a cross-chain operation
-func (op *UserOperation) setCrossChainIntent(intentJSON string) error {
-	intent, err := op.GetIntent()
-	if err != nil {
-		return err
-	}
-
-	if len(intentJSON) > math.MaxUint16 {
-		return fmt.Errorf("intentJSON length exceeds maximum uint16 value: %d", len(intentJSON))
-	}
-
-	srcChainID, err := ExtractSourceChainID(intent)
-	if err != nil {
-		return err
-	}
-
-	destChainID, err := ExtractDestinationChainID(intent)
-	if err != nil {
-		return err
-	}
-
-	if srcChainID.Cmp(destChainID) == 0 {
-		return ErrCrossChainSameChain
-	}
-
-	crossChainData := make([]byte, OpTypeLength+IntentJSONLengthSize+len(intentJSON))
-	binary.BigEndian.PutUint16(crossChainData[:OpTypeLength], CrossChainMarker)
-	binary.BigEndian.PutUint16(crossChainData[OpTypeLength:OpTypeLength+IntentJSONLengthSize], uint16(len(intentJSON)))
-	copy(crossChainData[OpTypeLength+IntentJSONLengthSize:], []byte(intentJSON))
-
-	// extract existing hash list entries from the op.CallData
-	prevJSON, found := op.extractIntentJSON()
-	if !found {
-		return ErrNoIntentFound
-	}
-	prevIntentJSONLen := len(prevJSON)
-	prevHashListStart := OpTypeLength + IntentJSONLengthSize + prevIntentJSONLen
-	prevHashListBytes := op.CallData[prevHashListStart:]
-
-	// Add hash list entries
-	crossChainData = append(crossChainData, prevHashListBytes...)
-
-	status, err := op.Validate()
-	if err != nil {
-		return err
-	}
-
-	if status == UnsolvedUserOp {
-		op.CallData = crossChainData
-	} else {
-		op.Signature = append(op.GetSignatureValue(), crossChainData...)
-	}
-
-	// validate the insertion of the cross-chain intent JSON
-	newJson, found := op.extractIntentJSON()
-	if !found {
-		return ErrNoIntentFound
-	}
-	if newJson != intentJSON {
-		return fmt.Errorf("failed to set cross-chain intent: %s", newJson)
-	}
-
-	return nil
-}
-
-// IsCrossChainIntent checks if the UserOperation represents a cross-chain intent.
-func (op *UserOperation) IsCrossChainIntent() (bool, error) {
-	intent, err := op.GetIntent()
-	if err != nil {
-		return false, err
-	}
-
-	srcChainID, err := ExtractSourceChainID(intent)
-	if err != nil {
-		return false, err
-	}
-
-	destChainID, err := ExtractDestinationChainID(intent)
-	if err != nil {
-		return false, err
-	}
-
-	if srcChainID.Cmp(destChainID) == 0 {
-		return false, ErrCrossChainSameChain
-	}
-
-	return true, nil
-}
-
-// Additional helper functions (ExtractSourceChainID, ExtractDestinationChainID) should be implemented as needed.
 
 // HasIntent checks if the CallData or signature field contains a valid Intent JSON that
 // decodes successfully into an Intent struct.
@@ -656,21 +353,10 @@ func (op *UserOperation) GetIntent() (*pb.Intent, error) {
 }
 
 // SetIntent sets the Intent JSON in the appropriate field of the UserOperation
-// based on the operation's solution state. The function first validates the
-// Intent JSON.
-// If the userOp CallData field does not contain EVM instructions (indicating an unsolved userOp),
-// the intentJSON is set directly in the CallData field.
-// If the CallData field contains EVM instructions (indicating a solved userOp),
-// the function then checks the length of the Signature field. If the length of
-// the Signature is less than the required signature length an error is returned.
-// If the Signature is of the appropriate length, the intentJSON is appended to
-// the Signature field starting at the SignatureLength index.
+// based on the operation's solution state.
 //
-// Returns:
-// - error: An error is returned if the intentJSON is invalid, if there is no
-// signature in the UserOperation when required, or if any other issue
-// arises during the process. Otherwise, nil is returned indicating
-// successful setting of the intent JSON.
+// If the UserOperation is unsolved, the Intent JSON is set in the CallData field.
+// If the UserOperation is solved, the Intent JSON is appended to the Signature field.
 func (op *UserOperation) SetIntent(intentJSON string) error {
 	if err := protojson.Unmarshal([]byte(intentJSON), new(pb.Intent)); err != nil {
 		return ErrIntentInvalidJSON
@@ -683,7 +369,6 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 	// err could be like no intent json or not a cross chain operation
 	// so safe to ignore here.
 	isCrossChain, _ := op.IsCrossChainIntent()
-
 	if isCrossChain {
 		return op.setCrossChainIntent(intentJSON)
 	}
@@ -695,22 +380,11 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 
 	if status == UnsolvedUserOp {
 		op.CallData = []byte(intentJSON)
-		return nil
+	} else {
+		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
 	}
-
-	op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
 
 	return nil
-}
-
-// sigHasKernelPrefix checks if the provided signature has a Kernel prefix.
-func sigHasKernelPrefix(signature []byte) bool {
-	if len(signature) < KernelSignatureLength {
-		return false
-	}
-
-	kernelPrefix := KernelSignaturePrefixValues[KernelSignaturePrefix(signature[3])]
-	return kernelPrefix != nil && bytes.HasPrefix(signature, kernelPrefix)
 }
 
 // GetSignatureValue retrieves the signature value from a UserOperation.
@@ -748,28 +422,32 @@ func (op *UserOperation) GetSignatureValue() []byte {
 	return nil
 }
 
+// sigHasKernelPrefix checks if the provided signature has a Kernel prefix.
+func sigHasKernelPrefix(signature []byte) bool {
+	if len(signature) < KernelSignatureLength {
+		return false
+	}
+
+	kernelPrefixes := [][]byte{
+		{0, 0, 0, 0},
+		{0, 0, 0, 1},
+		{0, 0, 0, 2},
+	}
+	for _, prefix := range kernelPrefixes {
+		if bytes.HasPrefix(signature, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // SetEVMInstructions sets the EVM instructions in the CallData field of the
-// UserOperation in the byte-level representation.
-// It handles the Intent JSON based on the operation's solution state.
-// The function checks the solved status of the operation:
-// For solved
-// operations, it ensures that the signature has the required length.
-// For unsolved
-// operations, it moves the Intent JSON to the Signature field if present and valid,
-// and then sets the provided EVM instructions in the CallData field.
+// UserOperation.
 //
-// Parameters:
-//   - callDataValueToSet: A hex-encoded or byte-level representation containing the
-//     EVM instructions to be set in the CallData field.
-//
-// Returns:
-//   - error: An error is returned if the operation's status is invalid, if there is no signature
-//     in the UserOperation when required, or if any other issue arises during the process.
-//     Otherwise, nil is returned, indicating successful setting of the EVM instructions in byte-level
-//     representation.
+// If the operation is unsolved, it moves the Intent JSON to the Signature field
+// if present, and then sets the provided EVM instructions in the CallData field.
 func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 	if len(callDataValue) >= 2 && callDataValue[0] == '0' && callDataValue[1] == 'x' {
-		// `Decode` allows using the source as the destination
 		var err error
 		callDataValue, err = hexutil.Decode(string(callDataValue))
 		if err != nil {
@@ -791,20 +469,10 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 		return ErrNoSignatureValue
 	}
 
-	// Check if it's a cross-chain intent
-	switch op.isCrossChainOperation() {
-	case true:
-		// For cross-chain intents, we need to include the whole cross-chain spec in the signature
-		// safe to righfully assert the callData contains the cross-chain spec for unsolved ops
-		crossChainData := op.CallData
-		op.Signature = append(op.GetSignatureValue(), crossChainData...)
-
-	default:
-		// Unsolved operation, move the Intent JSON to the Signature field if it exists.
-		intentJSON, hasIntent := op.extractIntentJSON()
-		if hasIntent {
-			op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
-		}
+	// Move Intent JSON to Signature if necessary
+	intentJSON, hasIntent := op.extractIntentJSON()
+	if hasIntent {
+		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
 	}
 
 	// Assign byte-level representation
@@ -847,24 +515,6 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// temporarily add this here
-	// will be replaced beneath regardless
-	// but this is useful so we can be call
-	// the extractIntentJSON that covers all usecases
-	op.CallData = []byte(aux.CallData)
-
-	// Check if CallData is JSON (indicating Intent); otherwise, decode as hex.
-	if intentJSON, ok := op.extractIntentJSON(); ok {
-		op.CallData = []byte(intentJSON)
-	} else {
-		var err error
-
-		op.CallData, err = hexutil.Decode(aux.CallData)
-		if err != nil {
-			return fmt.Errorf("invalid CallData: %w", err)
-		}
-	}
-
 	op.CallGasLimit, err = hexutil.DecodeBig(aux.CallGasLimit)
 	if err != nil {
 		return err
@@ -900,9 +550,20 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	// Handle CallData (Intent JSON or hex-encoded data)
+	if intentJSON, ok := ExtractJSONFromField(aux.CallData); ok {
+		op.CallData = []byte(intentJSON)
+	} else {
+		op.CallData, err = hexutil.Decode(aux.CallData)
+		if err != nil {
+			return fmt.Errorf("invalid CallData: %w", err)
+		}
+	}
+
 	return nil
 }
 
+// String returns a string representation of the UserOperation.
 func (op *UserOperation) String() string {
 	formatBytes := func(b []byte) string {
 		if len(b) == 0 {
@@ -911,7 +572,6 @@ func (op *UserOperation) String() string {
 		if len(b) >= 2 && b[0] == '0' && b[1] == 'x' {
 			return string(b)
 		}
-
 		return fmt.Sprintf("0x%x", b)
 	}
 
@@ -921,9 +581,9 @@ func (op *UserOperation) String() string {
 		}
 		return fmt.Sprintf("0x%x, %s", b, b.Text(10))
 	}
+
 	formatCallData := func(callDataBytes []byte) string {
 		// Directly return string if it's intended to be JSON (Intent)
-		// Handle cross chain intents and format as JSON
 		if intentJSON, ok := op.extractIntentJSON(); ok {
 			return intentJSON
 		}
@@ -957,68 +617,4 @@ func (op *UserOperation) String() string {
 		formatBytes(op.PaymasterAndData),
 		formatBytes(op.Signature),
 	)
-}
-
-// EncodeCrossChainCallData encodes the call data in the cross-chain format
-func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, otherOpHash common.Hash, isSourceOp bool, intentJSONBytes []byte) ([]byte, error) {
-	if len(intentJSONBytes) > math.MaxUint16 {
-		return nil, fmt.Errorf("callData length exceeds maximum uint16 value: %d", len(intentJSONBytes))
-	}
-
-	intent, err := op.GetIntent()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get intent: %w", err)
-	}
-
-	// Extract source and destination chain IDs
-	sourceChainID, err := ExtractSourceChainID(intent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract source chain ID: %w", err)
-	}
-
-	destChainID, err := ExtractDestinationChainID(intent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract destination chain ID: %w", err)
-	}
-
-	if sourceChainID.Cmp(destChainID) == 0 {
-		return nil, ErrCrossChainSameChain
-	}
-
-	totalLength := OpTypeLength + IntentJSONLengthSize + len(intentJSONBytes) + 1 + OpTypeLength + HashLength
-
-	crossChainCallData := make([]byte, totalLength)
-	offset := 0
-
-	binary.BigEndian.PutUint16(crossChainCallData[offset:], CrossChainMarker)
-	offset += OpTypeLength
-
-	binary.BigEndian.PutUint16(crossChainCallData[offset:], uint16(len(intentJSONBytes)))
-	offset += IntentJSONLengthSize
-
-	copy(crossChainCallData[offset:], intentJSONBytes)
-	offset += len(intentJSONBytes)
-
-	crossChainCallData[offset] = 2 // We're including two hashes
-	offset++
-
-	var thisOpHash common.Hash
-	if isSourceOp {
-		thisOpHash = op.GetUserOpHash(entrypoint, sourceChainID)
-	} else {
-		thisOpHash = op.GetUserOpHash(entrypoint, destChainID)
-	}
-
-	// 2 hash sorting Asc
-	if thisOpHash.Big().Cmp(otherOpHash.Big()) < 0 {
-		binary.BigEndian.PutUint16(crossChainCallData[offset:], HashPlaceholder)
-		offset += OpTypeLength
-		copy(crossChainCallData[offset:], otherOpHash.Bytes())
-	} else {
-		copy(crossChainCallData[offset:], otherOpHash.Bytes())
-		offset += HashLength
-		binary.BigEndian.PutUint16(crossChainCallData[offset:], HashPlaceholder)
-	}
-
-	return crossChainCallData, nil
 }
