@@ -272,21 +272,91 @@ func validateOperationHash(hash []byte) bool {
 
 // isCrossChainOperation checks if the UserOperation is a cross-chain operation
 func (op *UserOperation) isCrossChainOperation() bool {
-	if len(op.CallData) >= OpTypeLength &&
-		binary.BigEndian.Uint16(op.CallData[:OpTypeLength]) == CrossChainMarker {
+	// Check CallData first
+	if op.isCallDataCrossChain() {
 		return true
 	}
 
-	// solved operation has it's cross-chain data in the signature
+	// Check Signature for solved operations
+	return op.isSignatureCrossChain()
+}
+
+func (op *UserOperation) isCallDataCrossChain() bool {
+	minLength := OpTypeLength + CallDataLengthSize + 1 + OpTypeLength + HashLength
+
+	if len(op.CallData) < minLength {
+		return false
+	}
+
+	if binary.BigEndian.Uint16(op.CallData[:OpTypeLength]) != CrossChainMarker {
+		return false
+	}
+
+	intentJSONLength := int(binary.BigEndian.Uint16(op.CallData[OpTypeLength : OpTypeLength+CallDataLengthSize]))
+
+	expectedMinLength := OpTypeLength + CallDataLengthSize + intentJSONLength + 1 + OpTypeLength + HashLength
+
+	if len(op.CallData) < expectedMinLength {
+		return false
+	}
+
+	hashListLengthIndex := OpTypeLength + CallDataLengthSize + intentJSONLength
+	hashListLength := int(op.CallData[hashListLengthIndex])
+
+	if hashListLength < 1 {
+		return false
+	}
+
+	hashListStartIndex := hashListLengthIndex + 1
+	if binary.BigEndian.Uint16(op.CallData[hashListStartIndex:hashListStartIndex+OpTypeLength]) != CrossChainMarker {
+		return false
+	}
+
+	return true
+}
+
+func (op *UserOperation) isSignatureCrossChain() bool {
 	idx := op.GetSignatureEndIdx()
 	if idx > 0 && idx < len(op.Signature) {
 		xData := op.Signature[idx:]
-		if len(xData) >= OpTypeLength &&
-			binary.BigEndian.Uint16(xData[:OpTypeLength]) == CrossChainMarker {
-			return true
-		}
-	}
 
+		if len(xData) < OpTypeLength+CallDataLengthSize+1+OpTypeLength+HashLength {
+			return false
+		}
+
+		if binary.BigEndian.Uint16(xData[:OpTypeLength]) != CrossChainMarker {
+			return false
+		}
+
+		intentJSONLength := int(binary.BigEndian.Uint16(xData[OpTypeLength : OpTypeLength+CallDataLengthSize]))
+		if len(xData) < OpTypeLength+CallDataLengthSize+intentJSONLength+1 {
+			return false
+		}
+
+		hashListLengthIndex := OpTypeLength + CallDataLengthSize + intentJSONLength
+		hashListLength := int(xData[hashListLengthIndex])
+		if hashListLength < 1 || hashListLength > 3 {
+			return false
+		}
+
+		hashListStartIndex := hashListLengthIndex + 1
+		for i := 0; i < hashListLength; i++ {
+			entryStartIndex := hashListStartIndex + i*(OpTypeLength+HashLength)
+			if len(xData) < entryStartIndex+OpTypeLength+HashLength {
+				return false
+			}
+
+			if binary.BigEndian.Uint16(xData[entryStartIndex:entryStartIndex+OpTypeLength]) != CrossChainMarker {
+				return false
+			}
+
+			if len(xData) < entryStartIndex+OpTypeLength+HashLength {
+				return false
+			}
+		}
+
+		return true
+	}
 	return false
 }
 
@@ -846,10 +916,9 @@ func (op *UserOperation) String() string {
 }
 
 // encodeCrossChainCallData encodes the call data in the cross-chain format
-// [2 bytes opType (0xFFFF)] + [2 bytes callDataLength] + [callData] + [1 byte hashListLength] + [Hash List Entries]
-func (op *UserOperation) encodeCrossChainCallData(callData []byte) ([]byte, error) {
-	if len(callData) > math.MaxUint16 {
-		return nil, fmt.Errorf("callData length exceeds maximum uint16 value: %d", len(callData))
+func (op *UserOperation) encodeCrossChainCallData(intentJSONBytes []byte) ([]byte, error) {
+	if len(intentJSONBytes) > math.MaxUint16 {
+		return nil, fmt.Errorf("callData length exceeds maximum uint16 value: %d", len(intentJSONBytes))
 	}
 
 	intent, err := op.GetIntent()
@@ -868,40 +937,35 @@ func (op *UserOperation) encodeCrossChainCallData(callData []byte) ([]byte, erro
 		return nil, fmt.Errorf("failed to extract destination chain ID: %w", err)
 	}
 
-	// Determine the number of operations (2 for source and destination)
-	opCount := 2
+	if sourceChainID.Cmp(destChainID) == 0 {
+		return nil, ErrCrossChainSameChain
+	}
 
-	// Calculate the total length of the cross-chain call data
-	totalLength := OpTypeLength + CallDataLengthSize + len(callData) + HashListLengthSize + (opCount * HashListEntrySize)
+	totalLength := OpTypeLength + CallDataLengthSize + len(intentJSONBytes) + 1 + (2 * (OpTypeLength + HashLength))
 
-	// Create the cross-chain call data buffer
 	crossChainCallData := make([]byte, totalLength)
+	offset := 0
 
-	// Write the cross-chain marker
-	binary.BigEndian.PutUint16(crossChainCallData[:OpTypeLength], CrossChainMarker)
+	binary.BigEndian.PutUint16(crossChainCallData[offset:], CrossChainMarker)
+	offset += OpTypeLength
 
-	// Write the call data length
-	binary.BigEndian.PutUint16(crossChainCallData[OpTypeLength:OpTypeLength+CallDataLengthSize], uint16(len(callData)))
+	binary.BigEndian.PutUint16(crossChainCallData[offset:], uint16(len(intentJSONBytes)))
+	offset += CallDataLengthSize
 
-	// Write the call data
-	copy(crossChainCallData[OpTypeLength+CallDataLengthSize:], callData)
+	copy(crossChainCallData[offset:], intentJSONBytes)
+	offset += len(intentJSONBytes)
 
-	// Write the hash list length
-	crossChainCallData[OpTypeLength+CallDataLengthSize+len(callData)] = byte(opCount)
+	crossChainCallData[offset] = 2 // We're including two hashes
+	offset++
 
-	// Generate and write the hash list entries
-	hashListStart := OpTypeLength + CallDataLengthSize + len(callData) + HashListLengthSize
+	binary.BigEndian.PutUint16(crossChainCallData[offset:], CrossChainMarker)
+	offset += OpTypeLength
+	copy(crossChainCallData[offset:], common.BigToHash(sourceChainID).Bytes())
+	offset += HashLength
 
-	// Source chain entry
-	binary.BigEndian.PutUint16(crossChainCallData[hashListStart:], CrossChainMarker) // Placeholder
-	sourceHash := common.BigToHash(sourceChainID)
-	copy(crossChainCallData[hashListStart+PlaceholderSize:], sourceHash[:])
-
-	// Destination chain entry
-	destEntryStart := hashListStart + HashListEntrySize
-	binary.BigEndian.PutUint16(crossChainCallData[destEntryStart:], CrossChainMarker) // Placeholder
-	destHash := common.BigToHash(destChainID)
-	copy(crossChainCallData[destEntryStart+PlaceholderSize:], destHash[:])
+	binary.BigEndian.PutUint16(crossChainCallData[offset:], CrossChainMarker)
+	offset += OpTypeLength
+	copy(crossChainCallData[offset:], common.BigToHash(destChainID).Bytes())
 
 	return crossChainCallData, nil
 }

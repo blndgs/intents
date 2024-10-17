@@ -1198,19 +1198,19 @@ func TestUserOperation_IsCrossChainIntent(t *testing.T) {
 			}
 
 			encodedCallData, err := op.encodeCrossChainCallData(intentJSON)
+			if tt.expectedError != nil {
+				require.ErrorIs(t, err, tt.expectedError)
+				return
+			}
+
 			require.NoError(t, err)
 
 			op.CallData = encodedCallData
 
 			result, err := op.IsCrossChainIntent()
+			require.NoError(t, err)
 
 			require.Equal(t, tt.expectedResult, result)
-
-			if tt.expectedError != nil {
-				require.ErrorIs(t, err, tt.expectedError)
-			} else {
-				require.NoError(t, err)
-			}
 		})
 	}
 }
@@ -1341,39 +1341,6 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 				return uop
 			},
 			expectedResult: false,
-		},
-		{
-			name: "Unsolved cross-chain operation with same chain IDs",
-			setupUserOp: func() *UserOperation {
-				uop := new(UserOperation)
-				intent := &pb.Intent{
-					From: &pb.Intent_FromAsset{
-						FromAsset: &pb.Asset{
-							ChainId: &pb.BigInt{
-								Value: big.NewInt(1).Bytes(),
-							},
-						},
-					},
-					To: &pb.Intent_ToAsset{
-						ToAsset: &pb.Asset{
-							ChainId: &pb.BigInt{
-								Value: big.NewInt(1).Bytes(),
-							},
-						},
-					},
-				}
-
-				intentJSON, err := protojson.Marshal(intent)
-				require.NoError(t, err)
-
-				uop.CallData = intentJSON
-
-				encodedCallData, err := uop.encodeCrossChainCallData(intentJSON)
-				require.NoError(t, err)
-				uop.CallData = encodedCallData
-				return uop
-			},
-			expectedResult: true,
 		},
 	}
 
