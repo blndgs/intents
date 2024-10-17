@@ -308,11 +308,8 @@ func (op *UserOperation) isCallDataCrossChain() bool {
 	}
 
 	hashListStartIndex := hashListLengthIndex + 1
-	if binary.BigEndian.Uint16(op.CallData[hashListStartIndex:hashListStartIndex+OpTypeLength]) != CrossChainMarker {
-		return false
-	}
 
-	return true
+	return binary.BigEndian.Uint16(op.CallData[hashListStartIndex:hashListStartIndex+OpTypeLength]) == CrossChainMarker
 }
 
 func (op *UserOperation) isSignatureCrossChain() bool {

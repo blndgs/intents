@@ -12,7 +12,7 @@ func ToBigInt(b *protov1.BigInt) (*big.Int, error) {
 	if b == nil {
 		return nil, errors.New("input is nil")
 	}
-	if b.Value == nil || len(b.Value) == 0 {
+	if len(b.Value) == 0 {
 		return nil, errors.New("input byte array cannot be nil or empty")
 	}
 
