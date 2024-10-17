@@ -28,21 +28,26 @@ import (
 
 // constants for cross-chain operations
 const (
-	CrossChainMarker   uint16 = 0xFFFF
-	OpTypeLength              = 2
-	CallDataLengthSize        = 2
-	HashLength                = 32
-	HashListLengthSize        = 1
-	MinOpCount                = 2
-	MaxOpCount                = 3
-	PlaceholderSize           = 2
-	OperationHashSize         = 32
-	HashListEntrySize         = PlaceholderSize + OperationHashSize
+	CrossChainMarker     uint16 = 0xFFFF
+	HashPlaceholder      uint16 = 0xFFFF // 0xFFFF is a placeholder for the userOp hash that will be computed during validation
+	OpTypeLength                = 2
+	IntentJSONLengthSize        = 2
+	HashLength                  = 32
+	HashListLengthSize          = 1
+	MinOpCount                  = 2
+	MaxOpCount                  = 3
+	PlaceholderSize             = 2
+	OperationHashSize           = 32
+	HashListEntrySize           = PlaceholderSize + OperationHashSize
 )
 
 var (
+	EntrypointV06 = common.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
+
 	ErrInvalidHashListLength = errors.New("invalid hash list length")
 	ErrInvalidHashListEntry  = errors.New("invalid hash list entry")
+	ErrPlaceholderNotFound   = errors.New("invalid hash list with missing placeholder")
+	ErrHashListInvalidValue  = errors.New("invalid hash list hash value")
 	ErrMissingCrossChainData = errors.New("missing cross-chain data")
 	ErrCrossChainSameChain   = errors.New("destination and source chain cannot be the same")
 )
@@ -196,51 +201,64 @@ func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 	dataBytes := op.CallData
 
-	if len(dataBytes) < OpTypeLength+CallDataLengthSize {
+	if len(dataBytes) < OpTypeLength+IntentJSONLengthSize {
 		return UnknownUserOp, ErrMissingCrossChainData
 	}
 
-	intentLength := int(binary.BigEndian.Uint16(dataBytes[OpTypeLength : OpTypeLength+CallDataLengthSize]))
-	expectedLength := OpTypeLength + CallDataLengthSize + intentLength + HashListLengthSize
+	intentLength := int(binary.BigEndian.Uint16(dataBytes[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
+	expectedLength := OpTypeLength + IntentJSONLengthSize + intentLength + HashListLengthSize
 
 	if len(dataBytes) < expectedLength {
 		return UnknownUserOp, ErrMissingCrossChainData
 	}
 
-	if len(dataBytes) < expectedLength+HashListLengthSize {
-		return UnknownUserOp, ErrMissingCrossChainData
-	}
-
-	hashListLength := int(dataBytes[OpTypeLength+CallDataLengthSize+intentLength])
+	hashListLength := int(dataBytes[OpTypeLength+IntentJSONLengthSize+intentLength])
 	if hashListLength < MinOpCount || hashListLength > MaxOpCount {
 		return UnknownUserOp, ErrInvalidHashListLength
 	}
 
-	expectedLength += hashListLength * HashListEntrySize
+	//expectedLength = OpTypeLength + IntentJSONLengthSize + intentLength + HashListLengthSize + OpTypeLength + HashLength*(hashListLength-1)
+	expectedLength += OpTypeLength + HashLength*(hashListLength-1)
 
 	if len(dataBytes) != expectedLength {
 		return UnknownUserOp, ErrInvalidHashListEntry
 	}
 
 	// Validate hash list entries
-	hashListStart := OpTypeLength + CallDataLengthSize + intentLength + HashListLengthSize
+	hashListStart := OpTypeLength + IntentJSONLengthSize + intentLength + HashListLengthSize
+	var foundPlaceHolder uint
 	for i := 0; i < hashListLength; i++ {
-		entryStart := hashListStart + i*HashListEntrySize
-
-		if len(dataBytes) < entryStart+HashListEntrySize {
+		// enough bytes for the placeholder?
+		if len(dataBytes) < hashListStart+OpTypeLength {
 			return UnknownUserOp, ErrInvalidHashListEntry
 		}
 
 		// Validate placeholder
-		placeholder := binary.BigEndian.Uint16(dataBytes[entryStart : entryStart+PlaceholderSize])
-		if placeholder != CrossChainMarker {
-			return UnknownUserOp, ErrInvalidHashListEntry
+		placeholder := binary.BigEndian.Uint16(dataBytes[hashListStart : hashListStart+PlaceholderSize])
+		if placeholder != HashPlaceholder {
+			// enough bytes for the hash?
+			if len(dataBytes) < hashListStart+HashLength {
+				return UnknownUserOp, ErrInvalidHashListEntry
+			}
+
+			// Validate operation hash
+			operationHash := dataBytes[hashListStart : hashListStart+HashLength]
+			if !validateOperationHash(operationHash) {
+				return UnknownUserOp, ErrHashListInvalidValue
+			}
+
+			hashListStart += HashLength
+		} else {
+			if foundPlaceHolder > 0 {
+				return UnknownUserOp, ErrInvalidHashListEntry
+			}
+
+			foundPlaceHolder++
+			hashListStart += PlaceholderSize
 		}
 
-		// Validate operation hash
-		operationHash := dataBytes[entryStart+PlaceholderSize : entryStart+HashListEntrySize]
-		if !validateOperationHash(operationHash) {
-			return UnknownUserOp, ErrInvalidHashListEntry
+		if i == hashListLength-1 && foundPlaceHolder != 1 {
+			return UnknownUserOp, ErrPlaceholderNotFound
 		}
 	}
 
@@ -282,7 +300,7 @@ func (op *UserOperation) isCrossChainOperation() bool {
 }
 
 func (op *UserOperation) isCallDataCrossChain() bool {
-	minLength := OpTypeLength + CallDataLengthSize + 1 + OpTypeLength + HashLength
+	minLength := OpTypeLength + IntentJSONLengthSize + 1 + OpTypeLength + HashLength
 
 	if len(op.CallData) < minLength {
 		return false
@@ -292,24 +310,59 @@ func (op *UserOperation) isCallDataCrossChain() bool {
 		return false
 	}
 
-	intentJSONLength := int(binary.BigEndian.Uint16(op.CallData[OpTypeLength : OpTypeLength+CallDataLengthSize]))
+	intentJSONLength := int(binary.BigEndian.Uint16(op.CallData[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
 
-	expectedMinLength := OpTypeLength + CallDataLengthSize + intentJSONLength + 1 + OpTypeLength + HashLength
+	expectedMinLength := OpTypeLength + IntentJSONLengthSize + intentJSONLength + 1 + OpTypeLength + HashLength
 
 	if len(op.CallData) < expectedMinLength {
 		return false
 	}
 
-	hashListLengthIndex := OpTypeLength + CallDataLengthSize + intentJSONLength
+	hashListLengthIndex := OpTypeLength + IntentJSONLengthSize + intentJSONLength
 	hashListLength := int(op.CallData[hashListLengthIndex])
 
-	if hashListLength < 1 {
+	if hashListLength < 2 {
 		return false
 	}
 
 	hashListStartIndex := hashListLengthIndex + 1
 
-	return binary.BigEndian.Uint16(op.CallData[hashListStartIndex:hashListStartIndex+OpTypeLength]) == CrossChainMarker
+	for idx := 0; idx < hashListLength; idx++ {
+		if len(op.CallData) < hashListStartIndex+OpTypeLength {
+			return false
+		}
+
+		if binary.BigEndian.Uint16(op.CallData[hashListStartIndex:hashListStartIndex+OpTypeLength]) != HashPlaceholder {
+			if len(op.CallData) < hashListStartIndex+HashLength {
+				return false
+			}
+
+			if !validateOperationHash(op.CallData[hashListStartIndex : hashListStartIndex+HashLength]) {
+				return false
+			}
+
+			// last entry?
+			if idx == hashListLength-1 {
+				return len(op.CallData) == hashListStartIndex+HashLength
+			}
+
+			hashListStartIndex += HashLength
+		} else {
+
+			// last entry?
+			if idx == hashListLength-1 {
+				return len(op.CallData) == hashListStartIndex+OpTypeLength
+			}
+
+			hashListStartIndex += OpTypeLength
+		}
+
+		if len(op.CallData) < hashListStartIndex {
+			return false
+		}
+	}
+
+	return false
 }
 
 func (op *UserOperation) isSignatureCrossChain() bool {
@@ -317,7 +370,7 @@ func (op *UserOperation) isSignatureCrossChain() bool {
 	if idx > 0 && idx < len(op.Signature) {
 		xData := op.Signature[idx:]
 
-		if len(xData) < OpTypeLength+CallDataLengthSize+1+OpTypeLength+HashLength {
+		if len(xData) < OpTypeLength+IntentJSONLengthSize+1+OpTypeLength+HashLength {
 			return false
 		}
 
@@ -325,29 +378,49 @@ func (op *UserOperation) isSignatureCrossChain() bool {
 			return false
 		}
 
-		intentJSONLength := int(binary.BigEndian.Uint16(xData[OpTypeLength : OpTypeLength+CallDataLengthSize]))
-		if len(xData) < OpTypeLength+CallDataLengthSize+intentJSONLength+1 {
+		intentJSONLength := int(binary.BigEndian.Uint16(xData[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
+		if len(xData) < OpTypeLength+IntentJSONLengthSize+intentJSONLength+1 {
 			return false
 		}
 
-		hashListLengthIndex := OpTypeLength + CallDataLengthSize + intentJSONLength
+		hashListLengthIndex := OpTypeLength + IntentJSONLengthSize + intentJSONLength
 		hashListLength := int(xData[hashListLengthIndex])
 		if hashListLength < 1 || hashListLength > 3 {
 			return false
 		}
 
 		hashListStartIndex := hashListLengthIndex + 1
-		for i := 0; i < hashListLength; i++ {
-			entryStartIndex := hashListStartIndex + i*(OpTypeLength+HashLength)
-			if len(xData) < entryStartIndex+OpTypeLength+HashLength {
+		for idx := 0; idx < hashListLength; idx++ {
+			if len(xData) < hashListStartIndex+OpTypeLength {
 				return false
 			}
 
-			if binary.BigEndian.Uint16(xData[entryStartIndex:entryStartIndex+OpTypeLength]) != CrossChainMarker {
-				return false
+			if binary.BigEndian.Uint16(xData[hashListStartIndex:hashListStartIndex+OpTypeLength]) != HashPlaceholder {
+				if len(xData) < hashListStartIndex+HashLength {
+					return false
+				}
+
+				if !validateOperationHash(xData[hashListStartIndex : hashListStartIndex+HashLength]) {
+					return false
+				}
+
+				// last entry?
+				if idx == hashListLength-1 {
+					return len(xData) == hashListStartIndex+HashLength
+				}
+
+				hashListStartIndex += HashLength
+			} else {
+
+				// last entry?
+				if idx == hashListLength-1 {
+					return len(xData) == hashListStartIndex+OpTypeLength
+				}
+
+				hashListStartIndex += OpTypeLength
 			}
 
-			if len(xData) < entryStartIndex+OpTypeLength+HashLength {
+			if len(xData) < hashListStartIndex {
 				return false
 			}
 		}
@@ -386,9 +459,9 @@ func (op *UserOperation) extractIntentJSON() (string, bool) {
 	// Try to check if it is a cross chain calldata
 	if op.isCrossChainOperation() {
 		dataBytes := op.CallData
-		intentLength := int(binary.BigEndian.Uint16(dataBytes[OpTypeLength : OpTypeLength+CallDataLengthSize]))
-		if len(dataBytes) >= OpTypeLength+CallDataLengthSize+intentLength {
-			intentJSON := string(dataBytes[OpTypeLength+CallDataLengthSize : OpTypeLength+CallDataLengthSize+intentLength])
+		intentLength := int(binary.BigEndian.Uint16(dataBytes[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
+		if len(dataBytes) >= OpTypeLength+IntentJSONLengthSize+intentLength {
+			intentJSON := string(dataBytes[OpTypeLength+IntentJSONLengthSize : OpTypeLength+IntentJSONLengthSize+intentLength])
 
 			if intentJSON, ok := ExtractJSONFromField(intentJSON); ok {
 				return intentJSON, true
@@ -458,19 +531,43 @@ func (op *UserOperation) setCrossChainIntent(intentJSON string) error {
 		return ErrCrossChainSameChain
 	}
 
-	crossChainData := make([]byte, OpTypeLength+CallDataLengthSize+len(intentJSON)+HashListLengthSize)
+	crossChainData := make([]byte, OpTypeLength+IntentJSONLengthSize+len(intentJSON))
 	binary.BigEndian.PutUint16(crossChainData[:OpTypeLength], CrossChainMarker)
-	binary.BigEndian.PutUint16(crossChainData[OpTypeLength:OpTypeLength+CallDataLengthSize], uint16(len(intentJSON)))
-	copy(crossChainData[OpTypeLength+CallDataLengthSize:], []byte(intentJSON))
-	crossChainData[OpTypeLength+CallDataLengthSize+len(intentJSON)] = 2 // Hash list length
+	binary.BigEndian.PutUint16(crossChainData[OpTypeLength:OpTypeLength+IntentJSONLengthSize], uint16(len(intentJSON)))
+	copy(crossChainData[OpTypeLength+IntentJSONLengthSize:], []byte(intentJSON))
+
+	// extract existing hash list entries from the op.CallData
+	prevJSON, found := op.extractIntentJSON()
+	if !found {
+		return ErrNoIntentFound
+	}
+	prevIntentJSONLen := len(prevJSON)
+	prevHashListStart := OpTypeLength + IntentJSONLengthSize + prevIntentJSONLen
+	prevHashListBytes := op.CallData[prevHashListStart:]
 
 	// Add hash list entries
-	crossChainData = append(crossChainData, []byte{0xFF, 0xFF}...)
-	crossChainData = append(crossChainData, common.BigToHash(srcChainID).Bytes()...)
-	crossChainData = append(crossChainData, []byte{0xFF, 0xFF}...)
-	crossChainData = append(crossChainData, common.BigToHash(destChainID).Bytes()...)
+	crossChainData = append(crossChainData, prevHashListBytes...)
 
-	op.CallData = crossChainData
+	status, err := op.Validate()
+	if err != nil {
+		return err
+	}
+
+	if status == UnsolvedUserOp {
+		op.CallData = crossChainData
+	} else {
+		op.Signature = append(op.GetSignatureValue(), crossChainData...)
+	}
+
+	// validate the insertion of the cross-chain intent JSON
+	newJson, found := op.extractIntentJSON()
+	if !found {
+		return ErrNoIntentFound
+	}
+	if newJson != intentJSON {
+		return fmt.Errorf("failed to set cross-chain intent: %s", newJson)
+	}
+
 	return nil
 }
 
@@ -912,8 +1009,8 @@ func (op *UserOperation) String() string {
 	)
 }
 
-// encodeCrossChainCallData encodes the call data in the cross-chain format
-func (op *UserOperation) encodeCrossChainCallData(intentJSONBytes []byte) ([]byte, error) {
+// EncodeCrossChainCallData encodes the call data in the cross-chain format
+func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, otherOpHash common.Hash, isSourceOp bool, intentJSONBytes []byte) ([]byte, error) {
 	if len(intentJSONBytes) > math.MaxUint16 {
 		return nil, fmt.Errorf("callData length exceeds maximum uint16 value: %d", len(intentJSONBytes))
 	}
@@ -938,7 +1035,7 @@ func (op *UserOperation) encodeCrossChainCallData(intentJSONBytes []byte) ([]byt
 		return nil, ErrCrossChainSameChain
 	}
 
-	totalLength := OpTypeLength + CallDataLengthSize + len(intentJSONBytes) + 1 + (2 * (OpTypeLength + HashLength))
+	totalLength := OpTypeLength + IntentJSONLengthSize + len(intentJSONBytes) + 1 + OpTypeLength + HashLength
 
 	crossChainCallData := make([]byte, totalLength)
 	offset := 0
@@ -947,7 +1044,7 @@ func (op *UserOperation) encodeCrossChainCallData(intentJSONBytes []byte) ([]byt
 	offset += OpTypeLength
 
 	binary.BigEndian.PutUint16(crossChainCallData[offset:], uint16(len(intentJSONBytes)))
-	offset += CallDataLengthSize
+	offset += IntentJSONLengthSize
 
 	copy(crossChainCallData[offset:], intentJSONBytes)
 	offset += len(intentJSONBytes)
@@ -955,14 +1052,23 @@ func (op *UserOperation) encodeCrossChainCallData(intentJSONBytes []byte) ([]byt
 	crossChainCallData[offset] = 2 // We're including two hashes
 	offset++
 
-	binary.BigEndian.PutUint16(crossChainCallData[offset:], CrossChainMarker)
-	offset += OpTypeLength
-	copy(crossChainCallData[offset:], common.BigToHash(sourceChainID).Bytes())
-	offset += HashLength
+	var thisOpHash common.Hash
+	if isSourceOp {
+		thisOpHash = op.GetUserOpHash(entrypoint, sourceChainID)
+	} else {
+		thisOpHash = op.GetUserOpHash(entrypoint, destChainID)
+	}
 
-	binary.BigEndian.PutUint16(crossChainCallData[offset:], CrossChainMarker)
-	offset += OpTypeLength
-	copy(crossChainCallData[offset:], common.BigToHash(destChainID).Bytes())
+	// 2 hash sorting Asc
+	if thisOpHash.Big().Cmp(otherOpHash.Big()) < 0 {
+		binary.BigEndian.PutUint16(crossChainCallData[offset:], HashPlaceholder)
+		offset += OpTypeLength
+		copy(crossChainCallData[offset:], otherOpHash.Bytes())
+	} else {
+		copy(crossChainCallData[offset:], otherOpHash.Bytes())
+		offset += HashLength
+		binary.BigEndian.PutUint16(crossChainCallData[offset:], HashPlaceholder)
+	}
 
 	return crossChainCallData, nil
 }
