@@ -299,135 +299,85 @@ func (op *UserOperation) isCrossChainOperation() bool {
 	return op.isSignatureCrossChain()
 }
 
-func (op *UserOperation) isCallDataCrossChain() bool {
+func isCrossChainData(data []byte, minHashListLength int, maxHashListLength int) bool {
 	minLength := OpTypeLength + IntentJSONLengthSize + 1 + OpTypeLength + HashLength
 
-	if len(op.CallData) < minLength {
+	if len(data) < minLength {
 		return false
 	}
 
-	if binary.BigEndian.Uint16(op.CallData[:OpTypeLength]) != CrossChainMarker {
+	if binary.BigEndian.Uint16(data[:OpTypeLength]) != CrossChainMarker {
 		return false
 	}
 
-	intentJSONLength := int(binary.BigEndian.Uint16(op.CallData[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
-
+	intentJSONLength := int(binary.BigEndian.Uint16(data[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
 	expectedMinLength := OpTypeLength + IntentJSONLengthSize + intentJSONLength + 1 + OpTypeLength + HashLength
 
-	if len(op.CallData) < expectedMinLength {
+	if len(data) < expectedMinLength {
 		return false
 	}
 
 	hashListLengthIndex := OpTypeLength + IntentJSONLengthSize + intentJSONLength
-	hashListLength := int(op.CallData[hashListLengthIndex])
+	if len(data) <= hashListLengthIndex {
+		return false
+	}
 
-	if hashListLength < 2 {
+	hashListLength := int(data[hashListLengthIndex])
+
+	if hashListLength < minHashListLength || (maxHashListLength >= 0 && hashListLength > maxHashListLength) {
 		return false
 	}
 
 	hashListStartIndex := hashListLengthIndex + 1
 
 	for idx := 0; idx < hashListLength; idx++ {
-		if len(op.CallData) < hashListStartIndex+OpTypeLength {
+		if len(data) < hashListStartIndex+OpTypeLength {
 			return false
 		}
 
-		if binary.BigEndian.Uint16(op.CallData[hashListStartIndex:hashListStartIndex+OpTypeLength]) != HashPlaceholder {
-			if len(op.CallData) < hashListStartIndex+HashLength {
+		if binary.BigEndian.Uint16(data[hashListStartIndex:hashListStartIndex+OpTypeLength]) != HashPlaceholder {
+			if len(data) < hashListStartIndex+HashLength {
 				return false
 			}
 
-			if !validateOperationHash(op.CallData[hashListStartIndex : hashListStartIndex+HashLength]) {
+			if !validateOperationHash(data[hashListStartIndex : hashListStartIndex+HashLength]) {
 				return false
 			}
 
-			// last entry?
+			// Last entry?
 			if idx == hashListLength-1 {
-				return len(op.CallData) == hashListStartIndex+HashLength
+				return len(data) == hashListStartIndex+HashLength
 			}
 
 			hashListStartIndex += HashLength
 		} else {
-
-			// last entry?
+			// Last entry?
 			if idx == hashListLength-1 {
-				return len(op.CallData) == hashListStartIndex+OpTypeLength
+				return len(data) == hashListStartIndex+OpTypeLength
 			}
 
 			hashListStartIndex += OpTypeLength
 		}
 
-		if len(op.CallData) < hashListStartIndex {
+		if len(data) < hashListStartIndex {
 			return false
 		}
 	}
 
-	return false
+	return true
 }
 
 func (op *UserOperation) isSignatureCrossChain() bool {
 	idx := op.GetSignatureEndIdx()
 	if idx > 0 && idx < len(op.Signature) {
 		xData := op.Signature[idx:]
-
-		if len(xData) < OpTypeLength+IntentJSONLengthSize+1+OpTypeLength+HashLength {
-			return false
-		}
-
-		if binary.BigEndian.Uint16(xData[:OpTypeLength]) != CrossChainMarker {
-			return false
-		}
-
-		intentJSONLength := int(binary.BigEndian.Uint16(xData[OpTypeLength : OpTypeLength+IntentJSONLengthSize]))
-		if len(xData) < OpTypeLength+IntentJSONLengthSize+intentJSONLength+1 {
-			return false
-		}
-
-		hashListLengthIndex := OpTypeLength + IntentJSONLengthSize + intentJSONLength
-		hashListLength := int(xData[hashListLengthIndex])
-		if hashListLength < 1 || hashListLength > 3 {
-			return false
-		}
-
-		hashListStartIndex := hashListLengthIndex + 1
-		for idx := 0; idx < hashListLength; idx++ {
-			if len(xData) < hashListStartIndex+OpTypeLength {
-				return false
-			}
-
-			if binary.BigEndian.Uint16(xData[hashListStartIndex:hashListStartIndex+OpTypeLength]) != HashPlaceholder {
-				if len(xData) < hashListStartIndex+HashLength {
-					return false
-				}
-
-				if !validateOperationHash(xData[hashListStartIndex : hashListStartIndex+HashLength]) {
-					return false
-				}
-
-				// last entry?
-				if idx == hashListLength-1 {
-					return len(xData) == hashListStartIndex+HashLength
-				}
-
-				hashListStartIndex += HashLength
-			} else {
-
-				// last entry?
-				if idx == hashListLength-1 {
-					return len(xData) == hashListStartIndex+OpTypeLength
-				}
-
-				hashListStartIndex += OpTypeLength
-			}
-
-			if len(xData) < hashListStartIndex {
-				return false
-			}
-		}
-
-		return true
+		return isCrossChainData(xData, 1, 3)
 	}
 	return false
+}
+
+func (op *UserOperation) isCallDataCrossChain() bool {
+	return isCrossChainData(op.CallData, 2, -1)
 }
 
 func no0xPrefix(value []byte) bool {
