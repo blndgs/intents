@@ -23,6 +23,8 @@ import (
 	pb "github.com/blndgs/model/gen/go/proto/v1"
 )
 
+var EntrypointV06 = common.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
+
 // BodyOfUserOps represents the request body for HTTP requests sent to the Solver.
 // It contains slices of UserOperation and UserOperationExt, representing the primary
 // data and its extended information required for processing by the Solver.
@@ -95,14 +97,16 @@ func (e userOperationError) Error() string {
 
 // Define error constants
 const (
-	ErrNoIntentFound     userOperationError = "no Intent found"
-	ErrIntentInvalidJSON userOperationError = "invalid Intent JSON"
-	ErrNoSignatureValue  userOperationError = "signature value is not found"
-	ErrNoCallData        userOperationError = "no CallData found"
-	ErrInvalidCallData   userOperationError = "invalid hex-encoded CallData"
-	ErrInvalidSignature  userOperationError = "invalid hex-encoded signature"
-	ErrInvalidUserOp     userOperationError = "ambiguous UserOperation solved state"
-	ErrDoubleIntentDef   userOperationError = "intent JSON is set in both calldata and signature fields"
+	ErrNoIntentFound         userOperationError = "no Intent found"
+	ErrIntentInvalidJSON     userOperationError = "invalid Intent JSON"
+	ErrNoSignatureValue      userOperationError = "signature value is not found"
+	ErrNoCallData            userOperationError = "no CallData found"
+	ErrInvalidCallData       userOperationError = "invalid hex-encoded CallData"
+	ErrInvalidSignature      userOperationError = "invalid hex-encoded signature"
+	ErrInvalidUserOp         userOperationError = "ambiguous UserOperation solved state"
+	ErrDoubleIntentDef       userOperationError = "intent JSON is set in both calldata and signature fields"
+	ErrUnsupportedIntentType userOperationError = "unsupported intent type"
+	ErrInvalidChainID        userOperationError = "invalid chain ID"
 )
 
 type KernelSignaturePrefix int
@@ -132,6 +136,11 @@ const (
 //   - userOpSolvedStatus: The solved status of the UserOperation.
 //   - error: An error if there's an issue with the operation's state, contents.
 func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
+	// Check for cross-chain operation
+	if op.IsCrossChainOperation() {
+		return op.validateCrossChainOp()
+	}
+
 	// Conventional userOp? empty CallData without signature value.
 	if len(op.CallData) == 0 && (len(op.Signature) == 0 || op.HasSignatureExact()) {
 		return ConventionalUserOp, nil
@@ -171,20 +180,44 @@ func no0xPrefix(value []byte) bool {
 // the Signature field. The Intent JSON is expected to be appended to the
 // signature value within the Signature field. The signature has a fixed length
 // of 132 characters with '0x' prefix.
+// It also takes into account cross-chain calldata specific format which is
+// prioritized and is in the following format:
+//
+// [2 bytes opType (0xFFFF)]
+// [2 bytes length of intent JSON]
+// [Intent JSON]
+// [1 byte hash list length (N)]
+// [Hash List Entry]
 //
 // Returns:
 //   - string: The extracted JSON string.
 //   - bool: A boolean indicating if a valid JSON was found.
+//
+// extractIntentJSON attempts to extract the Intent JSON from either the CallData
+// or Signature field of a UserOperation.
 func (op *UserOperation) extractIntentJSON() (string, bool) {
-	// Try to extract Intent JSON from CallData field
-	if intentJSON, ok := ExtractJSONFromField(string(op.CallData)); ok {
+	// Try parsing CallData as cross-chain data
+	crossChainData, err := ParseCrossChainData(op.CallData)
+	if err == nil {
+		intentJSON := string(crossChainData.IntentJSON)
+		if _, ok := ExtractJSONFromField(intentJSON); ok {
+			return intentJSON, true
+		}
+	} else if intentJSON, ok := ExtractJSONFromField(string(op.CallData)); ok {
 		return intentJSON, true
 	}
 
+	// Try parsing Signature as cross-chain data
 	signatureEndIndex := op.GetSignatureEndIdx()
 	if op.HasSignature() && signatureEndIndex < len(op.Signature) {
-		jsonData := op.Signature[signatureEndIndex:]
-		if intentJSON, ok := ExtractJSONFromField(string(jsonData)); ok {
+		signatureData := op.Signature[signatureEndIndex:]
+		crossChainData, err := ParseCrossChainData(signatureData)
+		if err == nil {
+			intentJSON := string(crossChainData.IntentJSON)
+			if _, ok := ExtractJSONFromField(intentJSON); ok {
+				return intentJSON, true
+			}
+		} else if intentJSON, ok := ExtractJSONFromField(string(signatureData)); ok {
 			return intentJSON, true
 		}
 	}
@@ -320,24 +353,24 @@ func (op *UserOperation) GetIntent() (*pb.Intent, error) {
 }
 
 // SetIntent sets the Intent JSON in the appropriate field of the UserOperation
-// based on the operation's solution state. The function first validates the
-// Intent JSON.
-// If the userOp CallData field does not contain EVM instructions (indicating an unsolved userOp),
-// the intentJSON is set directly in the CallData field.
-// If the CallData field contains EVM instructions (indicating a solved userOp),
-// the function then checks the length of the Signature field. If the length of
-// the Signature is less than the required signature length an error is returned.
-// If the Signature is of the appropriate length, the intentJSON is appended to
-// the Signature field starting at the SignatureLength index.
+// based on the operation's solution state.
 //
-// Returns:
-// - error: An error is returned if the intentJSON is invalid, if there is no
-// signature in the UserOperation when required, or if any other issue
-// arises during the process. Otherwise, nil is returned indicating
-// successful setting of the intent JSON.
+// If the UserOperation is unsolved, the Intent JSON is set in the CallData field.
+// If the UserOperation is solved, the Intent JSON is appended to the Signature field.
 func (op *UserOperation) SetIntent(intentJSON string) error {
 	if err := protojson.Unmarshal([]byte(intentJSON), new(pb.Intent)); err != nil {
 		return ErrIntentInvalidJSON
+	}
+
+	// These errors while useful do not really matter here in this context
+	// since we rely  on the isCrossChain variable to determine if to set
+	// the cross chain item
+	//
+	// err could be like no intent json or not a cross chain operation
+	// so safe to ignore here.
+	isCrossChain, _ := op.IsCrossChainIntent()
+	if isCrossChain {
+		return op.setCrossChainIntent(intentJSON)
 	}
 
 	status, err := op.Validate()
@@ -347,22 +380,11 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 
 	if status == UnsolvedUserOp {
 		op.CallData = []byte(intentJSON)
-		return nil
+	} else {
+		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
 	}
-
-	op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
 
 	return nil
-}
-
-// sigHasKernelPrefix checks if the provided signature has a Kernel prefix.
-func sigHasKernelPrefix(signature []byte) bool {
-	if len(signature) < KernelSignatureLength {
-		return false
-	}
-
-	kernelPrefix := KernelSignaturePrefixValues[KernelSignaturePrefix(signature[3])]
-	return kernelPrefix != nil && bytes.HasPrefix(signature, kernelPrefix)
 }
 
 // GetSignatureValue retrieves the signature value from a UserOperation.
@@ -400,28 +422,32 @@ func (op *UserOperation) GetSignatureValue() []byte {
 	return nil
 }
 
+// sigHasKernelPrefix checks if the provided signature has a Kernel prefix.
+func sigHasKernelPrefix(signature []byte) bool {
+	if len(signature) < KernelSignatureLength {
+		return false
+	}
+
+	kernelPrefixes := [][]byte{
+		{0, 0, 0, 0},
+		{0, 0, 0, 1},
+		{0, 0, 0, 2},
+	}
+	for _, prefix := range kernelPrefixes {
+		if bytes.HasPrefix(signature, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // SetEVMInstructions sets the EVM instructions in the CallData field of the
-// UserOperation in the byte-level representation.
-// It handles the Intent JSON based on the operation's solution state.
-// The function checks the solved status of the operation:
-// For solved
-// operations, it ensures that the signature has the required length.
-// For unsolved
-// operations, it moves the Intent JSON to the Signature field if present and valid,
-// and then sets the provided EVM instructions in the CallData field.
+// UserOperation.
 //
-// Parameters:
-//   - callDataValueToSet: A hex-encoded or byte-level representation containing the
-//     EVM instructions to be set in the CallData field.
-//
-// Returns:
-//   - error: An error is returned if the operation's status is invalid, if there is no signature
-//     in the UserOperation when required, or if any other issue arises during the process.
-//     Otherwise, nil is returned, indicating successful setting of the EVM instructions in byte-level
-//     representation.
+// If the operation is unsolved, it moves the Intent JSON to the Signature field
+// if present, and then sets the provided EVM instructions in the CallData field.
 func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 	if len(callDataValue) >= 2 && callDataValue[0] == '0' && callDataValue[1] == 'x' {
-		// `Decode` allows using the source as the destination
 		var err error
 		callDataValue, err = hexutil.Decode(string(callDataValue))
 		if err != nil {
@@ -439,16 +465,14 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 		return nil
 	}
 
-	// Unsolved operation, move the Intent JSON to the Signature field if it exists.
+	if !op.HasSignature() {
+		return ErrNoSignatureValue
+	}
+
+	// Move Intent JSON to Signature if necessary
 	intentJSON, hasIntent := op.extractIntentJSON()
 	if hasIntent {
-		if !op.HasSignature() {
-			// Need a signed userOp to append the Intent JSON to the signature value.
-			return ErrNoSignatureValue
-		}
-
 		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
-		// Clear the Intent JSON from CallData as it's now moved to Signature.
 	}
 
 	// Assign byte-level representation
@@ -491,18 +515,6 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Check if CallData is JSON (indicating Intent); otherwise, decode as hex.
-	if intentJSON, ok := ExtractJSONFromField(aux.CallData); ok {
-		op.CallData = []byte(intentJSON)
-	} else {
-		var err error
-
-		op.CallData, err = hexutil.Decode(aux.CallData)
-		if err != nil {
-			return fmt.Errorf("invalid CallData: %w", err)
-		}
-	}
-
 	op.CallGasLimit, err = hexutil.DecodeBig(aux.CallGasLimit)
 	if err != nil {
 		return err
@@ -538,9 +550,20 @@ func (op *UserOperation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	// Handle CallData (Intent JSON or hex-encoded data)
+	if intentJSON, ok := ExtractJSONFromField(aux.CallData); ok {
+		op.CallData = []byte(intentJSON)
+	} else {
+		op.CallData, err = hexutil.Decode(aux.CallData)
+		if err != nil {
+			return fmt.Errorf("invalid CallData: %w", err)
+		}
+	}
+
 	return nil
 }
 
+// String returns a string representation of the UserOperation.
 func (op *UserOperation) String() string {
 	formatBytes := func(b []byte) string {
 		if len(b) == 0 {
@@ -549,7 +572,6 @@ func (op *UserOperation) String() string {
 		if len(b) >= 2 && b[0] == '0' && b[1] == 'x' {
 			return string(b)
 		}
-
 		return fmt.Sprintf("0x%x", b)
 	}
 
@@ -559,10 +581,11 @@ func (op *UserOperation) String() string {
 		}
 		return fmt.Sprintf("0x%x, %s", b, b.Text(10))
 	}
+
 	formatCallData := func(callDataBytes []byte) string {
 		// Directly return string if it's intended to be JSON (Intent)
-		if _, ok := ExtractJSONFromField(string(callDataBytes)); ok {
-			return string(callDataBytes)
+		if intentJSON, ok := op.extractIntentJSON(); ok {
+			return intentJSON
 		}
 		// Otherwise, encode as hex
 		return formatBytes(callDataBytes)
