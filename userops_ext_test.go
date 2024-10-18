@@ -1362,7 +1362,7 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			op := tt.setupUserOp()
 
-			result := op.isCrossChainOperation()
+			result := op.IsCrossChainOperation()
 			require.Equal(t, tt.expectedResult, result)
 		})
 	}

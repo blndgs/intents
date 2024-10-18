@@ -359,8 +359,8 @@ func isCrossChainData(data []byte, minHashListLength int, maxHashListLength int)
 	return true
 }
 
-// isCrossChainOperation checks if the UserOperation is a cross-chain operation.
-func (op *UserOperation) isCrossChainOperation() bool {
+// IsCrossChainOperation checks if the UserOperation is a cross-chain operation.
+func (op *UserOperation) IsCrossChainOperation() bool {
 	return isCrossChainData(op.CallData, MinOpCount, MaxOpCount) ||
 		(op.HasSignature() && isCrossChainData(op.Signature[op.GetSignatureEndIdx():], 1, MaxOpCount))
 }

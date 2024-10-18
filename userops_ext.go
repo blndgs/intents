@@ -137,7 +137,7 @@ const (
 //   - error: An error if there's an issue with the operation's state, contents.
 func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	// Check for cross-chain operation
-	if op.isCrossChainOperation() {
+	if op.IsCrossChainOperation() {
 		return op.validateCrossChainOp()
 	}
 
