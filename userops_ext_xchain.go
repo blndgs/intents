@@ -93,6 +93,23 @@ func ParseCrossChainData(data []byte) (*CrossChainData, error) {
 	hashListLength := int(data[offset])
 	offset++
 
+	// Hash List:
+	// +----------------+----------------+-------+----------------+
+	// | Entry 1        | Entry 2        |  ...  | Entry N        |
+	// +----------------+----------------+-------+----------------+
+	//
+	// Each Entry:
+	// - Placeholder: 2 bytes (`0xFFFF`). -- See sorting note below, it could be second.
+	// - Hash: 32 bytes (operation hash). -- Sorting applies for placement order.
+	// A sequence of hashes (each`32 bytes`) and a 2-byte placeholder (0xffff) representing the hash values involved in ASC sorted order. Note the placeholder 0xFFFF is replaced by the userOp’s hash value during sorting.
+	//
+	// 	Each entry in the hash list is either:
+	//
+	// - **Placeholder (2 bytes)**: `0xFFFF` the current operation's hash.
+	// - **Operation Hash (32 bytes)**: The hash of another operation in the cross-chain set.
+	//
+	// 	Their sorted ASC sequence establishes a deterministic hash calculation.
+
 	// Parse HashList entries
 	hashList := make([]CrossChainHashListEntry, 0, hashListLength)
 	foundPlaceholder := false
@@ -161,14 +178,44 @@ func (op *UserOperation) IsCrossChainIntent() (bool, error) {
 }
 
 // BuildCrossChainData constructs cross-chain data from Intent JSON and hash list.
+// BuildCrossChainData constructs the cross-chain data payload used in cross-chain UserOperations.
 //
-// Parameters:
-//   - intentJSON: The Intent JSON bytes.
-//   - hashList: The list of hash list entries.
+// **Purpose:**
+// This low-level utility function constructs the cross-chain data payload by combining
+// the Intent JSON and a provided hash list. It formats the data according to the
+// specified cross-chain data structure required by cross-chain operations.
 //
-// Returns:
-//   - []byte: The constructed cross-chain data.
-//   - error: An error if building fails.
+// **When to Use:**
+// Use `BuildCrossChainData` when you have the Intent JSON and the hash list already prepared
+// and need to construct the cross-chain data payload manually. This function does not
+// perform any sorting or validation of the hash list entries.
+//
+// **Parameters:**
+//   - `intentJSON`: The Intent JSON bytes.
+//   - `hashList`: A slice of `CrossChainHashListEntry` representing operation hashes and placeholders.
+//
+// **Returns:**
+//   - `[]byte`: The constructed cross-chain data payload.
+//   - `error`: An error if building fails (e.g., if the Intent JSON exceeds the maximum allowed size).
+//
+// **Cross-Chain Data Format:**
+// The cross-chain data is structured as follows:
+// - **OpType (2 bytes)**: A marker indicating a cross-chain operation (`0xFFFF`).
+// - **Intent JSON Length (2 bytes)**: The length of the Intent JSON.
+// - **Intent JSON (variable length)**: The serialized Intent JSON.
+// - **Hash List Length (1 byte)**: The number of entries in the hash list.
+// - **Hash List Entries (variable length)**: Each entry is either:
+//   - **Placeholder (2 bytes)**: `0xFFFF`, representing the current operation's hash.
+//   - **Operation Hash (32 bytes)**: The hash of another operation in the cross-chain set.
+//
+// **Usage Notes:**
+// - This function assumes that the hash list entries are already in the correct order.
+// - It does not perform any sorting or validation on the hash list.
+// - The caller is responsible for ensuring the hash list is correctly constructed.
+//
+// **Related Functions:**
+//   - `EncodeCrossChainCallData`: A higher-level function that builds the cross-chain call data
+//     for a `UserOperation`, including sorting and constructing the hash list.
 func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) ([]byte, error) {
 	if len(intentJSON) > math.MaxUint16 {
 		return nil, fmt.Errorf("intentJSON length exceeds maximum uint16 value: %d", len(intentJSON))
@@ -194,9 +241,26 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 	copy(crossChainData[offset:], intentJSON)
 	offset += len(intentJSON)
 
+	// hashList length
 	crossChainData[offset] = byte(len(hashList))
 	offset++
 
+	// Hash List:
+	// +----------------+----------------+-------+----------------+
+	// | Entry 1        | Entry 2        |  ...  | Entry N        |
+	// +----------------+----------------+-------+----------------+
+	//
+	// Each Entry:
+	// - Placeholder: 2 bytes (`0xFFFF`). -- See sorting note below, it could be second.
+	// - Hash: 32 bytes (operation hash). -- Sorting applies for placement order.
+	// A sequence of hashes (each`32 bytes`) and a 2-byte placeholder (0xffff) representing the hash values involved in ASC sorted order. Note the placeholder 0xFFFF is replaced by the userOp’s hash value during sorting.
+	//
+	// 	Each entry in the hash list is either:
+	//
+	// - **Placeholder (2 bytes)**: `0xFFFF` the current operation's hash.
+	// - **Operation Hash (32 bytes)**: The hash of another operation in the cross-chain set.
+	//
+	// 	Their sorted ASC sequence establishes a deterministic hash calculation.
 	for _, entry := range hashList {
 		if entry.IsPlaceholder {
 			binary.BigEndian.PutUint16(crossChainData[offset:], HashPlaceholder)
@@ -209,6 +273,42 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 
 	return crossChainData, nil
 }
+
+// EncodeCrossChainCallData constructs the cross-chain call data payload for a `UserOperation`.
+//
+// **Purpose:**
+// This high-level function prepares the cross-chain call data by calculating the current
+// operation's hash, building and sorting the hash list, and constructing the cross-chain
+// data payload. It encapsulates the logic required for cross-chain operations involving
+// two `UserOperation`s or be extended for more in the future.
+//
+// **When to Use:**
+// Use `EncodeCrossChainCallData` when you need to construct the cross-chain call data for a
+// `UserOperation` and have all the necessary parameters, including the entry point, the
+// hash of the other operation, and the Intent JSON. This function handles the calculation
+// of hashes, sorting of the hash list, and building the cross-chain data payload.
+//
+// **Parameters:**
+//   - `entrypoint`: The entry point address used to calculate the `UserOperation` hash.
+//   - `otherOpHash`: The operation hash of the other chain's `UserOperation`.
+//   - `isSourceOp`: A boolean indicating if this is the source operation (`true`) or the destination operation (`false`).
+//   - `intentJSONBytes`: The Intent JSON bytes.
+//
+// **Returns:**
+//   - `[]byte`: The encoded cross-chain call data payload.
+//   - `error`: An error if encoding fails (e.g., invalid chain IDs or Intent JSON exceeds maximum size).
+//
+// **Cross-Chain Data Construction Steps:**
+// 1. **Calculate Current Operation Hash**: Computes the hash of the current `UserOperation`.
+// 2. **Build and Sort Hash List**:
+//   - Create a hash list containing a placeholder for the current operation's hash and the other operation's hash.
+//   - Sort the hash list in ascending order based on the hash values.
+//
+// 3. **Construct Cross-Chain Data**:
+//   - Use `BuildCrossChainData` to assemble the cross-chain data payload.
+//
+// **Related Functions:**
+// - `BuildCrossChainData`: Used internally to construct the cross-chain data payload.
 
 // IsCrossChainIntent checks if the given Intent represents a cross-chain intent.
 //
@@ -382,6 +482,7 @@ func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, oth
 	thisOpHash := op.GetUserOpHash(entrypoint, sourceChainID)
 	var hashList []CrossChainHashListEntry
 
+	// Support only 2 x-chain operations for now
 	if thisOpHash.Big().Cmp(otherOpHash.Big()) < 0 {
 		hashList = append(hashList,
 			CrossChainHashListEntry{IsPlaceholder: true},
