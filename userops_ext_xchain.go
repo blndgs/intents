@@ -352,7 +352,7 @@ func isCrossChainData(data []byte, minHashListLength int, maxHashListLength int)
 	}
 
 	hashListLength := len(crossChainData.HashList)
-	if hashListLength < minHashListLength || (maxHashListLength >= 0 && hashListLength > maxHashListLength) {
+	if hashListLength < minHashListLength || hashListLength > maxHashListLength {
 		return false
 	}
 
