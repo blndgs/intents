@@ -6,10 +6,12 @@
 package model
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 
 	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
@@ -177,7 +179,77 @@ func (op *UserOperation) IsCrossChainIntent() (bool, error) {
 	return IsCrossChainIntent(intent)
 }
 
-// BuildCrossChainData constructs cross-chain data from Intent JSON and hash list.
+// BuildSortedHashList constructs a sorted hash list for cross-chain operations.
+//
+// **Purpose:**
+// This utility function creates a hash list containing the placeholder for the current operation's
+// hash and the hashes of other operations involved in the cross-chain set. It sorts the hash list
+// entries in ascending order to establish a deterministic hash calculation.
+//
+// **Parameters:**
+//   - `thisOpHash`: The hash of the current `UserOperation`.
+//   - `otherOpHashes`: A slice of hashes (`[]common.Hash`) representing other operations in the cross-chain set.
+//
+// **Returns:**
+//   - `[]CrossChainHashListEntry`: The sorted hash list entries.
+//   - `error`: An error if the operation hashes are invalid.
+//
+// **Usage Notes:**
+// - Use this function to build the hash list when preparing cross-chain call data.
+// - It ensures the placeholder and other operation hashes are correctly ordered.
+//
+// **Example:**
+// ```go
+// hashList, err := BuildSortedHashList(thisOpHash, []common.Hash{otherOpHash})
+//
+//	if err != nil {
+//	    // Handle error
+//	}
+//
+// crossChainData, err := BuildCrossChainData(intentJSONBytes, hashList)
+// ```
+//
+// **Related Functions:**
+// - `EncodeCrossChainCallData`: Can utilize this function to build the hash list.
+// - `BuildCrossChainData`: Consumes the hash list entries to construct the cross-chain data payload.
+func BuildSortedHashList(thisOpHash common.Hash, otherOpHashes []common.Hash) ([]CrossChainHashListEntry, error) {
+	// Collect all hashes including the placeholder
+	var hashes []struct {
+		IsPlaceholder bool
+		Hash          common.Hash
+	}
+
+	// Add the current operation's hash as a placeholder
+	hashes = append(hashes, struct {
+		IsPlaceholder bool
+		Hash          common.Hash
+	}{IsPlaceholder: true, Hash: thisOpHash})
+
+	// Add other operation hashes
+	for _, opHash := range otherOpHashes {
+		hashes = append(hashes, struct {
+			IsPlaceholder bool
+			Hash          common.Hash
+		}{IsPlaceholder: false, Hash: opHash})
+	}
+
+	// Sort the hashes in ascending order
+	sort.Slice(hashes, func(i, j int) bool {
+		return bytes.Compare(hashes[i].Hash.Bytes(), hashes[j].Hash.Bytes()) < 0
+	})
+
+	// Build the hash list entries
+	hashList := make([]CrossChainHashListEntry, len(hashes))
+	for i, h := range hashes {
+		hashList[i] = CrossChainHashListEntry{
+			IsPlaceholder: h.IsPlaceholder,
+			OperationHash: h.Hash.Bytes(),
+		}
+	}
+
+	return hashList, nil
+}
+
 // BuildCrossChainData constructs the cross-chain data payload used in cross-chain UserOperations.
 //
 // **Purpose:**
@@ -309,6 +381,47 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 //
 // **Related Functions:**
 // - `BuildCrossChainData`: Used internally to construct the cross-chain data payload.
+func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, otherOpHash common.Hash, isSourceOp bool, intentJSONBytes []byte) ([]byte, error) {
+	if len(intentJSONBytes) > math.MaxUint16 {
+		return nil, fmt.Errorf("callData length exceeds maximum uint16 value: %d", len(intentJSONBytes))
+	}
+
+	intent, err := op.GetIntent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get intent: %w", err)
+	}
+
+	// Extract source and destination chain IDs
+	sourceChainID, err := ExtractSourceChainID(intent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract source chain ID: %w", err)
+	}
+
+	destChainID, err := ExtractDestinationChainID(intent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract destination chain ID: %w", err)
+	}
+
+	if sourceChainID.Cmp(destChainID) == 0 {
+		return nil, ErrCrossChainSameChain
+	}
+
+	// Calculate the current operation's hash
+	chainID := sourceChainID
+	if !isSourceOp {
+		chainID = destChainID
+	}
+	thisOpHash := op.GetUserOpHash(entrypoint, chainID)
+
+	// Build the sorted hash list using the new function
+	hashList, err := BuildSortedHashList(thisOpHash, []common.Hash{otherOpHash})
+	if err != nil {
+		return nil, err
+	}
+
+	// Build the cross-chain data payload
+	return BuildCrossChainData(intentJSONBytes, hashList)
+}
 
 // IsCrossChainIntent checks if the given Intent represents a cross-chain intent.
 //
@@ -440,60 +553,4 @@ func (op *UserOperation) setCrossChainIntent(intentJSON string) error {
 	}
 
 	return nil
-}
-
-// EncodeCrossChainCallData encodes the call data in the cross-chain format.
-//
-// Parameters:
-//   - entrypoint: The entry point address.
-//   - otherOpHash: The operation hash of the other chain.
-//   - isSourceOp: Indicates if this is the source operation.
-//   - intentJSONBytes: The Intent JSON bytes.
-//
-// Returns:
-//   - []byte: The encoded cross-chain call data.
-//   - error: An error if encoding fails.
-func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, otherOpHash common.Hash, isSourceOp bool, intentJSONBytes []byte) ([]byte, error) {
-	if len(intentJSONBytes) > math.MaxUint16 {
-		return nil, fmt.Errorf("callData length exceeds maximum uint16 value: %d", len(intentJSONBytes))
-	}
-
-	intent, err := op.GetIntent()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get intent: %w", err)
-	}
-
-	// Extract source and destination chain IDs
-	sourceChainID, err := ExtractSourceChainID(intent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract source chain ID: %w", err)
-	}
-
-	destChainID, err := ExtractDestinationChainID(intent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract destination chain ID: %w", err)
-	}
-
-	if sourceChainID.Cmp(destChainID) == 0 {
-		return nil, ErrCrossChainSameChain
-	}
-
-	// Build hash list
-	thisOpHash := op.GetUserOpHash(entrypoint, sourceChainID)
-	var hashList []CrossChainHashListEntry
-
-	// Support only 2 x-chain operations for now
-	if thisOpHash.Big().Cmp(otherOpHash.Big()) < 0 {
-		hashList = append(hashList,
-			CrossChainHashListEntry{IsPlaceholder: true},
-			CrossChainHashListEntry{IsPlaceholder: false, OperationHash: otherOpHash.Bytes()},
-		)
-	} else {
-		hashList = append(hashList,
-			CrossChainHashListEntry{IsPlaceholder: false, OperationHash: otherOpHash.Bytes()},
-			CrossChainHashListEntry{IsPlaceholder: true},
-		)
-	}
-
-	return BuildCrossChainData(intentJSONBytes, hashList)
 }
