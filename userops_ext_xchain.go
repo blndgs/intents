@@ -10,7 +10,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
+	"math/big"
 	"sort"
 
 	pb "github.com/blndgs/model/gen/go/proto/v1"
@@ -50,6 +52,179 @@ type CrossChainData struct {
 type CrossChainHashListEntry struct {
 	IsPlaceholder bool
 	OperationHash []byte
+}
+
+// Aggregate combines the current UserOperation with another unsolved cross-chain UserOperation.
+//
+// Preconditions:
+//   - Both the called UserOperation and the otherOp are valid unsolved userOps (Validate() returns UnsolvedUserOp).
+//   - Both userOps are valid cross-chain userOps.
+//
+// If any precondition is not met, returns an error indicating which userOp didn't meet the precondition.
+//
+// Behavior:
+//   - Copies the otherOp's packed data into the signature field of the called UserOperation.
+//   - If initCode is set in the otherOp, it is copied into the called UserOperation.
+//   - If the same otherOp is already aggregated, the operation is idempotent.
+//   - If a different otherOp is already aggregated, the existing packed data is replaced with the new otherOp's data.
+//
+// Returns:
+//   - error: An error if the operation fails.
+func (op *UserOperation) Aggregate(otherOp *UserOperation) error {
+	// Validate the called UserOperation
+	status, err := op.Validate()
+	if err != nil {
+		return fmt.Errorf("failed to validate the called UserOperation: %w", err)
+	}
+	if status != UnsolvedUserOp && status != UnsolvedAggregateUserOp {
+		return fmt.Errorf("called UserOperation is not an unsolved userOp")
+	}
+
+	// Validate the other UserOperation
+	otherStatus, err := otherOp.Validate()
+	if err != nil {
+		return fmt.Errorf("failed to validate the other UserOperation: %w", err)
+	}
+	if otherStatus != UnsolvedUserOp {
+		return fmt.Errorf("other UserOperation is not an unsolved userOp")
+	}
+
+	// Check that both are valid cross-chain userOps
+	if !op.IsCrossChainOperation() {
+		return fmt.Errorf("called UserOperation is not a valid cross-chain userOp")
+	}
+
+	if !otherOp.IsCrossChainOperation() {
+		return fmt.Errorf("other UserOperation is not a valid cross-chain userOp")
+	}
+
+	packedData, err := otherOp.getPackedData()
+	if err != nil {
+		return fmt.Errorf("failed to get packed data from other UserOperation: %w", err)
+	}
+
+	// Check if the called UserOperation already has packed data
+	signatureEndIdx := op.GetSignatureEndIdx()
+	existingPackedData := op.Signature[signatureEndIdx:]
+
+	// If the existing packed data is the same as the new one, do nothing (idempotent)
+	if bytes.Equal(existingPackedData, packedData) {
+		return nil
+	}
+
+	// Otherwise, replace the existing packed data with the new one
+	op.Signature = append(op.Signature[:signatureEndIdx], packedData...)
+
+	return nil
+}
+
+// getPackedData serializes the necessary fields from the UserOperation for aggregation.
+//
+// Returns:
+//   - []byte: The packed data.
+//   - error: An error if serialization fails.
+func (op *UserOperation) getPackedData() ([]byte, error) {
+	buffer := new(bytes.Buffer)
+
+	// Since we are packing one additional UserOperation, n-1 = 1
+	packedOpsLength := byte(1)
+	if err := buffer.WriteByte(packedOpsLength); err != nil {
+		return nil, fmt.Errorf("failed to write packedOpsLength: %w", err)
+	}
+
+	// Write nonce (32 bytes)
+	nonceBytes := op.Nonce.Bytes()
+	if len(nonceBytes) > 32 {
+		return nil, fmt.Errorf("nonce is too large")
+	}
+	noncePadded := make([]byte, 32)
+	copy(noncePadded[32-len(nonceBytes):], nonceBytes)
+	if _, err := buffer.Write(noncePadded); err != nil {
+		return nil, fmt.Errorf("failed to write nonce: %w", err)
+	}
+
+	// Write callGasLimit (8 bytes)
+	callGasLimitBytes := op.CallGasLimit.Bytes()
+	if len(callGasLimitBytes) > 8 {
+		return nil, fmt.Errorf("callGasLimit is too large")
+	}
+	callGasLimitPadded := make([]byte, 8)
+	copy(callGasLimitPadded[8-len(callGasLimitBytes):], callGasLimitBytes)
+	if _, err := buffer.Write(callGasLimitPadded); err != nil {
+		return nil, fmt.Errorf("failed to write callGasLimit: %w", err)
+	}
+
+	// Write preVerificationGas (8 bytes)
+	preVerificationGasBytes := op.PreVerificationGas.Bytes()
+	if len(preVerificationGasBytes) > 8 {
+		return nil, fmt.Errorf("preVerificationGas is too large")
+	}
+	preVerificationGasPadded := make([]byte, 8)
+	copy(preVerificationGasPadded[8-len(preVerificationGasBytes):], preVerificationGasBytes)
+	if _, err := buffer.Write(preVerificationGasPadded); err != nil {
+		return nil, fmt.Errorf("failed to write preVerificationGas: %w", err)
+	}
+
+	// Write verificationGasLimit (8 bytes)
+	verificationGasLimitBytes := op.VerificationGasLimit.Bytes()
+	if len(verificationGasLimitBytes) > 8 {
+		return nil, fmt.Errorf("verificationGasLimit is too large")
+	}
+	verificationGasLimitPadded := make([]byte, 8)
+	copy(verificationGasLimitPadded[8-len(verificationGasLimitBytes):], verificationGasLimitBytes)
+	if _, err := buffer.Write(verificationGasLimitPadded); err != nil {
+		return nil, fmt.Errorf("failed to write verificationGasLimit: %w", err)
+	}
+
+	// Copy the Hash List Entry from the op's callData
+	crossChainData, err := ParseCrossChainData(op.CallData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse cross-chain data from callData: %w", err)
+	}
+
+	// Serialize Hash List Entry
+	hashListEntryBytes, err := serializeHashListEntries(crossChainData.HashList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize hash list entries: %w", err)
+	}
+	if _, err := buffer.Write(hashListEntryBytes); err != nil {
+		return nil, fmt.Errorf("failed to write hash list entries: %w", err)
+	}
+
+	// Write initCode (if any)
+	if len(op.InitCode) > 0 {
+		if _, err := buffer.Write(op.InitCode); err != nil {
+			return nil, fmt.Errorf("failed to write initCode: %w", err)
+		}
+	}
+
+	return buffer.Bytes(), nil
+}
+
+// serializeHashListEntries serializes the hash list entries into bytes.
+//
+// Returns:
+//   - []byte: The serialized hash list entries.
+//   - error: An error if serialization fails.
+func serializeHashListEntries(hashList []CrossChainHashListEntry) ([]byte, error) {
+	buffer := new(bytes.Buffer)
+
+	for _, entry := range hashList {
+		if entry.IsPlaceholder {
+			if err := binary.Write(buffer, binary.BigEndian, HashPlaceholder); err != nil {
+				return nil, fmt.Errorf("failed to write placeholder: %w", err)
+			}
+		} else {
+			if len(entry.OperationHash) != 32 {
+				return nil, fmt.Errorf("invalid operation hash length: expected 32 bytes, got %d", len(entry.OperationHash))
+			}
+			if _, err := buffer.Write(entry.OperationHash); err != nil {
+				return nil, fmt.Errorf("failed to write operation hash: %w", err)
+			}
+		}
+	}
+
+	return buffer.Bytes(), nil
 }
 
 // ParseCrossChainData parses the cross-chain data into a structured format.
@@ -504,11 +679,170 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 		return UnknownUserOp, ErrPlaceholderNotFound
 	}
 
+	// Check if the signature contains additional packed userOp
+	signatureEndIdx := op.GetSignatureEndIdx()
+	if len(op.Signature) > signatureEndIdx {
+		// Contains additional data past the signature
+		extraData := op.Signature[signatureEndIdx:]
+
+		// Try to parse extraData as Intent JSON
+		if _, isValidJSON := ExtractJSONFromField(string(extraData)); isValidJSON {
+			return SolvedUserOp, nil
+		}
+
+		// Assume it's packed data
+		return UnsolvedAggregateUserOp, nil
+	}
+
 	if op.HasSignature() {
 		return SolvedUserOp, nil
 	}
 
 	return UnsolvedUserOp, nil
+}
+
+// ExtractAggregatedOp reverses the Aggregate operation and extracts the packed
+// other UserOperation from the signature field.
+//
+// Returns:
+//   - *UserOperation: The extracted UserOperation.
+//   - error: An error if extraction fails.
+func (op *UserOperation) ExtractAggregatedOp() (*UserOperation, error) {
+	// Check if there is packed data
+	signatureEndIdx := op.GetSignatureEndIdx()
+	if len(op.Signature) <= signatureEndIdx {
+		return nil, fmt.Errorf("no aggregated operation found")
+	}
+
+	packedData := op.Signature[signatureEndIdx:]
+
+	intentJSON, err := op.GetIntentJSON()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get intent JSON: %w", err)
+	}
+
+	// Unpack the data to reconstruct the other UserOperation
+	otherOp, err := unpackUserOpData(intentJSON, packedData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unpack aggregated operation: %w", err)
+	}
+
+	return otherOp, nil
+}
+
+// unpackUserOpData deserializes the packed data back into a UserOperation.
+//
+// Returns:
+//   - *UserOperation: The deserialized UserOperation.
+//   - error: An error if deserialization fails.
+//
+// unpackUserOpData deserializes the packed data back into a UserOperation.
+//
+// Returns:
+//   - *UserOperation: The deserialized UserOperation.
+//   - error: An error if deserialization fails.
+func unpackUserOpData(intentJSON string, data []byte) (*UserOperation, error) {
+	buffer := bytes.NewReader(data)
+
+	// Read the length of packed userOps (should be 1)
+	var packedOpsLength byte
+	if err := binary.Read(buffer, binary.BigEndian, &packedOpsLength); err != nil {
+		return nil, fmt.Errorf("failed to read packedOpsLength: %w", err)
+	}
+	if packedOpsLength != 1 {
+		return nil, fmt.Errorf("expected packedOpsLength to be 1, got %d", packedOpsLength)
+	}
+
+	// Initialize a new UserOperation
+	op := &UserOperation{}
+
+	// Read nonce (32 bytes)
+	nonceBytes := make([]byte, 32)
+	if _, err := buffer.Read(nonceBytes); err != nil {
+		return nil, fmt.Errorf("failed to read nonce: %w", err)
+	}
+	op.Nonce = new(big.Int).SetBytes(nonceBytes)
+
+	// Read callGasLimit (8 bytes)
+	callGasLimitBytes := make([]byte, 8)
+	if _, err := buffer.Read(callGasLimitBytes); err != nil {
+		return nil, fmt.Errorf("failed to read callGasLimit: %w", err)
+	}
+	op.CallGasLimit = big.NewInt(0).SetBytes(callGasLimitBytes)
+
+	// Read preVerificationGas (8 bytes)
+	preVerificationGasBytes := make([]byte, 8)
+	if _, err := buffer.Read(preVerificationGasBytes); err != nil {
+		return nil, fmt.Errorf("failed to read preVerificationGas: %w", err)
+	}
+	op.PreVerificationGas = big.NewInt(0).SetBytes(preVerificationGasBytes)
+
+	// Read verificationGasLimit (8 bytes)
+	verificationGasLimitBytes := make([]byte, 8)
+	if _, err := buffer.Read(verificationGasLimitBytes); err != nil {
+		return nil, fmt.Errorf("failed to read verificationGasLimit: %w", err)
+	}
+	op.VerificationGasLimit = big.NewInt(0).SetBytes(verificationGasLimitBytes)
+
+	// Read Hash List Entry
+	hashListEntries, err := readHashListEntries(buffer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read hash list entries: %w", err)
+	}
+
+	// Restore the CallData by combining the intentJSON and the hash list entries
+	op.CallData, err = BuildCrossChainData([]byte(intentJSON), hashListEntries)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build cross-chain data: %w", err)
+	}
+
+	// Read initCode (remaining bytes)
+	initCode, err := io.ReadAll(buffer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read initCode: %w", err)
+	}
+	op.InitCode = initCode
+
+	return op, nil
+}
+
+func readHashListEntries(buffer *bytes.Reader) ([]CrossChainHashListEntry, error) {
+	var entries []CrossChainHashListEntry
+	// Assuming we know how many entries to read or have a delimiter
+	// For simplicity, let's read one placeholder or one hash
+
+	// Peek the next 2 bytes to check for placeholder
+	peekBytes := make([]byte, 2)
+	if _, err := buffer.Read(peekBytes); err != nil {
+		return nil, fmt.Errorf("failed to read hash list entry: %w", err)
+	}
+	if err := buffer.UnreadByte(); err != nil {
+		return nil, fmt.Errorf("failed to unread first byte: %w", err)
+	}
+	if err := buffer.UnreadByte(); err != nil {
+		return nil, fmt.Errorf("failed to unread second byte: %w", err)
+	}
+
+	if binary.BigEndian.Uint16(peekBytes) == HashPlaceholder {
+		// It's a placeholder
+		var placeholder uint16
+		if err := binary.Read(buffer, binary.BigEndian, &placeholder); err != nil {
+			return nil, fmt.Errorf("failed to read placeholder: %w", err)
+		}
+		entries = append(entries, CrossChainHashListEntry{IsPlaceholder: true})
+	} else {
+		// It's a hash (32 bytes)
+		hashBytes := make([]byte, 32)
+		if _, err := buffer.Read(hashBytes); err != nil {
+			return nil, fmt.Errorf("failed to read operation hash: %w", err)
+		}
+		entries = append(entries, CrossChainHashListEntry{
+			IsPlaceholder: false,
+			OperationHash: hashBytes,
+		})
+	}
+
+	return entries, nil
 }
 
 // setCrossChainIntent sets the Intent JSON for a cross-chain operation.

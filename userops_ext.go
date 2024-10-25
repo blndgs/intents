@@ -78,10 +78,11 @@ func (u *UserOperationExt) MarshalJSON() ([]byte, error) {
 type UserOpSolvedStatus int
 
 const (
-	UnsolvedUserOp UserOpSolvedStatus = iota
-	SolvedUserOp                      // Intent Json values may or may not be present
+	UnsolvedUserOp          UserOpSolvedStatus = iota
+	UnsolvedAggregateUserOp                    // Unsolved Cross-chain userOp that contains 1 or more cross-chain unsolved userOps
+	SolvedUserOp                               // Intent Json values must be present
 	// ConventionalUserOp indicates that the UserOperation does not contain Intent JSON and
-	// must have a valid EVM calldata value. Both conventional and Intent userOps apply.
+	// must have a valid EVM calldata value.
 	ConventionalUserOp
 	// UnknownUserOp indicates that the UserOperation's state is unknown or ambiguous.
 	UnknownUserOp
@@ -129,44 +130,47 @@ const (
 )
 
 // Validate checks the status of the UserOperation and returns
-// its userOpSolvedStatus. It determines if the operation is conventional,
+// its UserOpSolvedStatus. It determines if the operation is conventional,
 // unsolved, or solved based on the presence and content of CallData and Signature.
 //
 // Returns:
-//   - userOpSolvedStatus: The solved status of the UserOperation.
-//   - error: An error if there's an issue with the operation's state, contents.
+//   - UserOpSolvedStatus: The solved status of the UserOperation.
+//   - error: An error if there's an issue with the operation's state or contents.
 func (op *UserOperation) Validate() (UserOpSolvedStatus, error) {
 	// Check for cross-chain operation
 	if op.IsCrossChainOperation() {
-		return op.validateCrossChainOp()
+		status, err := op.validateCrossChainOp()
+		if err != nil {
+			return UnknownUserOp, err
+		}
+		return status, nil
 	}
 
-	// Conventional userOp? empty CallData without signature value.
+	// Conventional userOp: empty CallData without signature value.
 	if len(op.CallData) == 0 && (len(op.Signature) == 0 || op.HasSignatureExact()) {
 		return ConventionalUserOp, nil
 	}
 
-	// Unsolved userOp? Check if CallData is a non-hex-encoded string
+	// Unsolved userOp: Check if CallData is a non-hex-encoded string
 	if _, callDataErr := hexutil.Decode(string(op.CallData)); callDataErr != nil {
-		// not solved, check if there is a valid Intent JSON
+		// Not solved, check if there is a valid Intent JSON
 		_, validIntent := ExtractJSONFromField(string(op.CallData))
 		if validIntent && (op.HasSignatureExact() || len(op.Signature) == 0) {
-			// valid intent json in calldata (Unsolved) and not defined again in signature
+			// Valid intent JSON in CallData (Unsolved) and not defined again in Signature
 			return UnsolvedUserOp, nil
 		}
 		if validIntent && len(op.Signature) > KernelSignatureLength {
-			// both unsolved (No calldata value) status and likely intent json in the signature
+			// Both unsolved (no CallData value) status and likely intent JSON in the Signature
 			return UnknownUserOp, ErrDoubleIntentDef
 		}
 	}
 
 	if !op.HasSignature() {
-		// need a signature value for solved userOps
+		// Need a signature value for solved userOps
 		return SolvedUserOp, ErrNoSignatureValue
 	}
 
-	// Solved userOp: Intent Json values may or may not be present
-	// in the signature field
+	// Solved userOp: Intent JSON values may or may not be present in the Signature field
 	return SolvedUserOp, nil
 }
 
@@ -251,15 +255,15 @@ func (op *UserOperation) HasIntent() bool {
 	return hasIntent
 }
 
-// HasSignature checks if the signature field contains a fixed length hex-encoded
-// signature value either a conventional or a kernel with or without Intent.
+// HasSignature checks if the signature field contains a fixed length ECDSA
+// hex-encoded signature value either a conventional (65 bytes) or a kernel
+// with or without Intent.
 func (op *UserOperation) HasSignature() bool {
-	// valid signature does not have a '0x' prefix
+	// Valid signature does not have a '0x' prefix
 	if no0xPrefix(op.Signature) {
-		// chk kernel signature
 		lenSig := len(op.Signature)
 		if lenSig == KernelSignatureLength {
-			// cannot have a simple signature length fitting a kernel signature
+			// Check if it's a kernel signature
 			return sigHasKernelPrefix(op.Signature)
 		}
 
@@ -267,12 +271,11 @@ func (op *UserOperation) HasSignature() bool {
 			return true
 		}
 
-		// chk conventional signature
+		// Check for conventional signature
 		if lenSig >= SimpleSignatureLength {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -309,16 +312,15 @@ func (op *UserOperation) GetSignatureEndIdx() int {
 // signature field contains a fixed length hex-encoded signature value either a
 // conventional or a kernel without Intent.
 func (op *UserOperation) HasSignatureExact() bool {
-	// valid signature does not have a '0x' prefix
+	// Valid signature does not have a '0x' prefix
 	if no0xPrefix(op.Signature) {
-		// chk kernel signature
 		lenSig := len(op.Signature)
 		if lenSig != KernelSignatureLength && lenSig != SimpleSignatureLength {
 			return false
 		}
 
 		if lenSig == KernelSignatureLength {
-			// cannot have a simple signature length fitting a kernel signature
+			// Cannot have a simple signature length fitting a kernel signature length without a prefix
 			return sigHasKernelPrefix(op.Signature)
 		}
 
@@ -400,17 +402,16 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 //  3. Treated as a fallback if the UserOperation has a sufficient length for a conventional signature,
 //     it returns the signature up to the SignatureLength.
 //
-// Otherwise, it returns an error.
+// Otherwise, it returns nil.
 func (op *UserOperation) GetSignatureValue() []byte {
 	if no0xPrefix(op.Signature) {
-
 		lenSig := len(op.Signature)
 		if lenSig >= KernelSignatureLength && sigHasKernelPrefix(op.Signature) {
 			return op.Signature[:KernelSignatureLength]
 		}
 
 		if lenSig == KernelSignatureLength {
-			// cannot have a simple signature length fitting a kernel signature length without a prefix
+			// Cannot have a simple signature length fitting a kernel signature length without a prefix
 			return nil
 		}
 
