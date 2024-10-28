@@ -105,6 +105,10 @@ func (op *UserOperation) Aggregate(otherOp *UserOperation) error {
 
 	// Check if the called UserOperation already has packed data
 	signatureEndIdx := op.GetSignatureEndIdx()
+	if signatureEndIdx == 0 {
+		return fmt.Errorf("unsigned UserOperations are not supported")
+	}
+
 	existingPackedData := op.Signature[signatureEndIdx:]
 
 	// If the existing packed data is the same as the new one, do nothing (idempotent)
@@ -112,8 +116,12 @@ func (op *UserOperation) Aggregate(otherOp *UserOperation) error {
 		return nil
 	}
 
-	// Otherwise, replace the existing packed data with the new one
-	op.Signature = append(op.Signature[:signatureEndIdx], packedData...)
+	// Write number of packed ops (1 byte) and a constant of 1 for now
+	// as max packed ops is 1
+	sigPlusNumOps := append(op.Signature[:signatureEndIdx], 1)
+
+	// replace the existing packed data with the new one
+	op.Signature = append(sigPlusNumOps, packedData...)
 
 	return nil
 }
@@ -126,14 +134,9 @@ func (op *UserOperation) Aggregate(otherOp *UserOperation) error {
 func (op *UserOperation) getPackedData() ([]byte, error) {
 	buffer := new(bytes.Buffer)
 
-	// Since we are packing one additional UserOperation, n-1 = 1
-	packedOpsLength := byte(1)
-	if err := buffer.WriteByte(packedOpsLength); err != nil {
-		return nil, fmt.Errorf("failed to write packedOpsLength: %w", err)
-	}
-
 	// Write nonce (32 bytes)
 	nonceBytes := op.Nonce.Bytes()
+	// defensive check if nonce cannot fit in uint256
 	if len(nonceBytes) > 32 {
 		return nil, fmt.Errorf("nonce is too large")
 	}
@@ -144,54 +147,35 @@ func (op *UserOperation) getPackedData() ([]byte, error) {
 	}
 
 	// Write callGasLimit (8 bytes)
-	callGasLimitBytes := op.CallGasLimit.Bytes()
-	if len(callGasLimitBytes) > 8 {
-		return nil, fmt.Errorf("callGasLimit is too large")
-	}
-	callGasLimitPadded := make([]byte, 8)
-	copy(callGasLimitPadded[8-len(callGasLimitBytes):], callGasLimitBytes)
-	if _, err := buffer.Write(callGasLimitPadded); err != nil {
-		return nil, fmt.Errorf("failed to write callGasLimit: %w", err)
+	if err := writeUint64(buffer, op.CallGasLimit.Uint64()); err != nil {
+		return nil, err
 	}
 
 	// Write preVerificationGas (8 bytes)
-	preVerificationGasBytes := op.PreVerificationGas.Bytes()
-	if len(preVerificationGasBytes) > 8 {
-		return nil, fmt.Errorf("preVerificationGas is too large")
-	}
-	preVerificationGasPadded := make([]byte, 8)
-	copy(preVerificationGasPadded[8-len(preVerificationGasBytes):], preVerificationGasBytes)
-	if _, err := buffer.Write(preVerificationGasPadded); err != nil {
-		return nil, fmt.Errorf("failed to write preVerificationGas: %w", err)
+	if err := writeUint64(buffer, op.PreVerificationGas.Uint64()); err != nil {
+		return nil, err
 	}
 
 	// Write verificationGasLimit (8 bytes)
-	verificationGasLimitBytes := op.VerificationGasLimit.Bytes()
-	if len(verificationGasLimitBytes) > 8 {
-		return nil, fmt.Errorf("verificationGasLimit is too large")
-	}
-	verificationGasLimitPadded := make([]byte, 8)
-	copy(verificationGasLimitPadded[8-len(verificationGasLimitBytes):], verificationGasLimitBytes)
-	if _, err := buffer.Write(verificationGasLimitPadded); err != nil {
-		return nil, fmt.Errorf("failed to write verificationGasLimit: %w", err)
+	if err := writeUint64(buffer, op.VerificationGasLimit.Uint64()); err != nil {
+		return nil, err
 	}
 
-	// Copy the Hash List Entry from the op's callData
+	// Extract and write hash list from the callData
 	crossChainData, err := ParseCrossChainData(op.CallData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cross-chain data from callData: %w", err)
 	}
 
-	// Serialize Hash List Entry
-	hashListEntryBytes, err := serializeHashListEntries(crossChainData.HashList)
+	hashListBytes, err := serializeHashListEntries(crossChainData.HashList)
 	if err != nil {
-		return nil, fmt.Errorf("failed to serialize hash list entries: %w", err)
+		return nil, fmt.Errorf("failed to serialize hash list: %w", err)
 	}
-	if _, err := buffer.Write(hashListEntryBytes); err != nil {
-		return nil, fmt.Errorf("failed to write hash list entries: %w", err)
+	if _, err := buffer.Write(hashListBytes); err != nil {
+		return nil, fmt.Errorf("failed to write hash list: %w", err)
 	}
 
-	// Write initCode (if any)
+	// Write initCode if present
 	if len(op.InitCode) > 0 {
 		if _, err := buffer.Write(op.InitCode); err != nil {
 			return nil, fmt.Errorf("failed to write initCode: %w", err)
@@ -201,6 +185,17 @@ func (op *UserOperation) getPackedData() ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
+// writeUint64 writes a uint64 value to the buffer in big-endian format.
+func writeUint64(buffer *bytes.Buffer, num64 uint64) error {
+	buffer.Reset()
+	valueBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(valueBytes, num64)
+	if _, err := buffer.Write(valueBytes); err != nil {
+		return fmt.Errorf("failed to write uint64: %w", err)
+	}
+	return nil
+}
+
 // serializeHashListEntries serializes the hash list entries into bytes.
 //
 // Returns:
@@ -208,6 +203,7 @@ func (op *UserOperation) getPackedData() ([]byte, error) {
 //   - error: An error if serialization fails.
 func serializeHashListEntries(hashList []CrossChainHashListEntry) ([]byte, error) {
 	buffer := new(bytes.Buffer)
+	buffer.WriteByte(byte(len(hashList)))
 
 	for _, entry := range hashList {
 		if entry.IsPlaceholder {
@@ -708,26 +704,25 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 //   - *UserOperation: The extracted UserOperation.
 //   - error: An error if extraction fails.
 func (op *UserOperation) ExtractAggregatedOp() (*UserOperation, error) {
-	// Check if there is packed data
 	signatureEndIdx := op.GetSignatureEndIdx()
 	if len(op.Signature) <= signatureEndIdx {
-		return nil, fmt.Errorf("no aggregated operation found")
+		return nil, fmt.Errorf("no aggregated operation data found")
 	}
 
 	packedData := op.Signature[signatureEndIdx:]
 
+	// Get original intent JSON for reconstruction
 	intentJSON, err := op.GetIntentJSON()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get intent JSON: %w", err)
 	}
 
-	// Unpack the data to reconstruct the other UserOperation
-	otherOp, err := unpackUserOpData(intentJSON, packedData)
+	extractedOp, err := unpackUserOpData(intentJSON, packedData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unpack aggregated operation: %w", err)
+		return nil, fmt.Errorf("failed to unpack user operation data: %w", err)
 	}
 
-	return otherOp, nil
+	return extractedOp, nil
 }
 
 // unpackUserOpData deserializes the packed data back into a UserOperation.
@@ -742,6 +737,10 @@ func (op *UserOperation) ExtractAggregatedOp() (*UserOperation, error) {
 //   - *UserOperation: The deserialized UserOperation.
 //   - error: An error if deserialization fails.
 func unpackUserOpData(intentJSON string, data []byte) (*UserOperation, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("invalid packed data or length")
+	}
+
 	buffer := bytes.NewReader(data)
 
 	// Read the length of packed userOps (should be 1)
@@ -753,7 +752,6 @@ func unpackUserOpData(intentJSON string, data []byte) (*UserOperation, error) {
 		return nil, fmt.Errorf("expected packedOpsLength to be 1, got %d", packedOpsLength)
 	}
 
-	// Initialize a new UserOperation
 	op := &UserOperation{}
 
 	// Read nonce (32 bytes)
@@ -764,39 +762,38 @@ func unpackUserOpData(intentJSON string, data []byte) (*UserOperation, error) {
 	op.Nonce = new(big.Int).SetBytes(nonceBytes)
 
 	// Read callGasLimit (8 bytes)
-	callGasLimitBytes := make([]byte, 8)
-	if _, err := buffer.Read(callGasLimitBytes); err != nil {
-		return nil, fmt.Errorf("failed to read callGasLimit: %w", err)
+	var err error
+	op.CallGasLimit, err = setUint64(buffer)
+	if err != nil {
+		return nil, err
 	}
-	op.CallGasLimit = big.NewInt(0).SetBytes(callGasLimitBytes)
 
 	// Read preVerificationGas (8 bytes)
-	preVerificationGasBytes := make([]byte, 8)
-	if _, err := buffer.Read(preVerificationGasBytes); err != nil {
-		return nil, fmt.Errorf("failed to read preVerificationGas: %w", err)
+	op.PreVerificationGas, err = setUint64(buffer)
+	if err != nil {
+		return nil, err
 	}
-	op.PreVerificationGas = big.NewInt(0).SetBytes(preVerificationGasBytes)
 
 	// Read verificationGasLimit (8 bytes)
-	verificationGasLimitBytes := make([]byte, 8)
-	if _, err := buffer.Read(verificationGasLimitBytes); err != nil {
-		return nil, fmt.Errorf("failed to read verificationGasLimit: %w", err)
+	op.VerificationGasLimit, err = setUint64(buffer)
+	if err != nil {
+		return nil, err
 	}
-	op.VerificationGasLimit = big.NewInt(0).SetBytes(verificationGasLimitBytes)
 
-	// Read Hash List Entry
-	hashListEntries, err := readHashListEntries(buffer)
+	// Read hash list
+	hashList, err := readHashListEntries(buffer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read hash list entries: %w", err)
 	}
 
-	// Restore the CallData by combining the intentJSON and the hash list entries
-	op.CallData, err = BuildCrossChainData([]byte(intentJSON), hashListEntries)
+	// Reconstruct callData using intentJSON and hash list
+	callData, err := BuildCrossChainData([]byte(intentJSON), hashList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build cross-chain data: %w", err)
 	}
+	op.CallData = callData
 
-	// Read initCode (remaining bytes)
+	// Read remaining bytes as initCode
 	initCode, err := io.ReadAll(buffer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read initCode: %w", err)
@@ -806,40 +803,59 @@ func unpackUserOpData(intentJSON string, data []byte) (*UserOperation, error) {
 	return op, nil
 }
 
+// setUint64 reads 8 bytes from the reader and sets it as a big.Int.
+func setUint64(uint64Reader *bytes.Reader) (*big.Int, error) {
+	uint64Buffer := make([]byte, 8)
+	if _, err := uint64Reader.Read(uint64Buffer); err != nil {
+		return nil, fmt.Errorf("failed to read uint64 (8) bytes from the reader: %w", err)
+	}
+
+	return new(big.Int).SetBytes(uint64Buffer), nil
+}
+
 func readHashListEntries(buffer *bytes.Reader) ([]CrossChainHashListEntry, error) {
-	var entries []CrossChainHashListEntry
-	// Assuming we know how many entries to read or have a delimiter
-	// For simplicity, let's read one placeholder or one hash
-
-	// Peek the next 2 bytes to check for placeholder
-	peekBytes := make([]byte, 2)
-	if _, err := buffer.Read(peekBytes); err != nil {
-		return nil, fmt.Errorf("failed to read hash list entry: %w", err)
-	}
-	if err := buffer.UnreadByte(); err != nil {
-		return nil, fmt.Errorf("failed to unread first byte: %w", err)
-	}
-	if err := buffer.UnreadByte(); err != nil {
-		return nil, fmt.Errorf("failed to unread second byte: %w", err)
+	// Read the hash list length
+	hashListLength, err := buffer.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read hash list length: %w", err)
 	}
 
-	if binary.BigEndian.Uint16(peekBytes) == HashPlaceholder {
-		// It's a placeholder
-		var placeholder uint16
-		if err := binary.Read(buffer, binary.BigEndian, &placeholder); err != nil {
-			return nil, fmt.Errorf("failed to read placeholder: %w", err)
+	if hashListLength < MinOpCount || hashListLength > MaxOpCount {
+		return nil, ErrInvalidHashListLength
+	}
+
+	entries := make([]CrossChainHashListEntry, 0, hashListLength)
+	for i := 0; i < int(hashListLength); i++ {
+		// Peek the next 2 bytes to check for placeholder
+		peekBytes := make([]byte, OpTypeLength) // placeholder length
+		if _, err := buffer.Read(peekBytes); err != nil {
+			return nil, fmt.Errorf("failed to read hash list entry: %w", err)
 		}
-		entries = append(entries, CrossChainHashListEntry{IsPlaceholder: true})
-	} else {
-		// It's a hash (32 bytes)
-		hashBytes := make([]byte, 32)
-		if _, err := buffer.Read(hashBytes); err != nil {
-			return nil, fmt.Errorf("failed to read operation hash: %w", err)
+		if err := buffer.UnreadByte(); err != nil {
+			return nil, fmt.Errorf("failed to unread first byte: %w", err)
 		}
-		entries = append(entries, CrossChainHashListEntry{
-			IsPlaceholder: false,
-			OperationHash: hashBytes,
-		})
+		if err := buffer.UnreadByte(); err != nil {
+			return nil, fmt.Errorf("failed to unread second byte: %w", err)
+		}
+
+		if binary.BigEndian.Uint16(peekBytes) == HashPlaceholder {
+			// It's a placeholder
+			var placeholder uint16
+			if err := binary.Read(buffer, binary.BigEndian, &placeholder); err != nil {
+				return nil, fmt.Errorf("failed to read placeholder: %w", err)
+			}
+			entries = append(entries, CrossChainHashListEntry{IsPlaceholder: true})
+		} else {
+			// It's a hash (32 bytes)
+			hashBytes := make([]byte, 32)
+			if _, err := buffer.Read(hashBytes); err != nil {
+				return nil, fmt.Errorf("failed to read operation hash: %w", err)
+			}
+			entries = append(entries, CrossChainHashListEntry{
+				IsPlaceholder: false,
+				OperationHash: hashBytes,
+			})
+		}
 	}
 
 	return entries, nil

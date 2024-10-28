@@ -280,6 +280,10 @@ func (op *UserOperation) HasSignature() bool {
 }
 
 // GetSignatureEndIdx returns the end index of the signature value in the UserOperation's Signature field.
+// Returns either of the 3 following values:
+//   - KernelSignatureLength: If the signature is a kernel signature with a prefix.
+//   - SimpleSignatureLength: If the signature is an ECDSA signature without a prefix.
+//   - 0: If the signature is a kernel signature without a prefix or as a fallback
 func (op *UserOperation) GetSignatureEndIdx() int {
 	// valid signature does not have a '0x' prefix
 	if no0xPrefix(op.Signature) {
