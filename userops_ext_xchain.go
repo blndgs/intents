@@ -205,11 +205,16 @@ func serializeHashListEntries(hashList []CrossChainHashListEntry) ([]byte, error
 	buffer := new(bytes.Buffer)
 	buffer.WriteByte(byte(len(hashList)))
 
+	wrotePlaceHolder := false
 	for _, entry := range hashList {
 		if entry.IsPlaceholder {
+			if wrotePlaceHolder {
+				return nil, fmt.Errorf("invalid hash list with multiple placeholders")
+			}
 			if err := binary.Write(buffer, binary.BigEndian, HashPlaceholder); err != nil {
 				return nil, fmt.Errorf("failed to write placeholder: %w", err)
 			}
+			wrotePlaceHolder = true
 		} else {
 			if len(entry.OperationHash) != 32 {
 				return nil, fmt.Errorf("invalid operation hash length: expected 32 bytes, got %d", len(entry.OperationHash))
@@ -466,9 +471,10 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 
 	totalLength := OpTypeLength + IntentJSONLengthSize + len(intentJSON) + HashListLengthSize
 	for _, entry := range hashList {
-		totalLength += PlaceholderSize
-		if !entry.IsPlaceholder {
-			totalLength += OperationHashSize - PlaceholderSize
+		if entry.IsPlaceholder {
+			totalLength += PlaceholderSize
+		} else {
+			totalLength += OperationHashSize
 		}
 	}
 

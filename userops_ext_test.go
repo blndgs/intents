@@ -76,6 +76,43 @@ func mockSignature() []byte {
 	}
 }
 
+func TestSerializeAndDeserializeHashListEntries(t *testing.T) {
+	placeholderEntry := CrossChainHashListEntry{IsPlaceholder: true}
+	opHash1 := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+	opHash2 := common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+	opHashEntry1 := CrossChainHashListEntry{IsPlaceholder: false, OperationHash: opHash1.Bytes()}
+	opHashEntry2 := CrossChainHashListEntry{IsPlaceholder: false, OperationHash: opHash2.Bytes()}
+
+	hashList := []CrossChainHashListEntry{placeholderEntry, opHashEntry1, opHashEntry2}
+
+	// Serialize the hash list entries
+	serializedHashList, err := serializeHashListEntries(hashList)
+	require.NoError(t, err)
+
+	// Now deserialize the hash list entries
+	buffer := bytes.NewReader(serializedHashList)
+	deserializedHashList, err := readHashListEntries(buffer)
+	require.NoError(t, err)
+
+	// Verify that the deserialized hash list matches the original
+	require.Equal(t, len(hashList), len(deserializedHashList))
+	for i := range hashList {
+		require.Equal(t, hashList[i].IsPlaceholder, deserializedHashList[i].IsPlaceholder)
+		require.Equal(t, hashList[i].OperationHash, deserializedHashList[i].OperationHash)
+	}
+}
+
+func TestHashListLengthValidation(t *testing.T) {
+	// Create a buffer with an invalid hash list length (e.g., 4, which exceeds MaxOpCount)
+	invalidHashListLength := MaxOpCount + 1
+	buffer := new(bytes.Buffer)
+	buffer.WriteByte(byte(invalidHashListLength))
+
+	// Try to read hash list entries
+	_, err := readHashListEntries(bytes.NewReader(buffer.Bytes()))
+	require.ErrorIs(t, err, ErrInvalidHashListLength)
+}
+
 func TestIntentsWithCreationDateInFuture(t *testing.T) {
 	intentJSON := mockIntentJSON()
 
