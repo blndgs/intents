@@ -321,6 +321,10 @@ func ParseCrossChainData(data []byte) (*CrossChainData, error) {
 		}
 	}
 
+	if !foundPlaceholder {
+		return nil, ErrPlaceholderNotFound
+	}
+
 	return &CrossChainData{
 		IntentJSON: intentJSON,
 		HashList:   hashList,
