@@ -544,7 +544,7 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 //   - `intentJSONBytes`: The Intent JSON bytes.
 //
 // **Returns:**
-//   - `[]byte`: The encoded cross-chain call data payload.
+//   - `[]byte`: The encoded cross-chain call data payload: Intent JSON and sorted hash list.
 //   - `error`: An error if encoding fails (e.g., invalid chain IDs or Intent JSON exceeds maximum size).
 //
 // **Cross-Chain Data Construction Steps:**
@@ -661,18 +661,18 @@ func (op *UserOperation) IsCrossChainOperation() bool {
 //   - UserOpSolvedStatus: The solved status of the UserOperation.
 //   - error: An error if validation fails.
 func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
-	crossChainData, err := ParseCrossChainData(op.CallData)
+	xCallDataField, err := ParseCrossChainData(op.CallData)
 	if err != nil {
 		return UnknownUserOp, err
 	}
 
-	hashListLength := len(crossChainData.HashList)
+	hashListLength := len(xCallDataField.HashList)
 	if hashListLength < MinOpCount || hashListLength > MaxOpCount {
 		return UnknownUserOp, ErrInvalidHashListLength
 	}
 
 	placeholderCount := 0
-	for _, entry := range crossChainData.HashList {
+	for _, entry := range xCallDataField.HashList {
 		if entry.IsPlaceholder {
 			placeholderCount++
 		}
