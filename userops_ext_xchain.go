@@ -735,6 +735,13 @@ func (op *UserOperation) ExtractAggregatedOp() (*UserOperation, error) {
 		return nil, fmt.Errorf("failed to unpack user operation data: %w", err)
 	}
 
+	// Since Intent ops are sponsored (0 value), it's ok to share the same reference
+	extractedOp.MaxPriorityFeePerGas = op.MaxPriorityFeePerGas
+	extractedOp.MaxFeePerGas = op.MaxFeePerGas
+
+	// set the extracted operation's signature to outer operation's signature
+	extractedOp.Signature = op.Signature[:signatureEndIdx]
+
 	return extractedOp, nil
 }
 
@@ -811,7 +818,13 @@ func unpackUserOpData(intentJSON string, data []byte) (*UserOperation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read initCode: %w", err)
 	}
-	op.InitCode = initCode
+
+	// Set InitCode to nil if empty
+	if len(initCode) == 0 {
+		op.InitCode = nil
+	} else {
+		op.InitCode = initCode
+	}
 
 	return op, nil
 }
