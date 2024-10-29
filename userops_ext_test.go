@@ -76,6 +76,112 @@ func mockSignature() []byte {
 	}
 }
 
+func TestUserOperation_AggregateAndExtract(t *testing.T) {
+	baseOp := mockUserOpXDataInCallData(t)
+	otherOp := mockUserOpXDataInCallData(t)
+
+	// Ensure both are valid unsolved cross-chain userOps
+	// sharing the signature payload
+	// Because mockUserOpXDataInCallData() sets a partially random signature payload
+	// set the same signature payload
+	otherOp.Signature = baseOp.Signature
+
+	// Ensure both are valid unsolved cross-chain userOps
+	baseStatus, err := baseOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, UnsolvedUserOp, baseStatus, "baseOp is not an UnsolvedUserOp")
+
+	otherStatus, err := otherOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, UnsolvedUserOp, otherStatus, "otherOp is not an UnsolvedUserOp")
+
+	// Aggregate otherOp into baseOp
+	err = baseOp.Aggregate(otherOp)
+	require.NoError(t, err, "failed to aggregate otherOp into baseOp")
+
+	// Validate that baseOp is now an UnsolvedAggregateUserOp
+	newStatus, err := baseOp.Validate()
+	require.NoError(t, err, "failed to validate baseOp after aggregation")
+	require.Equal(t, UnsolvedAggregateUserOp, newStatus, "baseOp is not an UnsolvedAggregateUserOp")
+
+	// Extract the aggregated op bytes
+	extractedOpBytes := baseOp.Signature[baseOp.GetSignatureEndIdx():]
+
+	otherOpBytes, err := otherOp.getPackedData()
+	require.NoError(t, err, "failed to get packed data for otherOp")
+
+	require.Equal(t, append([]byte{1}, otherOpBytes...), extractedOpBytes, "extractedOpBytes does not match otherOp")
+
+	// Get the shared Intent JSON
+	baseOpIntentJSON, err := baseOp.GetIntentJSON()
+	require.NoError(t, err, "failed to get baseOp's intent JSON")
+	otherOpIntentJSON, err := otherOp.GetIntentJSON()
+	require.NoError(t, err, "failed to get otherOp's intent JSON")
+
+	// parse the Intent JSON from the embedded op's callData
+	otherOpXData, err := ParseCrossChainData(otherOp.CallData)
+	require.NoError(t, err, "failed to parse otherOp's CrossChainData")
+	parsedIntentString := string(otherOpXData.IntentJSON)
+	require.Equal(t, baseOpIntentJSON, parsedIntentString)
+	require.Equal(t, otherOpIntentJSON, parsedIntentString)
+
+	// Read with 2 different functions the hash list entries from the otherOp's CallData
+	// and compare results.
+	// The first function `ParseCrossChainData` is used to parse the CallData and extract the hash list entries.
+	// The second function `readHashListEntries` is used to read the hash list entries from the CallData bytes.
+	//
+	// skip in otherOp.CallData value the 2-bytes 0xffff prefix (opType) + 2-bytes length of Intent JSON + bytes length of Intent JSON and initialize a bytes reader from the remaining bytes
+	otherOpCallData := otherOp.CallData[4+len(otherOpXData.IntentJSON):]
+	otherOpCallDataReader := bytes.NewReader(otherOpCallData)
+	xChainHashListEntries, err := readHashListEntries(otherOpCallDataReader)
+	require.NoError(t, err, "failed to read hash list entries from otherOp's CallData")
+	for idx, entry := range xChainHashListEntries {
+		require.Equal(t, entry.IsPlaceholder, otherOpXData.HashList[idx].IsPlaceholder, "placeholder entry does not match")
+		require.Equal(t, entry.OperationHash, otherOpXData.HashList[idx].OperationHash, "operation hash entry does not match")
+	}
+
+	extractedOp, err := baseOp.ExtractAggregatedOp()
+	require.NoError(t, err, "failed to extract aggregated op")
+
+	// Check that extractedOp matches otherOp
+	require.Equal(t, otherOp.Nonce.String(), extractedOp.Nonce.String(), "nonce does not match")
+	require.Equal(t, otherOp.CallGasLimit.String(), extractedOp.CallGasLimit.String(), "callGasLimit does not match")
+	require.Equal(t, otherOp.PreVerificationGas.String(), extractedOp.PreVerificationGas.String(), "preVerificationGas does not match")
+	require.Equal(t, otherOp.VerificationGasLimit.String(), extractedOp.VerificationGasLimit.String(), "verificationGasLimit does not match")
+	require.Equal(t, otherOp.InitCode, extractedOp.InitCode, "initCode does not match")
+	require.Equal(t, otherOp.CallData, extractedOp.CallData, "callData does not match")
+	require.Equal(t, otherOp.MaxFeePerGas.String(), extractedOp.MaxFeePerGas.String(), "maxFeePerGas does not match")
+	require.Equal(t, otherOp.MaxPriorityFeePerGas.String(), extractedOp.MaxPriorityFeePerGas.String(), "maxPriorityFeePerGas does not match")
+	require.Equal(t, otherOp.PaymasterAndData, extractedOp.PaymasterAndData, "paymasterAndData does not match")
+	require.Equal(t, otherOp.Signature, extractedOp.Signature, "signature does not match")
+}
+
+func TestUserOperation_ExtractAggregatedOp_CallData(t *testing.T) {
+	baseOp := mockUserOpXDataInCallData(t)
+	otherOp := mockUserOpXDataInCallData(t)
+
+	// Aggregate otherOp into baseOp
+	err := baseOp.Aggregate(otherOp)
+	require.NoError(t, err)
+
+	// Extract the aggregated op
+	extractedOp, err := baseOp.ExtractAggregatedOp()
+	require.NoError(t, err)
+
+	// Verify that the CallData matches the original otherOp's CallData
+	require.Equal(t, otherOp.CallData, extractedOp.CallData)
+
+	// Additionally, parse the CallData and verify its contents
+	extractedCrossChainData, err := ParseCrossChainData(extractedOp.CallData)
+	require.NoError(t, err)
+
+	originalCrossChainData, err := ParseCrossChainData(otherOp.CallData)
+	require.NoError(t, err)
+
+	// Compare the parsed CrossChainData structures
+	require.Equal(t, originalCrossChainData, extractedCrossChainData)
+}
+
 func TestSerializeAndDeserializeHashListEntries(t *testing.T) {
 	placeholderEntry := CrossChainHashListEntry{IsPlaceholder: true}
 	opHash1 := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
@@ -269,12 +375,12 @@ func mockCreateOp() *UserOperation {
 	userOp.CallGasLimit = big.NewInt(65536)
 	userOp.VerificationGasLimit = big.NewInt(65536)
 	userOp.PreVerificationGas = big.NewInt(70000)
-	userOp.MaxFeePerGas = big.NewInt(20000000000)
-	userOp.MaxPriorityFeePerGas = big.NewInt(1000000000)
+	userOp.MaxFeePerGas = big.NewInt(0)
+	userOp.MaxPriorityFeePerGas = big.NewInt(0)
 	return userOp
 }
 
-func mockUserOperationWithCrossChainIntentInCallData(t *testing.T) *UserOperation {
+func mockUserOpXDataInCallData(t *testing.T) *UserOperation {
 	t.Helper()
 
 	userOp := mockCreateOp()
@@ -1186,10 +1292,10 @@ func TestUserOperation_GetSignatureValue(t *testing.T) {
 
 // TestValidateUserOperation_CrossChain test Validate for cross chain intent.
 func TestValidateUserOperation_CrossChain_SimpleValidate(t *testing.T) {
-	uop := mockUserOperationWithCrossChainIntentInCallData(t)
+	uop := mockUserOpXDataInCallData(t)
 	status, err := uop.Validate()
 	require.NoError(t, err)
-	require.Equal(t, SolvedUserOp, status)
+	require.Equal(t, UnsolvedUserOp, status)
 }
 
 func TestUserOperation_IsCrossChainIntent(t *testing.T) {
@@ -1442,7 +1548,7 @@ func TestValidateUserOperation_CrossChain_Validate(t *testing.T) {
 				uop.Signature = mockSignature()
 				return uop
 			},
-			expectedStatus: SolvedUserOp,
+			expectedStatus: UnsolvedUserOp,
 			expectedError:  nil,
 		},
 		{
@@ -1475,7 +1581,7 @@ func TestValidateUserOperation_CrossChain_Validate(t *testing.T) {
 				// No signature set
 				return uop
 			},
-			expectedStatus: UnsolvedUserOp,
+			expectedStatus: UnSignedUserOp,
 			expectedError:  nil,
 		},
 	}
