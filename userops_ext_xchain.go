@@ -185,7 +185,6 @@ func (op *UserOperation) getPackedData() ([]byte, error) {
 
 // writeUint64 writes a uint64 value to the buffer in big-endian format.
 func writeUint64(buffer *bytes.Buffer, num64 uint64) error {
-	buffer.Reset()
 	valueBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(valueBytes, num64)
 	if _, err := buffer.Write(valueBytes); err != nil {
