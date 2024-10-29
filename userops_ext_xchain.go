@@ -116,12 +116,10 @@ func (op *UserOperation) Aggregate(otherOp *UserOperation) error {
 		return nil
 	}
 
-	// Write number of packed ops (1 byte) and a constant of 1 for now
+	// Write number of packed ops (1 byte): a constant of 1 for now
 	// as max packed ops is 1
-	sigPlusNumOps := append(op.Signature[:signatureEndIdx], 1)
-
 	// replace the existing packed data with the new one
-	op.Signature = append(sigPlusNumOps, packedData...)
+	op.Signature = append(op.Signature[:signatureEndIdx], append([]byte{1}, packedData...)...)
 
 	return nil
 }
@@ -193,6 +191,7 @@ func writeUint64(buffer *bytes.Buffer, num64 uint64) error {
 	if _, err := buffer.Write(valueBytes); err != nil {
 		return fmt.Errorf("failed to write uint64: %w", err)
 	}
+
 	return nil
 }
 
@@ -470,6 +469,7 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 	}
 
 	totalLength := OpTypeLength + IntentJSONLengthSize + len(intentJSON) + HashListLengthSize
+	// add the length of each entry in the hash list
 	for _, entry := range hashList {
 		if entry.IsPlaceholder {
 			totalLength += PlaceholderSize
