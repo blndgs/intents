@@ -681,7 +681,10 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 		return UnknownUserOp, ErrPlaceholderNotFound
 	}
 
-	// Check if the signature contains additional packed userOp
+	if !op.HasSignature() {
+		return UnSignedUserOp, nil
+	}
+
 	signatureEndIdx := op.GetSignatureEndIdx()
 	if len(op.Signature) > signatureEndIdx {
 		// Contains additional data past the signature

@@ -84,6 +84,7 @@ const (
 	// ConventionalUserOp indicates that the UserOperation does not contain Intent JSON and
 	// must have a valid EVM calldata value.
 	ConventionalUserOp
+	UnSignedUserOp // UnSignedUserOp indicates that the UserOperation does not contain a signature value.
 	// UnknownUserOp indicates that the UserOperation's state is unknown or ambiguous.
 	UnknownUserOp
 )
