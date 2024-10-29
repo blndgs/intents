@@ -686,6 +686,13 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 	}
 
 	signatureEndIdx := op.GetSignatureEndIdx()
+
+	if signatureEndIdx < SimpleSignatureLength {
+		// should have been caught by the previous check: HasSignature()
+		return UnknownUserOp, nil
+	}
+
+	// Check if the signature contains additional packed userOp
 	if len(op.Signature) > signatureEndIdx {
 		// Contains additional data past the signature
 		extraData := op.Signature[signatureEndIdx:]
@@ -696,11 +703,8 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 		}
 
 		// Assume it's packed data
+		// TODO: Validate packed data at least with a heuristic check of hashList length < MaxOpCount
 		return UnsolvedAggregateUserOp, nil
-	}
-
-	if op.HasSignature() {
-		return SolvedUserOp, nil
 	}
 
 	return UnsolvedUserOp, nil
