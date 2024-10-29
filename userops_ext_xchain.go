@@ -57,20 +57,21 @@ type CrossChainHashListEntry struct {
 // Aggregate combines the current UserOperation with another unsolved cross-chain UserOperation.
 //
 // Preconditions:
-//   - Both the called UserOperation and the otherOp are valid unsolved userOps (Validate() returns UnsolvedUserOp).
+//   - Both the called UserOperation and the embeddedOp are valid unsolved userOps (Validate() returns UnsolvedUserOp).
 //   - Both userOps are valid cross-chain userOps.
 //
 // If any precondition is not met, returns an error indicating which userOp didn't meet the precondition.
 //
 // Behavior:
-//   - Copies the otherOp's packed data into the signature field of the called UserOperation.
-//   - If initCode is set in the otherOp, it is copied into the called UserOperation.
-//   - If the same otherOp is already aggregated, the operation is idempotent.
-//   - If a different otherOp is already aggregated, the existing packed data is replaced with the new otherOp's data.
+//   - Copies the embeddedOp's packed data into the signature field of the called UserOperation.
+//   - If initCode is set in the embeddedOp, it is copied into the called UserOperation.
+//   - If the same embeddedOp is already aggregated, the operation is idempotent.
+//   - If a different embeddedOp is already aggregated, the existing packed
+//   - data is replaced with the new embeddedOp's data.
 //
 // Returns:
 //   - error: An error if the operation fails.
-func (op *UserOperation) Aggregate(otherOp *UserOperation) error {
+func (op *UserOperation) Aggregate(embeddedOp *UserOperation) error {
 	// Validate the called UserOperation
 	status, err := op.Validate()
 	if err != nil {
@@ -81,7 +82,7 @@ func (op *UserOperation) Aggregate(otherOp *UserOperation) error {
 	}
 
 	// Validate the other UserOperation
-	otherStatus, err := otherOp.Validate()
+	otherStatus, err := embeddedOp.Validate()
 	if err != nil {
 		return fmt.Errorf("failed to validate the other UserOperation: %w", err)
 	}
@@ -94,11 +95,11 @@ func (op *UserOperation) Aggregate(otherOp *UserOperation) error {
 		return fmt.Errorf("called UserOperation is not a valid cross-chain userOp")
 	}
 
-	if !otherOp.IsCrossChainOperation() {
+	if !embeddedOp.IsCrossChainOperation() {
 		return fmt.Errorf("other UserOperation is not a valid cross-chain userOp")
 	}
 
-	packedData, err := otherOp.getPackedData()
+	packedData, err := embeddedOp.getPackedData()
 	if err != nil {
 		return fmt.Errorf("failed to get packed data from other UserOperation: %w", err)
 	}
@@ -710,13 +711,13 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 	return UnsolvedUserOp, nil
 }
 
-// ExtractAggregatedOp reverses the Aggregate operation and extracts the packed
+// ExtractEmbeddedOp reverses the Aggregate operation and extracts the packed
 // other UserOperation from the signature field.
 //
 // Returns:
 //   - *UserOperation: The extracted UserOperation.
 //   - error: An error if extraction fails.
-func (op *UserOperation) ExtractAggregatedOp() (*UserOperation, error) {
+func (op *UserOperation) ExtractEmbeddedOp() (*UserOperation, error) {
 	signatureEndIdx := op.GetSignatureEndIdx()
 	if len(op.Signature) <= signatureEndIdx {
 		return nil, fmt.Errorf("no aggregated operation data found")

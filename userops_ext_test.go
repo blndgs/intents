@@ -78,26 +78,26 @@ func mockSignature() []byte {
 
 func TestUserOperation_AggregateAndExtract(t *testing.T) {
 	baseOp := mockUserOpXDataInCallData(t)
-	otherOp := mockUserOpXDataInCallData(t)
+	embeddedOp := mockUserOpXDataInCallData(t)
 
 	// Ensure both are valid unsolved cross-chain userOps
 	// sharing the signature payload
 	// Because mockUserOpXDataInCallData() sets a partially random signature payload
 	// set the same signature payload
-	otherOp.Signature = baseOp.Signature
+	embeddedOp.Signature = baseOp.Signature
 
 	// Ensure both are valid unsolved cross-chain userOps
 	baseStatus, err := baseOp.Validate()
 	require.NoError(t, err)
 	require.Equal(t, UnsolvedUserOp, baseStatus, "baseOp is not an UnsolvedUserOp")
 
-	otherStatus, err := otherOp.Validate()
+	otherStatus, err := embeddedOp.Validate()
 	require.NoError(t, err)
-	require.Equal(t, UnsolvedUserOp, otherStatus, "otherOp is not an UnsolvedUserOp")
+	require.Equal(t, UnsolvedUserOp, otherStatus, "embeddedOp is not an UnsolvedUserOp")
 
-	// Aggregate otherOp into baseOp
-	err = baseOp.Aggregate(otherOp)
-	require.NoError(t, err, "failed to aggregate otherOp into baseOp")
+	// Aggregate embeddedOp into baseOp
+	err = baseOp.Aggregate(embeddedOp)
+	require.NoError(t, err, "failed to aggregate embeddedOp into baseOp")
 
 	// Validate that baseOp is now an UnsolvedAggregateUserOp
 	newStatus, err := baseOp.Validate()
@@ -107,75 +107,75 @@ func TestUserOperation_AggregateAndExtract(t *testing.T) {
 	// Extract the aggregated op bytes
 	extractedOpBytes := baseOp.Signature[baseOp.GetSignatureEndIdx():]
 
-	otherOpBytes, err := otherOp.getPackedData()
-	require.NoError(t, err, "failed to get packed data for otherOp")
+	embeddedOpBytes, err := embeddedOp.getPackedData()
+	require.NoError(t, err, "failed to get packed data for embeddedOp")
 
-	require.Equal(t, append([]byte{1}, otherOpBytes...), extractedOpBytes, "extractedOpBytes does not match otherOp")
+	require.Equal(t, append([]byte{1}, embeddedOpBytes...), extractedOpBytes, "extractedOpBytes does not match embeddedOp")
 
 	// Get the shared Intent JSON
 	baseOpIntentJSON, err := baseOp.GetIntentJSON()
 	require.NoError(t, err, "failed to get baseOp's intent JSON")
-	otherOpIntentJSON, err := otherOp.GetIntentJSON()
-	require.NoError(t, err, "failed to get otherOp's intent JSON")
+	otherOpIntentJSON, err := embeddedOp.GetIntentJSON()
+	require.NoError(t, err, "failed to get embeddedOp's intent JSON")
 
 	// parse the Intent JSON from the embedded op's callData
-	otherOpXData, err := ParseCrossChainData(otherOp.CallData)
-	require.NoError(t, err, "failed to parse otherOp's CrossChainData")
+	otherOpXData, err := ParseCrossChainData(embeddedOp.CallData)
+	require.NoError(t, err, "failed to parse embeddedOp's CrossChainData")
 	parsedIntentString := string(otherOpXData.IntentJSON)
 	require.Equal(t, baseOpIntentJSON, parsedIntentString)
 	require.Equal(t, otherOpIntentJSON, parsedIntentString)
 
-	// Read with 2 different functions the hash list entries from the otherOp's CallData
+	// Read with 2 different functions the hash list entries from the embeddedOp's CallData
 	// and compare results.
 	// The first function `ParseCrossChainData` is used to parse the CallData and extract the hash list entries.
 	// The second function `readHashListEntries` is used to read the hash list entries from the CallData bytes.
 	//
-	// skip in otherOp.CallData value the 2-bytes 0xffff prefix (opType) + 2-bytes length of Intent JSON + bytes length of Intent JSON and initialize a bytes reader from the remaining bytes
-	otherOpCallData := otherOp.CallData[4+len(otherOpXData.IntentJSON):]
+	// skip in embeddedOp.CallData value the 2-bytes 0xffff prefix (opType) + 2-bytes length of Intent JSON + bytes length of Intent JSON and initialize a bytes reader from the remaining bytes
+	otherOpCallData := embeddedOp.CallData[4+len(otherOpXData.IntentJSON):]
 	otherOpCallDataReader := bytes.NewReader(otherOpCallData)
 	xChainHashListEntries, err := readHashListEntries(otherOpCallDataReader)
-	require.NoError(t, err, "failed to read hash list entries from otherOp's CallData")
+	require.NoError(t, err, "failed to read hash list entries from embeddedOp's CallData")
 	for idx, entry := range xChainHashListEntries {
 		require.Equal(t, entry.IsPlaceholder, otherOpXData.HashList[idx].IsPlaceholder, "placeholder entry does not match")
 		require.Equal(t, entry.OperationHash, otherOpXData.HashList[idx].OperationHash, "operation hash entry does not match")
 	}
 
-	extractedOp, err := baseOp.ExtractAggregatedOp()
+	extractedOp, err := baseOp.ExtractEmbeddedOp()
 	require.NoError(t, err, "failed to extract aggregated op")
 
-	// Check that extractedOp matches otherOp
-	require.Equal(t, otherOp.Nonce.String(), extractedOp.Nonce.String(), "nonce does not match")
-	require.Equal(t, otherOp.CallGasLimit.String(), extractedOp.CallGasLimit.String(), "callGasLimit does not match")
-	require.Equal(t, otherOp.PreVerificationGas.String(), extractedOp.PreVerificationGas.String(), "preVerificationGas does not match")
-	require.Equal(t, otherOp.VerificationGasLimit.String(), extractedOp.VerificationGasLimit.String(), "verificationGasLimit does not match")
-	require.Equal(t, otherOp.InitCode, extractedOp.InitCode, "initCode does not match")
-	require.Equal(t, otherOp.CallData, extractedOp.CallData, "callData does not match")
-	require.Equal(t, otherOp.MaxFeePerGas.String(), extractedOp.MaxFeePerGas.String(), "maxFeePerGas does not match")
-	require.Equal(t, otherOp.MaxPriorityFeePerGas.String(), extractedOp.MaxPriorityFeePerGas.String(), "maxPriorityFeePerGas does not match")
-	require.Equal(t, otherOp.PaymasterAndData, extractedOp.PaymasterAndData, "paymasterAndData does not match")
-	require.Equal(t, otherOp.Signature, extractedOp.Signature, "signature does not match")
+	// Check that extractedOp matches embeddedOp
+	require.Equal(t, embeddedOp.Nonce.String(), extractedOp.Nonce.String(), "nonce does not match")
+	require.Equal(t, embeddedOp.CallGasLimit.String(), extractedOp.CallGasLimit.String(), "callGasLimit does not match")
+	require.Equal(t, embeddedOp.PreVerificationGas.String(), extractedOp.PreVerificationGas.String(), "preVerificationGas does not match")
+	require.Equal(t, embeddedOp.VerificationGasLimit.String(), extractedOp.VerificationGasLimit.String(), "verificationGasLimit does not match")
+	require.Equal(t, embeddedOp.InitCode, extractedOp.InitCode, "initCode does not match")
+	require.Equal(t, embeddedOp.CallData, extractedOp.CallData, "callData does not match")
+	require.Equal(t, embeddedOp.MaxFeePerGas.String(), extractedOp.MaxFeePerGas.String(), "maxFeePerGas does not match")
+	require.Equal(t, embeddedOp.MaxPriorityFeePerGas.String(), extractedOp.MaxPriorityFeePerGas.String(), "maxPriorityFeePerGas does not match")
+	require.Equal(t, embeddedOp.PaymasterAndData, extractedOp.PaymasterAndData, "paymasterAndData does not match")
+	require.Equal(t, embeddedOp.Signature, extractedOp.Signature, "signature does not match")
 }
 
 func TestUserOperation_ExtractAggregatedOp_CallData(t *testing.T) {
 	baseOp := mockUserOpXDataInCallData(t)
-	otherOp := mockUserOpXDataInCallData(t)
+	embeddedOp := mockUserOpXDataInCallData(t)
 
-	// Aggregate otherOp into baseOp
-	err := baseOp.Aggregate(otherOp)
+	// Aggregate embeddedOp into baseOp
+	err := baseOp.Aggregate(embeddedOp)
 	require.NoError(t, err)
 
 	// Extract the aggregated op
-	extractedOp, err := baseOp.ExtractAggregatedOp()
+	extractedOp, err := baseOp.ExtractEmbeddedOp()
 	require.NoError(t, err)
 
-	// Verify that the CallData matches the original otherOp's CallData
-	require.Equal(t, otherOp.CallData, extractedOp.CallData)
+	// Verify that the CallData matches the original embeddedOp's CallData
+	require.Equal(t, embeddedOp.CallData, extractedOp.CallData)
 
 	// Additionally, parse the CallData and verify its contents
 	extractedCrossChainData, err := ParseCrossChainData(extractedOp.CallData)
 	require.NoError(t, err)
 
-	originalCrossChainData, err := ParseCrossChainData(otherOp.CallData)
+	originalCrossChainData, err := ParseCrossChainData(embeddedOp.CallData)
 	require.NoError(t, err)
 
 	// Compare the parsed CrossChainData structures
