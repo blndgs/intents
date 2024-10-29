@@ -112,7 +112,8 @@ func (op *UserOperation) Aggregate(otherOp *UserOperation) error {
 	existingPackedData := op.Signature[signatureEndIdx:]
 
 	// If the existing packed data is the same as the new one, do nothing (idempotent)
-	if bytes.Equal(existingPackedData, packedData) {
+	// first byte is the number of packed ops
+	if len(existingPackedData) == len(packedData)+1 && existingPackedData[0] == 1 && bytes.Equal(existingPackedData[1:], packedData) {
 		return nil
 	}
 
