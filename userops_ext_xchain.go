@@ -228,28 +228,84 @@ func serializeHashListEntries(hashList []CrossChainHashListEntry) ([]byte, error
 	return buffer.Bytes(), nil
 }
 
-// ParseCrossChainData parses the cross-chain data into a structured format.
+// parseHashListEntries is a shared function that parses a byte slice or reader into hash list entries.
+// It handles both raw byte slices and readers to support both initial parsing and unpacking.
 //
 // Parameters:
-//   - data: The byte slice containing the cross-chain data.
+//   - reader: io.Reader containing the hash list data
+//   - hashListLength: Number of entries to parse
 //
 // Returns:
-//   - *CrossChainData: The parsed cross-chain data.
-//   - error: An error if parsing fails.
-func ParseCrossChainData(data []byte) (*CrossChainData, error) {
-	offset := 0
+//   - []CrossChainHashListEntry: Parsed hash list entries
+//   - int: Number of bytes read
+//   - error: Error if parsing fails
+func parseHashListEntries(reader io.Reader, hashListLength int) ([]CrossChainHashListEntry, int, error) {
+	if hashListLength < MinOpCount || hashListLength > MaxOpCount {
+		return nil, 0, ErrInvalidHashListLength
+	}
 
-	// Check if data is at least the minimum length
+	entries := make([]CrossChainHashListEntry, 0, hashListLength)
+	bytesRead := 0
+	foundPlaceholder := false
+
+	for i := 0; i < hashListLength; i++ {
+		// Read the next 2 bytes to check for placeholder
+		placeholderBytes := make([]byte, PlaceholderSize)
+		n, err := reader.Read(placeholderBytes)
+		if err != nil {
+			return nil, bytesRead, fmt.Errorf("failed to read hash list entry: %w", err)
+		}
+		bytesRead += n
+
+		placeholder := binary.BigEndian.Uint16(placeholderBytes)
+		if placeholder == HashPlaceholder {
+			if foundPlaceholder {
+				return nil, bytesRead, ErrInvalidHashListEntry
+			}
+			foundPlaceholder = true
+			entries = append(entries, CrossChainHashListEntry{IsPlaceholder: true})
+			continue
+		}
+
+		// Not a placeholder, read the remaining 30 bytes for the full 32-byte hash
+		hashBytes := make([]byte, OperationHashSize-PlaceholderSize)
+		n, err = reader.Read(hashBytes)
+		if err != nil {
+			return nil, bytesRead, fmt.Errorf("failed to read operation hash: %w", err)
+		}
+		bytesRead += n
+
+		// Combine placeholder bytes and hash bytes for full 32-byte hash
+		fullHash := append(placeholderBytes, hashBytes...)
+		if !validateOperationHash(fullHash) {
+			return nil, bytesRead, ErrHashListInvalidValue
+		}
+
+		entries = append(entries, CrossChainHashListEntry{
+			IsPlaceholder: false,
+			OperationHash: fullHash,
+		})
+	}
+
+	if !foundPlaceholder {
+		return nil, bytesRead, ErrPlaceholderNotFound
+	}
+
+	return entries, bytesRead, nil
+}
+
+// ParseCrossChainData parses the cross-chain data into a structured format.
+func ParseCrossChainData(data []byte) (*CrossChainData, error) {
 	if len(data) < OpTypeLength+IntentJSONLengthSize {
 		return nil, ErrMissingCrossChainData
 	}
 
 	// Verify OpType
-	opType := binary.BigEndian.Uint16(data[offset : offset+OpTypeLength])
+	opType := binary.BigEndian.Uint16(data[:OpTypeLength])
 	if opType != CrossChainMarker {
 		return nil, errors.New("not a cross-chain operation")
 	}
-	offset += OpTypeLength
+	offset := OpTypeLength
 
 	// Get IntentJSON length
 	intentJSONLength := int(binary.BigEndian.Uint16(data[offset : offset+IntentJSONLengthSize]))
@@ -288,43 +344,35 @@ func ParseCrossChainData(data []byte) (*CrossChainData, error) {
 	//
 	// 	Their sorted ASC sequence establishes a deterministic hash calculation.
 
-	// Parse HashList entries
-	hashList := make([]CrossChainHashListEntry, 0, hashListLength)
-	foundPlaceholder := false
-	for i := 0; i < hashListLength; i++ {
-		if len(data) < offset+PlaceholderSize {
-			return nil, ErrInvalidHashListEntry
-		}
+	// Create reader for remaining data
+	reader := bytes.NewReader(data[offset:])
 
-		placeholder := binary.BigEndian.Uint16(data[offset : offset+PlaceholderSize])
-		offset += PlaceholderSize
-
-		if placeholder == HashPlaceholder {
-			if foundPlaceholder {
-				return nil, ErrInvalidHashListEntry
-			}
-			foundPlaceholder = true
-			hashList = append(hashList, CrossChainHashListEntry{IsPlaceholder: true})
-		} else {
-			if len(data) < offset+OperationHashSize-PlaceholderSize {
-				return nil, ErrInvalidHashListEntry
-			}
-			operationHash := data[offset-PlaceholderSize : offset-PlaceholderSize+OperationHashSize]
-			offset += OperationHashSize - PlaceholderSize
-			if !validateOperationHash(operationHash) {
-				return nil, ErrHashListInvalidValue
-			}
-			hashList = append(hashList, CrossChainHashListEntry{
-				IsPlaceholder: false,
-				OperationHash: operationHash,
-			})
-		}
+	// Use shared parsing function
+	hashList, _, err := parseHashListEntries(reader, hashListLength)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse hash list: %w", err)
 	}
 
 	return &CrossChainData{
 		IntentJSON: intentJSON,
 		HashList:   hashList,
 	}, nil
+}
+
+// readHashListEntries reads the hash list entries from a byte reader.
+func readHashListEntries(buffer *bytes.Reader) ([]CrossChainHashListEntry, error) {
+	// Read the hash list length
+	hashListLength, err := buffer.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read hash list length: %w", err)
+	}
+
+	hashList, _, err := parseHashListEntries(buffer, int(hashListLength))
+	if err != nil {
+		return nil, err
+	}
+
+	return hashList, nil
 }
 
 // validateOperationHash checks if the provided operation hash is valid.
@@ -838,54 +886,6 @@ func setUint64(uint64Reader *bytes.Reader) (*big.Int, error) {
 	}
 
 	return new(big.Int).SetBytes(uint64Buffer), nil
-}
-
-func readHashListEntries(buffer *bytes.Reader) ([]CrossChainHashListEntry, error) {
-	// Read the hash list length
-	hashListLength, err := buffer.ReadByte()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read hash list length: %w", err)
-	}
-
-	if hashListLength < MinOpCount || hashListLength > MaxOpCount {
-		return nil, ErrInvalidHashListLength
-	}
-
-	entries := make([]CrossChainHashListEntry, 0, hashListLength)
-	for i := 0; i < int(hashListLength); i++ {
-		// Peek the next 2 bytes to check for placeholder
-		peekBytes := make([]byte, OpTypeLength) // placeholder length
-		if _, err := buffer.Read(peekBytes); err != nil {
-			return nil, fmt.Errorf("failed to read hash list entry: %w", err)
-		}
-		if err := buffer.UnreadByte(); err != nil {
-			return nil, fmt.Errorf("failed to unread first byte: %w", err)
-		}
-		if err := buffer.UnreadByte(); err != nil {
-			return nil, fmt.Errorf("failed to unread second byte: %w", err)
-		}
-
-		if binary.BigEndian.Uint16(peekBytes) == HashPlaceholder {
-			// It's a placeholder
-			var placeholder uint16
-			if err := binary.Read(buffer, binary.BigEndian, &placeholder); err != nil {
-				return nil, fmt.Errorf("failed to read placeholder: %w", err)
-			}
-			entries = append(entries, CrossChainHashListEntry{IsPlaceholder: true})
-		} else {
-			// It's a hash (32 bytes)
-			hashBytes := make([]byte, 32)
-			if _, err := buffer.Read(hashBytes); err != nil {
-				return nil, fmt.Errorf("failed to read operation hash: %w", err)
-			}
-			entries = append(entries, CrossChainHashListEntry{
-				IsPlaceholder: false,
-				OperationHash: hashBytes,
-			})
-		}
-	}
-
-	return entries, nil
 }
 
 // setCrossChainIntent sets the Intent JSON for a cross-chain operation.
