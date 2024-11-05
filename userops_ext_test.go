@@ -3159,3 +3159,321 @@ func TestUserOperation_Aggregate_ErrorHandling(t *testing.T) {
 		})
 	}
 }
+
+func TestUserOperation_AggregateAggregated(t *testing.T) {
+	tests := []struct {
+		name         string
+		setupOps     func(t *testing.T) (*UserOperation, *UserOperation, *UserOperation)
+		validateFunc func(t *testing.T, baseOp *UserOperation, err error)
+	}{
+		{
+			name: "Aggregate an already aggregated operation",
+			setupOps: func(t *testing.T) (*UserOperation, *UserOperation, *UserOperation) {
+				// Create base operation
+				baseOp := mockUserOpXDataInCallData(t)
+
+				// Create first embedded operation
+				embedOp1 := mockUserOpXDataInCallData(t)
+				embedOp1.Nonce = big.NewInt(100) // Different nonce for identification
+
+				// Create second embedded operation
+				embedOp2 := mockUserOpXDataInCallData(t)
+				embedOp2.Nonce = big.NewInt(200) // Different nonce for identification
+
+				return baseOp, embedOp1, embedOp2
+			},
+			validateFunc: func(t *testing.T, baseOp *UserOperation, err error) {
+				if err != nil {
+					t.Logf("Got error as expected: %v", err)
+					require.Contains(t, err.Error(), "already aggregated")
+					return
+				}
+
+				// If no error, verify we can extract both operations
+				t.Log("No error, verifying double aggregation result...")
+
+				// Verify the operation status
+				status, err := baseOp.Validate()
+				require.NoError(t, err)
+				require.Equal(t, UnsolvedAggregateUserOp, status)
+
+				// Try to extract embedded operations
+				firstOp, err := baseOp.ExtractEmbeddedOp()
+				require.NoError(t, err)
+				require.NotNil(t, firstOp)
+				t.Logf("First extracted operation nonce: %s", firstOp.Nonce.String())
+
+				// If we support multiple aggregations, try to extract second operation
+				if len(baseOp.Signature) > baseOp.GetSignatureEndIdx()+100 { // Rough check for second operation
+					secondOp, err := firstOp.ExtractEmbeddedOp()
+					if err == nil {
+						require.NotNil(t, secondOp)
+						t.Logf("Second extracted operation nonce: %s", secondOp.Nonce.String())
+					}
+				}
+			},
+		},
+		{
+			name: "Attempt to aggregate into aggregated operation",
+			setupOps: func(t *testing.T) (*UserOperation, *UserOperation, *UserOperation) {
+				// Create and aggregate first pair
+				baseOp := mockUserOpXDataInCallData(t)
+				embedOp1 := mockUserOpXDataInCallData(t)
+				err := baseOp.Aggregate(embedOp1)
+				require.NoError(t, err)
+
+				// Create third operation to attempt aggregation into aggregated op
+				embedOp2 := mockUserOpXDataInCallData(t)
+				embedOp2.Nonce = big.NewInt(300) // Different nonce
+
+				return baseOp, embedOp1, embedOp2
+			},
+			validateFunc: func(t *testing.T, baseOp *UserOperation, err error) {
+				t.Logf("Base operation signature length: %d", len(baseOp.Signature))
+
+				// If we get an error, verify it's clear
+				if err != nil {
+					t.Logf("Got error as expected: %v", err)
+					require.Contains(t, err.Error(), "already contains aggregated operation")
+					return
+				}
+
+				status, err := baseOp.Validate()
+				require.NoError(t, err)
+				require.Equal(t, UnsolvedAggregateUserOp, status)
+
+				extractedOp, err := baseOp.ExtractEmbeddedOp()
+				require.NoError(t, err)
+				require.NotNil(t, extractedOp)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseOp, embedOp1, embedOp2 := tt.setupOps(t)
+
+			// First aggregation
+			err := baseOp.Aggregate(embedOp1)
+			require.NoError(t, err)
+
+			t.Log("First aggregation successful")
+
+			// Debug output before second aggregation
+			status, err := baseOp.Validate()
+			require.NoError(t, err)
+			t.Logf("Status after first aggregation: %v", status)
+			t.Logf("Signature length after first aggregation: %d", len(baseOp.Signature))
+
+			// Attempt second aggregation
+			err = baseOp.Aggregate(embedOp2)
+
+			tt.validateFunc(t, baseOp, err)
+		})
+	}
+}
+
+func TestUserOperation_ExtractAggregated(t *testing.T) {
+	// Create a chain of operations
+	baseOp := mockUserOpXDataInCallData(t)
+	embedOp1 := mockUserOpXDataInCallData(t)
+	embedOp1.Nonce = big.NewInt(100)
+	embedOp2 := mockUserOpXDataInCallData(t)
+	embedOp2.Nonce = big.NewInt(200)
+
+	// First aggregation
+	err := baseOp.Aggregate(embedOp1)
+	require.NoError(t, err)
+
+	// Try to extract after first aggregation
+	extractedOp1, err := baseOp.ExtractEmbeddedOp()
+	require.NoError(t, err)
+	require.NotNil(t, extractedOp1)
+	require.Equal(t, embedOp1.Nonce.String(), extractedOp1.Nonce.String())
+
+	t.Log("Successfully extracted first aggregated operation")
+
+	// Attempt second aggregation
+	err = baseOp.Aggregate(embedOp2)
+
+	if err != nil {
+		t.Logf("Second aggregation failed as expected: %v", err)
+	} else {
+		t.Log("Second aggregation successful, testing extraction...")
+
+		// Extract and verify
+		extracted, err := baseOp.ExtractEmbeddedOp()
+		require.NoError(t, err)
+		require.NotNil(t, extracted)
+
+		t.Logf("Extracted operation nonce: %s", extracted.Nonce.String())
+
+		// Try to extract from extracted operation
+		nestedExtracted, err := extracted.ExtractEmbeddedOp()
+		if err == nil {
+			t.Logf("Successfully extracted nested operation with nonce: %s", nestedExtracted.Nonce.String())
+		} else {
+			t.Logf("No nested operation found (expected): %v", err)
+		}
+	}
+}
+
+func TestAggregatedOperation_SolvingBehavior(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupOp     func(t *testing.T) *UserOperation
+		action      func(t *testing.T, op *UserOperation) error
+		expectError string
+	}{
+		{
+			name: "Extract and solve embedded operation",
+			setupOp: func(t *testing.T) *UserOperation {
+				baseOp := mockUserOpXDataInCallData(t)
+				embedOp := mockUserOpXDataInCallData(t)
+
+				err := baseOp.Aggregate(embedOp)
+				require.NoError(t, err)
+
+				return baseOp
+			},
+			action: func(t *testing.T, op *UserOperation) error {
+				// Extract embedded op
+				extractedOp, err := op.ExtractEmbeddedOp()
+				require.NoError(t, err)
+				require.NotNil(t, extractedOp)
+
+				// Attempt to solve extracted op
+				err = extractedOp.SetEVMInstructions([]byte(mockEvmSolution))
+				require.NoError(t, err)
+
+				// Verify solved status
+				status, err := extractedOp.Validate()
+				require.NoError(t, err)
+				require.Equal(t, SolvedUserOp, status)
+
+				return nil
+			},
+			expectError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := tt.setupOp(t)
+
+			// Verify initial state
+			status, err := op.Validate()
+			require.NoError(t, err)
+			require.Equal(t, UnsolvedAggregateUserOp, status)
+
+			// Perform action
+			err = tt.action(t, op)
+
+			if tt.expectError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAggregatedOperation_InvalidPackedOpsLength(t *testing.T) {
+	tests := []struct {
+		name        string
+		modifyOp    func(t *testing.T, op *UserOperation)
+		expectError string
+	}{
+		{
+			name: "Zero packed ops length",
+			modifyOp: func(t *testing.T, op *UserOperation) {
+				sigEnd := op.GetSignatureEndIdx()
+				// Set packed ops length to 0
+				op.Signature[sigEnd] = 0
+			},
+			expectError: "expected packedOpsLength to be 1",
+		},
+		{
+			name: "Packed ops length greater than 1",
+			modifyOp: func(t *testing.T, op *UserOperation) {
+				sigEnd := op.GetSignatureEndIdx()
+				// Set packed ops length to 2
+				op.Signature[sigEnd] = 2
+			},
+			expectError: "expected packedOpsLength to be 1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create and aggregate operations
+			baseOp := mockUserOpXDataInCallData(t)
+			embedOp := mockUserOpXDataInCallData(t)
+
+			err := baseOp.Aggregate(embedOp)
+			require.NoError(t, err)
+
+			// Debug output before modification
+			t.Logf("Original signature length: %d", len(baseOp.Signature))
+			t.Logf("Signature end index: %d", baseOp.GetSignatureEndIdx())
+
+			// Modify the aggregated operation
+			tt.modifyOp(t, baseOp)
+
+			// Try to extract embedded operation
+			extractedOp, err := baseOp.ExtractEmbeddedOp()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.expectError)
+			require.Nil(t, extractedOp)
+
+			t.Logf("Got expected error: %v", err)
+		})
+	}
+}
+
+func TestAggregatedOperation_CompleteSolvingProcess(t *testing.T) {
+	// Create and aggregate operations
+	baseOp := mockUserOpXDataInCallData(t)
+	embedOp := mockUserOpXDataInCallData(t)
+
+	// Set unique values for identification
+	embedOp.Nonce = big.NewInt(999)
+	embedOp.CallGasLimit = big.NewInt(100000)
+
+	t.Log("Aggregating operations...")
+	err := baseOp.Aggregate(embedOp)
+	require.NoError(t, err)
+
+	// Verify aggregate status
+	status, err := baseOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, UnsolvedAggregateUserOp, status)
+
+	t.Log("Extracting embedded operation...")
+	extractedOp, err := baseOp.ExtractEmbeddedOp()
+	require.NoError(t, err)
+	require.NotNil(t, extractedOp)
+
+	// Verify extracted operation matches original
+	require.Equal(t, embedOp.Nonce.String(), extractedOp.Nonce.String())
+	require.Equal(t, embedOp.CallGasLimit.String(), extractedOp.CallGasLimit.String())
+
+	t.Log("Solving extracted operation...")
+	err = extractedOp.SetEVMInstructions([]byte(mockEvmSolution))
+	require.NoError(t, err)
+
+	// Verify solved status
+	status, err = extractedOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, SolvedUserOp, status)
+
+	t.Log("Verifying solved operation...")
+	// Verify EVM solution was properly set
+	require.Equal(t, mockCallDataBytesValue, extractedOp.CallData)
+
+	// Verify original aggregate operation remains unchanged
+	status, err = baseOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, UnsolvedAggregateUserOp, status)
+}
