@@ -17,6 +17,7 @@ import (
 
 	pb "github.com/blndgs/model/gen/go/proto/v1"
 	"github.com/ethereum/go-ethereum/common"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -615,6 +616,13 @@ func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, oth
 	intent, err := op.GetIntent()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get intent: %w", err)
+	}
+
+	if len(intentJSONBytes) == 0 {
+		intentJSONBytes, err = protojson.Marshal(intent)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Extract source and destination chain IDs
