@@ -411,7 +411,10 @@ func (op *UserOperation) SetIntent(intentJSON string) error {
 func (op *UserOperation) GetSignatureValue() []byte {
 	if no0xPrefix(op.Signature) {
 		lenSig := len(op.Signature)
-		if lenSig >= KernelSignatureLength && sigHasKernelPrefix(op.Signature) {
+
+		// sigHasKernelPrefix already checks this internally
+		// if lenSig >= KernelSignatureLength && sigHasKernelPrefix(op.Signature) {
+		if sigHasKernelPrefix(op.Signature) {
 			return op.Signature[:KernelSignatureLength]
 		}
 
