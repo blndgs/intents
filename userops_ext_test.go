@@ -1607,7 +1607,7 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 		callData      []byte
 		setupIntent   func() *pb.Intent
 		expectedError string
-		validate      func(t *testing.T, result []byte)
+		validate      func(t *testing.T, result []byte, intent *pb.Intent)
 	}{
 		{
 			name:     "Successful encoding",
@@ -1627,27 +1627,32 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 				}
 			},
 			expectedError: "",
-			validate: func(t *testing.T, result []byte) {
+			validate: func(t *testing.T, result []byte, _ *pb.Intent) {
 				// Cross-chain marker
 				require.Equal(t, CrossChainMarker, binary.BigEndian.Uint16(result[:OpTypeLength]))
 				offset := OpTypeLength
 
 				// intent JSON
-				require.Equal(t, uint16(len("test call data")), binary.BigEndian.Uint16(result[offset:offset+IntentJSONLengthSize]))
-				intLen := int(binary.BigEndian.Uint16(result[offset : offset+IntentJSONLengthSize]))
-				// Intent length
-				require.Equal(t, len("test call data"), intLen)
-				offset += int(binary.BigEndian.Uint16(result[offset:offset+IntentJSONLengthSize])) + IntentJSONLengthSize
+				dataLen := binary.BigEndian.Uint16(result[offset : offset+IntentJSONLengthSize])
+				require.Equal(t, uint16(len("test call data")), dataLen)
+				offset += IntentJSONLengthSize
+
+				// Verify content length
+				require.Equal(t, len("test call data"), int(dataLen))
+				offset += int(dataLen)
 
 				// hash list length
 				require.Equal(t, byte(2), result[offset])
-				// skip the hash value as the placeholder is sorted and placed at the 2nd position
-				offset += 1 + HashLength
+				offset++
 
+				// Skip first hash
+				offset += HashLength
+
+				// Verify placeholder
 				require.Equal(t, uint16(HashPlaceholder), binary.BigEndian.Uint16(result[offset:offset+2]))
 				offset += 2
 
-				// exhausted bytes
+				// Verify we used all bytes
 				require.Equal(t, len(result), offset)
 			},
 		},
@@ -1669,16 +1674,42 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 				}
 			},
 			expectedError: "",
-			validate: func(t *testing.T, result []byte) {
+			validate: func(t *testing.T, result []byte, intent *pb.Intent) {
+				t.Helper()
+
+				// Marshal intent to get expected length
+				intentJSON, err := protojson.Marshal(intent)
+				require.NoError(t, err)
+				expectedLen := len(intentJSON)
+
+				// Cross-chain marker
 				require.Equal(t, CrossChainMarker, binary.BigEndian.Uint16(result[:OpTypeLength]))
-				require.Equal(t, uint16(0), binary.BigEndian.Uint16(result[OpTypeLength:OpTypeLength+IntentJSONLengthSize]))
-				require.Equal(t, byte(2), result[OpTypeLength+IntentJSONLengthSize])
-				// No Intent JSON bytes, next is the hash list length
-				offset := OpTypeLength + IntentJSONLengthSize + 1
-				// Skip 1st hash engry, Placeholder is at the 2nd position
+				offset := OpTypeLength
+
+				// Verify intent JSON length
+				dataLen := binary.BigEndian.Uint16(result[offset : offset+IntentJSONLengthSize])
+				require.Equal(t, uint16(expectedLen), dataLen)
+				offset += IntentJSONLengthSize
+
+				// Verify intent JSON content
+				require.Equal(t, intentJSON, result[offset:offset+int(dataLen)])
+				offset += int(dataLen)
+
+				// Verify hash list
+				require.Equal(t, byte(2), result[offset])
+				offset++
+
+				// Skip first hash
 				offset += HashLength
+
+				// Verify placeholder
 				require.Equal(t, uint16(HashPlaceholder), binary.BigEndian.Uint16(result[offset:offset+2]))
-				require.Equal(t, len(result), offset+2)
+				offset += 2
+
+				// Verify we used all bytes
+				require.Equal(t, len(result), offset)
+
+				t.Logf("Successfully validated empty call data case with intent JSON length: %d", expectedLen)
 			},
 		},
 	}
@@ -1698,7 +1729,7 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 				require.Contains(t, err.Error(), tt.expectedError)
 			} else {
 				require.NoError(t, err)
-				tt.validate(t, result)
+				tt.validate(t, result, intent)
 			}
 		})
 	}
