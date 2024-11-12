@@ -576,10 +576,11 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 // EncodeCrossChainCallData constructs the cross-chain call data payload for a `UserOperation`.
 //
 // **Purpose:**
-// This high-level function prepares the cross-chain call data by calculating the current
-// operation's hash, building and sorting the hash list, and constructing the cross-chain
-// data payload. It encapsulates the logic required for cross-chain operations involving
-// two `UserOperation`s or be extended for more in the future.
+// This high-level function (vs the `BuildCrossChainData`) prepares the
+// cross-chain call data by calculating the current operation's hash, building
+// and sorting the hash list, and constructing the cross-chain
+// data payload. It encapsulates the logic required for cross-chain operations
+// involving two `UserOperation`s or extended for more in the future.
 //
 // **When to Use:**
 // Use `EncodeCrossChainCallData` when you need to construct the cross-chain call data for a
@@ -591,7 +592,6 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 //   - `entrypoint`: The entry point address used to calculate the `UserOperation` hash.
 //   - `otherOpHash`: The operation hash of the other chain's `UserOperation`.
 //   - `isSourceOp`: A boolean indicating if this is the source operation (`true`) or the destination operation (`false`).
-//   - `intentJSONBytes`: The Intent JSON bytes.
 //
 // **Returns:**
 //   - `[]byte`: The encoded cross-chain call data payload: Intent JSON and sorted hash list.
@@ -611,12 +611,12 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, otherOpHash common.Hash, isSourceOp bool) ([]byte, error) {
 	intent, err := op.GetIntent()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get intent: %w", err)
+		return nil, fmt.Errorf("failed to get userOp intent: %w", err)
 	}
 
 	intentJSONBytes, err := protojson.Marshal(intent)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal intent to extract the JSON bytes: %w", err)
+		return nil, fmt.Errorf("failed to marshal intent to extract the JSON bytes: %w, Intent:%+v", err, intent)
 	}
 
 	// Extract source and destination chain IDs
