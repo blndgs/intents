@@ -227,6 +227,10 @@ func serializeHashListEntries(hashList []CrossChainHashListEntry) ([]byte, error
 		}
 	}
 
+	if !wrotePlaceHolder {
+		return nil, ErrPlaceholderNotFound
+	}
+
 	return buffer.Bytes(), nil
 }
 
