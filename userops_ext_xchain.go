@@ -608,21 +608,15 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 //
 // **Related Functions:**
 // - `BuildCrossChainData`: Used internally to construct the cross-chain data payload.
-func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, otherOpHash common.Hash, isSourceOp bool, intentJSONBytes []byte) ([]byte, error) {
-	if len(intentJSONBytes) > math.MaxUint16 {
-		return nil, fmt.Errorf("callData length exceeds maximum uint16 value: %d", len(intentJSONBytes))
-	}
-
+func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, otherOpHash common.Hash, isSourceOp bool) ([]byte, error) {
 	intent, err := op.GetIntent()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get intent: %w", err)
 	}
 
-	if len(intentJSONBytes) == 0 {
-		intentJSONBytes, err = protojson.Marshal(intent)
-		if err != nil {
-			return nil, err
-		}
+	intentJSONBytes, err := protojson.Marshal(intent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal intent to extract the JSON bytes: %w", err)
 	}
 
 	// Extract source and destination chain IDs

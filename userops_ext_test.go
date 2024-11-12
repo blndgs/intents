@@ -389,7 +389,7 @@ func mockUserOpXDataInCallData(t *testing.T) *UserOperation {
 
 	userOp.CallData = []byte(intentJSON)
 
-	data, err := userOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, []byte(intentJSON))
+	data, err := userOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 	require.NoError(t, err)
 
 	require.NotEqual(t, userOp.CallData, data)
@@ -1355,7 +1355,7 @@ func TestUserOperation_IsCrossChainIntent(t *testing.T) {
 			op := mockCreateOp()
 			op.CallData = intentJSON
 
-			encodedCallData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+			encodedCallData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 			if tt.expectedError != nil {
 				require.ErrorIs(t, err, tt.expectedError)
 				return
@@ -1406,7 +1406,7 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 
 				// Simulate SetEVMInstructions
@@ -1445,7 +1445,7 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 
 				// Simulate SetEVMInstructions
@@ -1483,7 +1483,7 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 				uop.CallData = encodedCallData
 				return uop
@@ -1542,7 +1542,7 @@ func TestValidateUserOperation_CrossChain_Validate(t *testing.T) {
 				// set initial calldata before encoding
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 
 				uop.CallData = encodedCallData
@@ -1574,7 +1574,7 @@ func TestValidateUserOperation_CrossChain_Validate(t *testing.T) {
 
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 
 				uop.CallData = encodedCallData
@@ -1628,18 +1628,21 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 				}
 			},
 			expectedError: "",
-			validate: func(t *testing.T, result []byte, _ *pb.Intent) {
+			validate: func(t *testing.T, result []byte, intent *pb.Intent) {
 				// Cross-chain marker
 				require.Equal(t, CrossChainMarker, binary.BigEndian.Uint16(result[:OpTypeLength]))
 				offset := OpTypeLength
 
 				// intent JSON
 				dataLen := binary.BigEndian.Uint16(result[offset : offset+IntentJSONLengthSize])
-				require.Equal(t, uint16(len("test call data")), dataLen)
-				offset += IntentJSONLengthSize
 
+				intentJSON, err := protojson.Marshal(intent)
+				require.NoError(t, err)
+				lenJSON := len(intentJSON)
 				// Verify content length
-				require.Equal(t, len("test call data"), int(dataLen))
+				require.Equal(t, uint16(lenJSON), dataLen)
+
+				offset += IntentJSONLengthSize
 				offset += int(dataLen)
 
 				// hash list length
@@ -1723,7 +1726,7 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 			require.NoError(t, err)
 			op.CallData = intentJSON
 
-			result, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, tt.callData)
+			result, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 
 			if tt.expectedError != "" {
 				require.Error(t, err)
@@ -1846,7 +1849,7 @@ func TestSetCrossChainIntent(t *testing.T) {
 
 			var encodedCallData []byte = intentJSON
 			if !tt.sameChainOp {
-				encodedCallData, err = op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err = op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 			}
 
@@ -2450,12 +2453,7 @@ func TestUserOperation_GetPackedData_GasLimits(t *testing.T) {
 			t.Logf("VerificationGasLimit: %v", op.VerificationGasLimit)
 
 			// Encode cross-chain data
-			crossChainData, err := op.EncodeCrossChainCallData(
-				EntrypointV06,
-				mockOtherOpHash,
-				true,
-				intentJSON,
-			)
+			crossChainData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 			require.NoError(t, err)
 			op.CallData = crossChainData
 
@@ -2652,12 +2650,7 @@ func TestUserOperation_GetPackedData_NonceValidation(t *testing.T) {
 
 			op.CallData = intentJSON
 
-			crossChainData, err := op.EncodeCrossChainCallData(
-				EntrypointV06,
-				mockOtherOpHash,
-				true,
-				intentJSON,
-			)
+			crossChainData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 			require.NoError(t, err)
 			op.CallData = crossChainData
 
@@ -2739,12 +2732,7 @@ func TestUserOperation_GetPackedData_NoncePadding(t *testing.T) {
 
 			op.CallData = intentJSON
 
-			crossChainData, err := op.EncodeCrossChainCallData(
-				EntrypointV06,
-				mockOtherOpHash,
-				true,
-				intentJSON,
-			)
+			crossChainData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 			require.NoError(t, err)
 			op.CallData = crossChainData
 
@@ -2811,22 +2799,12 @@ func TestUserOperation_Aggregate_Idempotency(t *testing.T) {
 				embedOp.CallData = intentJSON
 
 				// Encode cross-chain data for base operation
-				baseData, err := baseOp.EncodeCrossChainCallData(
-					EntrypointV06,
-					mockOtherOpHash,
-					true,
-					intentJSON,
-				)
+				baseData, err := baseOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 				baseOp.CallData = baseData
 
 				// Encode cross-chain data for embedded operation
-				embedData, err := embedOp.EncodeCrossChainCallData(
-					EntrypointV06,
-					mockOtherOpHash,
-					false,
-					intentJSON,
-				)
+				embedData, err := embedOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, false)
 				require.NoError(t, err)
 				embedOp.CallData = embedData
 
@@ -2870,22 +2848,12 @@ func TestUserOperation_Aggregate_Idempotency(t *testing.T) {
 				embedOp.CallData = intentJSON
 
 				// Encode cross-chain data for base operation
-				baseData, err := baseOp.EncodeCrossChainCallData(
-					EntrypointV06,
-					mockOtherOpHash,
-					true,
-					intentJSON,
-				)
+				baseData, err := baseOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 				baseOp.CallData = baseData
 
 				// Encode cross-chain data for embedded operation
-				embedData, err := embedOp.EncodeCrossChainCallData(
-					EntrypointV06,
-					mockOtherOpHash,
-					false,
-					intentJSON,
-				)
+				embedData, err := embedOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, false)
 				require.NoError(t, err)
 				embedOp.CallData = embedData
 
@@ -2973,7 +2941,7 @@ func TestUserOperation_Aggregate_DifferentOperations(t *testing.T) {
 
 	baseOp.CallData = intentJSON1
 
-	data1, err := baseOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON1)
+	data1, err := baseOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 	require.NoError(t, err)
 
 	baseOp.CallData = data1
@@ -2987,7 +2955,7 @@ func TestUserOperation_Aggregate_DifferentOperations(t *testing.T) {
 
 	embedOp1.CallData = intentJSON2
 
-	data2, err := embedOp1.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON2)
+	data2, err := embedOp1.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 	require.NoError(t, err)
 
 	embedOp1.CallData = data2
