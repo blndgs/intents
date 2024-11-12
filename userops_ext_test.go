@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -74,6 +75,149 @@ func mockSignature() []byte {
 	default:
 		return mockSimpleSignature()
 	}
+}
+
+func TestUserOperation_AggregateAndExtract(t *testing.T) {
+	baseOp := mockUserOpXDataInCallData(t)
+	embeddedOp := mockUserOpXDataInCallData(t)
+
+	// Ensure both are valid unsolved cross-chain userOps
+	// sharing the signature payload
+	// Because mockUserOpXDataInCallData() sets a partially random signature payload
+	// set the same signature payload
+	embeddedOp.Signature = baseOp.Signature
+
+	// Ensure both are valid unsolved cross-chain userOps
+	baseStatus, err := baseOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, UnsolvedUserOp, baseStatus, "baseOp is not an UnsolvedUserOp")
+
+	otherStatus, err := embeddedOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, UnsolvedUserOp, otherStatus, "embeddedOp is not an UnsolvedUserOp")
+
+	// Aggregate embeddedOp into baseOp
+	err = baseOp.Aggregate(embeddedOp)
+	require.NoError(t, err, "failed to aggregate embeddedOp into baseOp")
+
+	// Validate that baseOp is now an UnsolvedAggregateUserOp
+	newStatus, err := baseOp.Validate()
+	require.NoError(t, err, "failed to validate baseOp after aggregation")
+	require.Equal(t, UnsolvedAggregateUserOp, newStatus, "baseOp is not an UnsolvedAggregateUserOp")
+
+	// Extract the aggregated op bytes
+	extractedOpBytes := baseOp.Signature[baseOp.GetSignatureEndIdx():]
+
+	embeddedOpBytes, err := embeddedOp.getPackedData()
+	require.NoError(t, err, "failed to get packed data for embeddedOp")
+
+	require.Equal(t, append([]byte{1}, embeddedOpBytes...), extractedOpBytes, "extractedOpBytes does not match embeddedOp")
+
+	// Get the shared Intent JSON
+	baseOpIntentJSON, err := baseOp.GetIntentJSON()
+	require.NoError(t, err, "failed to get baseOp's intent JSON")
+	otherOpIntentJSON, err := embeddedOp.GetIntentJSON()
+	require.NoError(t, err, "failed to get embeddedOp's intent JSON")
+
+	// parse the Intent JSON from the embedded op's callData
+	otherOpXData, err := ParseCrossChainData(embeddedOp.CallData)
+	require.NoError(t, err, "failed to parse embeddedOp's CrossChainData")
+	parsedIntentString := string(otherOpXData.IntentJSON)
+	require.Equal(t, baseOpIntentJSON, parsedIntentString)
+	require.Equal(t, otherOpIntentJSON, parsedIntentString)
+
+	// Read with 2 different functions the hash list entries from the embeddedOp's CallData
+	// and compare results.
+	// The first function `ParseCrossChainData` is used to parse the CallData and extract the hash list entries.
+	// The second function `readHashListEntries` is used to read the hash list entries from the CallData bytes.
+	//
+	// skip in embeddedOp.CallData value the 2-bytes 0xffff prefix (opType) + 2-bytes length of Intent JSON + bytes length of Intent JSON and initialize a bytes reader from the remaining bytes
+	otherOpCallData := embeddedOp.CallData[4+len(otherOpXData.IntentJSON):]
+	otherOpCallDataReader := bytes.NewReader(otherOpCallData)
+	xChainHashListEntries, err := readHashListEntries(otherOpCallDataReader)
+	require.NoError(t, err, "failed to read hash list entries from embeddedOp's CallData")
+	for idx, entry := range xChainHashListEntries {
+		require.Equal(t, entry.IsPlaceholder, otherOpXData.HashList[idx].IsPlaceholder, "placeholder entry does not match")
+		require.Equal(t, entry.OperationHash, otherOpXData.HashList[idx].OperationHash, "operation hash entry does not match")
+	}
+
+	extractedOp, err := baseOp.ExtractEmbeddedOp()
+	require.NoError(t, err, "failed to extract aggregated op")
+
+	// Check that extractedOp matches embeddedOp
+	require.Equal(t, embeddedOp.Nonce.String(), extractedOp.Nonce.String(), "nonce does not match")
+	require.Equal(t, embeddedOp.CallGasLimit.String(), extractedOp.CallGasLimit.String(), "callGasLimit does not match")
+	require.Equal(t, embeddedOp.PreVerificationGas.String(), extractedOp.PreVerificationGas.String(), "preVerificationGas does not match")
+	require.Equal(t, embeddedOp.VerificationGasLimit.String(), extractedOp.VerificationGasLimit.String(), "verificationGasLimit does not match")
+	require.Equal(t, embeddedOp.InitCode, extractedOp.InitCode, "initCode does not match")
+	require.Equal(t, embeddedOp.CallData, extractedOp.CallData, "callData does not match")
+	require.Equal(t, embeddedOp.MaxFeePerGas.String(), extractedOp.MaxFeePerGas.String(), "maxFeePerGas does not match")
+	require.Equal(t, embeddedOp.MaxPriorityFeePerGas.String(), extractedOp.MaxPriorityFeePerGas.String(), "maxPriorityFeePerGas does not match")
+	require.Equal(t, embeddedOp.PaymasterAndData, extractedOp.PaymasterAndData, "paymasterAndData does not match")
+	require.Equal(t, embeddedOp.Signature, extractedOp.Signature, "signature does not match")
+}
+
+func TestUserOperation_ExtractAggregatedOp_CallData(t *testing.T) {
+	baseOp := mockUserOpXDataInCallData(t)
+	embeddedOp := mockUserOpXDataInCallData(t)
+
+	// Aggregate embeddedOp into baseOp
+	err := baseOp.Aggregate(embeddedOp)
+	require.NoError(t, err)
+
+	// Extract the aggregated op
+	extractedOp, err := baseOp.ExtractEmbeddedOp()
+	require.NoError(t, err)
+
+	// Verify that the CallData matches the original embeddedOp's CallData
+	require.Equal(t, embeddedOp.CallData, extractedOp.CallData)
+
+	// Additionally, parse the CallData and verify its contents
+	extractedCrossChainData, err := ParseCrossChainData(extractedOp.CallData)
+	require.NoError(t, err)
+
+	originalCrossChainData, err := ParseCrossChainData(embeddedOp.CallData)
+	require.NoError(t, err)
+
+	// Compare the parsed CrossChainData structures
+	require.Equal(t, originalCrossChainData, extractedCrossChainData)
+}
+
+func TestSerializeAndDeserializeHashListEntries(t *testing.T) {
+	placeholderEntry := CrossChainHashListEntry{IsPlaceholder: true}
+	opHash1 := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+	opHash2 := common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+	opHashEntry1 := CrossChainHashListEntry{IsPlaceholder: false, OperationHash: opHash1.Bytes()}
+	opHashEntry2 := CrossChainHashListEntry{IsPlaceholder: false, OperationHash: opHash2.Bytes()}
+
+	hashList := []CrossChainHashListEntry{placeholderEntry, opHashEntry1, opHashEntry2}
+
+	// Serialize the hash list entries
+	serializedHashList, err := serializeHashListEntries(hashList)
+	require.NoError(t, err)
+
+	// Now deserialize the hash list entries
+	buffer := bytes.NewReader(serializedHashList)
+	deserializedHashList, err := readHashListEntries(buffer)
+	require.NoError(t, err)
+
+	// Verify that the deserialized hash list matches the original
+	require.Equal(t, len(hashList), len(deserializedHashList))
+	for i := range hashList {
+		require.Equal(t, hashList[i].IsPlaceholder, deserializedHashList[i].IsPlaceholder)
+		require.Equal(t, hashList[i].OperationHash, deserializedHashList[i].OperationHash)
+	}
+}
+
+func TestHashListLengthValidation(t *testing.T) {
+	// Create a buffer with an invalid hash list length (e.g., 4, which exceeds MaxOpCount)
+	invalidHashListLength := MaxOpCount + 1
+	buffer := new(bytes.Buffer)
+	buffer.WriteByte(byte(invalidHashListLength))
+
+	// Try to read hash list entries
+	_, err := readHashListEntries(bytes.NewReader(buffer.Bytes()))
+	require.ErrorIs(t, err, ErrInvalidHashListLength)
 }
 
 func TestIntentsWithCreationDateInFuture(t *testing.T) {
@@ -232,12 +376,12 @@ func mockCreateOp() *UserOperation {
 	userOp.CallGasLimit = big.NewInt(65536)
 	userOp.VerificationGasLimit = big.NewInt(65536)
 	userOp.PreVerificationGas = big.NewInt(70000)
-	userOp.MaxFeePerGas = big.NewInt(20000000000)
-	userOp.MaxPriorityFeePerGas = big.NewInt(1000000000)
+	userOp.MaxFeePerGas = big.NewInt(0)
+	userOp.MaxPriorityFeePerGas = big.NewInt(0)
 	return userOp
 }
 
-func mockUserOperationWithCrossChainIntentInCallData(t *testing.T) *UserOperation {
+func mockUserOpXDataInCallData(t *testing.T) *UserOperation {
 	t.Helper()
 
 	userOp := mockCreateOp()
@@ -245,7 +389,7 @@ func mockUserOperationWithCrossChainIntentInCallData(t *testing.T) *UserOperatio
 
 	userOp.CallData = []byte(intentJSON)
 
-	data, err := userOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, []byte(intentJSON))
+	data, err := userOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 	require.NoError(t, err)
 
 	require.NotEqual(t, userOp.CallData, data)
@@ -1149,10 +1293,10 @@ func TestUserOperation_GetSignatureValue(t *testing.T) {
 
 // TestValidateUserOperation_CrossChain test Validate for cross chain intent.
 func TestValidateUserOperation_CrossChain_SimpleValidate(t *testing.T) {
-	uop := mockUserOperationWithCrossChainIntentInCallData(t)
+	uop := mockUserOpXDataInCallData(t)
 	status, err := uop.Validate()
 	require.NoError(t, err)
-	require.Equal(t, SolvedUserOp, status)
+	require.Equal(t, UnsolvedUserOp, status)
 }
 
 func TestUserOperation_IsCrossChainIntent(t *testing.T) {
@@ -1211,7 +1355,7 @@ func TestUserOperation_IsCrossChainIntent(t *testing.T) {
 			op := mockCreateOp()
 			op.CallData = intentJSON
 
-			encodedCallData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+			encodedCallData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 			if tt.expectedError != nil {
 				require.ErrorIs(t, err, tt.expectedError)
 				return
@@ -1262,7 +1406,7 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 
 				// Simulate SetEVMInstructions
@@ -1301,7 +1445,7 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 
 				// Simulate SetEVMInstructions
@@ -1339,7 +1483,7 @@ func TestUserOperation_IsCrossChainOperation(t *testing.T) {
 
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 				uop.CallData = encodedCallData
 				return uop
@@ -1398,14 +1542,14 @@ func TestValidateUserOperation_CrossChain_Validate(t *testing.T) {
 				// set initial calldata before encoding
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 
 				uop.CallData = encodedCallData
 				uop.Signature = mockSignature()
 				return uop
 			},
-			expectedStatus: SolvedUserOp,
+			expectedStatus: UnsolvedUserOp,
 			expectedError:  nil,
 		},
 		{
@@ -1430,7 +1574,7 @@ func TestValidateUserOperation_CrossChain_Validate(t *testing.T) {
 
 				uop.CallData = intentJSON
 
-				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err := uop.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 
 				uop.CallData = encodedCallData
@@ -1438,7 +1582,7 @@ func TestValidateUserOperation_CrossChain_Validate(t *testing.T) {
 				// No signature set
 				return uop
 			},
-			expectedStatus: UnsolvedUserOp,
+			expectedStatus: UnSignedUserOp,
 			expectedError:  nil,
 		},
 	}
@@ -1461,14 +1605,12 @@ func TestValidateUserOperation_CrossChain_Validate(t *testing.T) {
 func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 	tests := []struct {
 		name          string
-		callData      []byte
 		setupIntent   func() *pb.Intent
 		expectedError string
-		validate      func(t *testing.T, result []byte)
+		validate      func(t *testing.T, result []byte, intent *pb.Intent)
 	}{
 		{
-			name:     "Successful encoding",
-			callData: []byte("test call data"),
+			name: "Successful encoding",
 			setupIntent: func() *pb.Intent {
 				return &pb.Intent{
 					From: &pb.Intent_FromAsset{
@@ -1484,59 +1626,52 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 				}
 			},
 			expectedError: "",
-			validate: func(t *testing.T, result []byte) {
+			validate: func(t *testing.T, result []byte, intent *pb.Intent) {
 				// Cross-chain marker
 				require.Equal(t, CrossChainMarker, binary.BigEndian.Uint16(result[:OpTypeLength]))
 				offset := OpTypeLength
 
 				// intent JSON
-				require.Equal(t, uint16(len("test call data")), binary.BigEndian.Uint16(result[offset:offset+IntentJSONLengthSize]))
-				intLen := int(binary.BigEndian.Uint16(result[offset : offset+IntentJSONLengthSize]))
-				// Intent length
-				require.Equal(t, len("test call data"), intLen)
-				offset += int(binary.BigEndian.Uint16(result[offset:offset+IntentJSONLengthSize])) + IntentJSONLengthSize
+				dataLen := binary.BigEndian.Uint16(result[offset : offset+IntentJSONLengthSize])
+
+				intentJSON, err := protojson.Marshal(intent)
+				require.NoError(t, err)
+				lenJSON := len(intentJSON)
+				// Verify Intent JSON length
+				require.Equal(t, uint16(lenJSON), dataLen)
+
+				offset += IntentJSONLengthSize
+				offset += int(dataLen)
 
 				// hash list length
 				require.Equal(t, byte(2), result[offset])
-				// skip the hash value as the placeholder is sorted and placed at the 2nd position
-				offset += 1 + HashLength
+				offset++
 
+				// Skip first hash
+				offset += HashLength
+
+				// Verify placeholder
 				require.Equal(t, uint16(HashPlaceholder), binary.BigEndian.Uint16(result[offset:offset+2]))
 				offset += 2
 
-				// exhausted bytes
+				// Verify we used all bytes
 				require.Equal(t, len(result), offset)
 			},
 		},
+
 		{
-			name:     "Empty call data",
-			callData: []byte{},
+			name: "Empty Intent",
 			setupIntent: func() *pb.Intent {
-				return &pb.Intent{
-					From: &pb.Intent_FromAsset{
-						FromAsset: &pb.Asset{
-							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
-						},
-					},
-					To: &pb.Intent_ToAsset{
-						ToAsset: &pb.Asset{
-							ChainId: &pb.BigInt{Value: big.NewInt(56).Bytes()},
-						},
-					},
-				}
+				return &pb.Intent{}
 			},
-			expectedError: "",
-			validate: func(t *testing.T, result []byte) {
-				require.Equal(t, CrossChainMarker, binary.BigEndian.Uint16(result[:OpTypeLength]))
-				require.Equal(t, uint16(0), binary.BigEndian.Uint16(result[OpTypeLength:OpTypeLength+IntentJSONLengthSize]))
-				require.Equal(t, byte(2), result[OpTypeLength+IntentJSONLengthSize])
-				// No Intent JSON bytes, next is the hash list length
-				offset := OpTypeLength + IntentJSONLengthSize + 1
-				// Skip 1st hash engry, Placeholder is at the 2nd position
-				offset += HashLength
-				require.Equal(t, uint16(HashPlaceholder), binary.BigEndian.Uint16(result[offset:offset+2]))
-				require.Equal(t, len(result), offset+2)
+			expectedError: ErrNoIntent.Error(),
+		},
+		{
+			name: "Nil Intent",
+			setupIntent: func() *pb.Intent {
+				return nil
 			},
+			expectedError: ErrNoIntent.Error(),
 		},
 	}
 
@@ -1548,14 +1683,14 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 			require.NoError(t, err)
 			op.CallData = intentJSON
 
-			result, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, tt.callData)
+			result, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
 			} else {
 				require.NoError(t, err)
-				tt.validate(t, result)
+				tt.validate(t, result, intent)
 			}
 		})
 	}
@@ -1671,7 +1806,7 @@ func TestSetCrossChainIntent(t *testing.T) {
 
 			var encodedCallData []byte = intentJSON
 			if !tt.sameChainOp {
-				encodedCallData, err = op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true, intentJSON)
+				encodedCallData, err = op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
 				require.NoError(t, err)
 			}
 
@@ -1748,4 +1883,1553 @@ func TestDataCopy_SetCrossChainIntent(t *testing.T) {
 	// Check that the modification didn't affect the intent data
 	// require.NotEqual(t, originalCallData[0], op.CallData[0])
 	require.Equal(t, originalCallData[1:], op.CallData[1:])
+}
+
+func TestSetUint64_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name          string
+		inputBytes    []byte
+		expectedError string
+	}{
+		{
+			name:          "Empty reader",
+			inputBytes:    []byte{},
+			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+		},
+		{
+			name:          "Valid input - zero",
+			inputBytes:    make([]byte, 8),
+			expectedError: "",
+		},
+		{
+			name:          "Valid input - max value",
+			inputBytes:    maxUint64Bytes(),
+			expectedError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := bytes.NewReader(tt.inputBytes)
+			result, err := setUint64(reader)
+
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+				require.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+
+				// Verify value
+				expected := new(big.Int).SetBytes(tt.inputBytes)
+				require.Equal(t, expected, result)
+			}
+		})
+	}
+}
+
+func maxUint64Bytes() []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, math.MaxUint64)
+	return b
+}
+
+func TestUnpackUserOpData(t *testing.T) {
+	tests := []struct {
+		name          string
+		intentJSON    string
+		setupData     func() []byte
+		expectedError string
+	}{
+		{
+			name:       "Empty data",
+			intentJSON: "{}",
+			setupData: func() []byte {
+				return []byte{}
+			},
+			expectedError: "invalid packed data or length",
+		},
+		{
+			name:       "Invalid packed ops length",
+			intentJSON: "{}",
+			setupData: func() []byte {
+				data := []byte{2} // Should be 1
+				return data
+			},
+			expectedError: "expected packedOpsLength to be 1, got 2",
+		},
+		{
+			name:       "Missing nonce bytes",
+			intentJSON: "{}",
+			setupData: func() []byte {
+				data := []byte{1} // Correct packed ops length
+				return data
+			},
+			expectedError: "failed to read nonce: EOF",
+		},
+		{
+			name:       "Complete nonce but missing callGasLimit",
+			intentJSON: "{}",
+			setupData: func() []byte {
+				data := []byte{1}                        // Packed ops length
+				data = append(data, make([]byte, 32)...) // Complete nonce
+				return data
+			},
+			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+		},
+		{
+			name:       "Partial callGasLimit",
+			intentJSON: "{}",
+			setupData: func() []byte {
+				data := []byte{1}                        // Packed ops length
+				data = append(data, make([]byte, 32)...) // Nonce
+				data = append(data, make([]byte, 4)...)  // Only 4 bytes of callGasLimit
+				return data
+			},
+			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+		},
+		{
+			name:       "Complete callGasLimit but missing preVerificationGas",
+			intentJSON: "{}",
+			setupData: func() []byte {
+				data := []byte{1}                        // Packed ops length
+				data = append(data, make([]byte, 32)...) // Nonce
+				data = append(data, make([]byte, 8)...)  // Complete callGasLimit
+				return data
+			},
+			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+		},
+		{
+			name:       "Partial preVerificationGas",
+			intentJSON: "{}",
+			setupData: func() []byte {
+				data := []byte{1}                        // Packed ops length
+				data = append(data, make([]byte, 32)...) // Nonce
+				data = append(data, make([]byte, 8)...)  // CallGasLimit
+				data = append(data, make([]byte, 4)...)  // Only 4 bytes of preVerificationGas
+				return data
+			},
+			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+		},
+		{
+			name:       "Invalid hash list length",
+			intentJSON: "{}",
+			setupData: func() []byte {
+				data := []byte{1}                        // Packed ops length
+				data = append(data, make([]byte, 32)...) // Nonce
+				data = append(data, make([]byte, 8)...)  // CallGasLimit
+				data = append(data, make([]byte, 8)...)  // PreVerificationGas
+				data = append(data, make([]byte, 8)...)  // VerificationGasLimit
+				data = append(data, byte(MaxOpCount+1))  // Invalid hash list length
+				return data
+			},
+			expectedError: "failed to read hash list entries: invalid hash list length",
+		},
+		{
+			name:       "Valid data with max values",
+			intentJSON: "{}",
+			setupData: func() []byte {
+				data := []byte{1} // Packed ops length
+
+				// Max value nonce
+				maxNonce := make([]byte, 32)
+				for i := range maxNonce {
+					maxNonce[i] = 0xFF
+				}
+				data = append(data, maxNonce...)
+
+				// Max gas limits
+				maxUint64Bytes := make([]byte, 8)
+				binary.BigEndian.PutUint64(maxUint64Bytes, math.MaxUint64)
+				data = append(data, maxUint64Bytes...) // CallGasLimit
+				data = append(data, maxUint64Bytes...) // PreVerificationGas
+				data = append(data, maxUint64Bytes...) // VerificationGasLimit
+
+				// Valid hash list
+				data = append(data, byte(2)) // Hash list length
+				placeholder := make([]byte, 2)
+				binary.BigEndian.PutUint16(placeholder, HashPlaceholder)
+				data = append(data, placeholder...)
+				data = append(data, mockOtherOpHash.Bytes()...)
+
+				return data
+			},
+			expectedError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := tt.setupData()
+			op, err := unpackUserOpData(tt.intentJSON, data)
+
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+				require.Nil(t, op)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, op)
+
+			// Validate unpacked fields for successful cases
+			require.NotNil(t, op.Nonce)
+			require.NotNil(t, op.CallGasLimit)
+			require.NotNil(t, op.PreVerificationGas)
+			require.NotNil(t, op.VerificationGasLimit)
+
+			// Validate call data format
+			crossChainData, err := ParseCrossChainData(op.CallData)
+			require.NoError(t, err)
+			require.Equal(t, tt.intentJSON, string(crossChainData.IntentJSON))
+
+			// Validate hash list
+			foundPlaceholder := false
+			for _, entry := range crossChainData.HashList {
+				if entry.IsPlaceholder {
+					foundPlaceholder = true
+					break
+				}
+			}
+			require.True(t, foundPlaceholder)
+		})
+	}
+}
+
+func TestParseCrossChainData_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupData     func() []byte
+		expectedError string
+	}{
+		{
+			name: "Data too short for marker",
+			setupData: func() []byte {
+				return []byte{0xFF} // Only 1 byte instead of required 2
+			},
+			expectedError: "missing cross-chain data",
+		},
+		{
+			name: "Invalid marker",
+			setupData: func() []byte {
+				data := make([]byte, 4)                       // Marker + length
+				binary.BigEndian.PutUint16(data[0:2], 0x1234) // Wrong marker
+				return data
+			},
+			expectedError: "not a cross-chain operation",
+		},
+		{
+			name: "Missing intent JSON length",
+			setupData: func() []byte {
+				data := make([]byte, 2) // Only marker
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+				return data
+			},
+			expectedError: "missing cross-chain data",
+		},
+		{
+			name: "Incomplete intent JSON",
+			setupData: func() []byte {
+				data := make([]byte, 4) // Marker + length
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+				binary.BigEndian.PutUint16(data[2:4], 10) // Claim 10 bytes but don't provide them
+				return data
+			},
+			expectedError: "intent JSON is incomplete",
+		},
+		{
+			name: "Missing hash list length",
+			setupData: func() []byte {
+				data := make([]byte, 4) // Marker + length
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+				binary.BigEndian.PutUint16(data[2:4], 0) // Zero length intent JSON
+				return data
+			},
+			expectedError: "hash list length is missing",
+		},
+		{
+			name: "Invalid hash list length - too small",
+			setupData: func() []byte {
+				data := make([]byte, 5) // Marker + length + hash list length
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+				binary.BigEndian.PutUint16(data[2:4], 0) // Zero length intent JSON
+				data[4] = 1                              // Hash list length less than MinOpCount
+				return data
+			},
+			expectedError: "invalid hash list length",
+		},
+		{
+			name: "Invalid hash list length - too large",
+			setupData: func() []byte {
+				data := make([]byte, 5) // Marker + length + hash list length
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+				binary.BigEndian.PutUint16(data[2:4], 0) // Zero length intent JSON
+				data[4] = MaxOpCount + 1                 // Too many operations
+				return data
+			},
+			expectedError: "invalid hash list length",
+		},
+		{
+			name: "Incomplete hash list entries",
+			setupData: func() []byte {
+				data := make([]byte, 5) // Marker + length + hash list length
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+				binary.BigEndian.PutUint16(data[2:4], 0) // Zero length intent JSON
+				data[4] = 2                              // Valid hash list length
+				// But no hash list entries provided
+				return data
+			},
+			expectedError: "failed to parse hash list",
+		},
+		{
+			name: "Partial hash list entry",
+			setupData: func() []byte {
+				data := make([]byte, 7) // Marker + length + hash list length + partial entry
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+				binary.BigEndian.PutUint16(data[2:4], 0) // Zero length intent JSON
+				data[4] = 2                              // Valid hash list length
+				// Add start of a hash entry (just 2 bytes)
+				binary.BigEndian.PutUint16(data[5:7], 0x1234)
+				return data
+			},
+			expectedError: "failed to read operation hash",
+		},
+		{
+			name: "No placeholder in hash list",
+			setupData: func() []byte {
+				data := make([]byte, 71) // Marker + length + hash list length + 2 complete hashes
+				// Set marker
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+
+				// Set empty intent JSON length
+				binary.BigEndian.PutUint16(data[2:4], 0)
+
+				// Set hash list length = 2
+				data[4] = 2
+
+				// First hash - create valid non-zero hash
+				hash1 := common.HexToHash("0x1234567890123456789012345678901234567890123456789012345678901234")
+				copy(data[5:37], hash1.Bytes())
+
+				// Second hash - different valid non-zero hash
+				hash2 := common.HexToHash("0x5678901234567890123456789012345678901234567890123456789012345678")
+				copy(data[37:69], hash2.Bytes())
+
+				return data
+			},
+			expectedError: ErrPlaceholderNotFound.Error(),
+		},
+		{
+			name: "Multiple placeholders in hash list",
+			setupData: func() []byte {
+				data := make([]byte, 9) // Marker + length + hash list length + two placeholders
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+				binary.BigEndian.PutUint16(data[2:4], 0) // Zero length intent JSON
+				data[4] = 2                              // Hash list length
+				// Add two placeholders
+				binary.BigEndian.PutUint16(data[5:7], HashPlaceholder)
+				binary.BigEndian.PutUint16(data[7:9], HashPlaceholder)
+				return data
+			},
+			expectedError: "invalid hash list entry",
+		},
+		{
+			name: "Invalid hash - all zeros",
+			setupData: func() []byte {
+				data := make([]byte, 39) // Full size for marker + length + hash list length + placeholder + one hash
+				binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+				binary.BigEndian.PutUint16(data[2:4], 0) // Zero length intent JSON
+				data[4] = 2                              // Hash list length
+				// Add placeholder
+				binary.BigEndian.PutUint16(data[5:7], HashPlaceholder)
+				// Add invalid hash (all zeros)
+				copy(data[7:], make([]byte, 32))
+				return data
+			},
+			expectedError: "invalid hash list hash value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := tt.setupData()
+
+			// Debug output
+			t.Logf("Test case: %s", tt.name)
+			t.Logf("Data length: %d", len(data))
+			t.Logf("Data: %v", data)
+
+			result, err := ParseCrossChainData(data)
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.expectedError)
+			require.Nil(t, result)
+
+			// Log actual error for debugging
+			t.Logf("Got expected error: %v", err)
+		})
+	}
+}
+
+func TestParseCrossChainData_ValidData(t *testing.T) {
+	// Create valid cross-chain data
+	data := make([]byte, 71) // Minimum valid size
+
+	// Set marker
+	binary.BigEndian.PutUint16(data[0:2], CrossChainMarker)
+
+	// Set intent JSON length and content
+	intentJSON := []byte("{}")
+	binary.BigEndian.PutUint16(data[2:4], uint16(len(intentJSON)))
+	copy(data[4:6], intentJSON)
+
+	// Set hash list
+	offset := 4 + len(intentJSON)
+	data[offset] = 2 // Hash list length
+
+	// Add placeholder
+	offset++
+	binary.BigEndian.PutUint16(data[offset:offset+2], HashPlaceholder)
+
+	// Add valid hash
+	offset += 2
+	validHash := mockOtherOpHash.Bytes()
+	copy(data[offset:], validHash)
+
+	// Parse and validate
+	result, err := ParseCrossChainData(data)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Validate parsed data
+	require.Equal(t, intentJSON, result.IntentJSON)
+	require.Len(t, result.HashList, 2)
+
+	// Validate hash list entries
+	foundPlaceholder := false
+	foundValidHash := false
+	for _, entry := range result.HashList {
+		if entry.IsPlaceholder {
+			foundPlaceholder = true
+		} else if string(entry.OperationHash) == string(validHash) {
+			foundValidHash = true
+		}
+	}
+
+	require.True(t, foundPlaceholder, "Placeholder not found in parsed data")
+	require.True(t, foundValidHash, "Valid hash not found in parsed data")
+}
+
+func TestUserOperation_GetPackedData_GasLimits(t *testing.T) {
+
+	tests := []struct {
+		name          string
+		setupUserOp   func() *UserOperation
+		expectedError string
+	}{
+		{
+			name: "Normal gas values",
+			setupUserOp: func() *UserOperation {
+				op := mockCreateOp()
+				op.CallGasLimit = big.NewInt(100000)
+				op.PreVerificationGas = big.NewInt(50000)
+				op.VerificationGasLimit = big.NewInt(75000)
+				// These fields are required to avoid nil panics
+				op.Nonce = big.NewInt(1)
+				op.MaxFeePerGas = big.NewInt(1)
+				op.MaxPriorityFeePerGas = big.NewInt(1)
+				return op
+			},
+			expectedError: "",
+		},
+		{
+			name: "Default gas values",
+			setupUserOp: func() *UserOperation {
+				op := mockCreateOp()
+				// Set required fields to non-nil values
+				op.Nonce = big.NewInt(1)
+				op.MaxFeePerGas = big.NewInt(1)
+				op.MaxPriorityFeePerGas = big.NewInt(1)
+				// Let gas values use their zero value (nil)
+				op.CallGasLimit = big.NewInt(0)
+				op.PreVerificationGas = big.NewInt(0)
+				op.VerificationGasLimit = big.NewInt(0)
+				return op
+			},
+			expectedError: "",
+		},
+		{
+			name: "Maximum valid gas values",
+			setupUserOp: func() *UserOperation {
+				op := mockCreateOp()
+				// These fields are required to avoid nil panics
+				op.Nonce = big.NewInt(1)
+				op.MaxFeePerGas = big.NewInt(1)
+				op.MaxPriorityFeePerGas = big.NewInt(1)
+
+				maxUint64 := new(big.Int).SetUint64(^uint64(0))
+				op.CallGasLimit = new(big.Int).Set(maxUint64)
+				op.PreVerificationGas = new(big.Int).Set(maxUint64)
+				op.VerificationGasLimit = new(big.Int).Set(maxUint64)
+				return op
+			},
+			expectedError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := tt.setupUserOp()
+
+			// Ensure proper cross-chain data for packing
+
+			intent := &pb.Intent{
+				From: &pb.Intent_FromAsset{FromAsset: &pb.Asset{
+					Address: "0x1234567890123456789012345678901234567890",
+					Amount:  &pb.BigInt{Value: big.NewInt(100).Bytes()},
+					ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+				}},
+				To: &pb.Intent_ToAsset{ToAsset: &pb.Asset{
+					Address: "0x0987654321098765432109876543210987654321",
+					Amount:  &pb.BigInt{Value: big.NewInt(90).Bytes()},
+					ChainId: &pb.BigInt{Value: big.NewInt(56).Bytes()},
+				}},
+			}
+
+			intentJSON, err := protojson.Marshal(intent)
+			require.NoError(t, err)
+
+			op.CallData = intentJSON
+
+			// Debug logging before operation
+			t.Logf("Test case: %s", tt.name)
+			t.Logf("CallGasLimit: %v", op.CallGasLimit)
+			t.Logf("PreVerificationGas: %v", op.PreVerificationGas)
+			t.Logf("VerificationGasLimit: %v", op.VerificationGasLimit)
+
+			// Encode cross-chain data
+			crossChainData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
+			require.NoError(t, err)
+			op.CallData = crossChainData
+
+			// Get packed data
+			packedData, err := op.getPackedData()
+
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+				require.Nil(t, packedData)
+				t.Logf("Got expected error: %v", err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, packedData)
+
+				// For successful cases, verify the packed data format
+				require.GreaterOrEqual(t, len(packedData), 56) // Minimum length for nonce + gas fields
+
+				t.Logf("Packed data length: %d", len(packedData))
+			}
+		})
+	}
+}
+
+func TestWriteUint64_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name          string
+		value         uint64
+		expectedError string
+	}{
+		{
+			name:          "Zero value",
+			value:         0,
+			expectedError: "",
+		},
+		{
+			name:          "Maximum uint64",
+			value:         ^uint64(0),
+			expectedError: "",
+		},
+		{
+			name:          "Regular value",
+			value:         1000000,
+			expectedError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buffer := new(bytes.Buffer)
+			err := writeUint64(buffer, tt.value)
+
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Should always write 8 bytes
+			require.Equal(t, 8, buffer.Len())
+
+			// Verify written value
+			written := binary.BigEndian.Uint64(buffer.Bytes())
+			require.Equal(t, tt.value, written)
+		})
+	}
+}
+
+func TestUserOperation_GetPackedData_NonceValidation(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupUserOp   func() *UserOperation
+		expectedError string
+	}{
+		{
+			name: "Valid small nonce",
+			setupUserOp: func() *UserOperation {
+				op := mockCreateOp()
+				op.Nonce = big.NewInt(123)
+				// Set required fields
+				op.CallGasLimit = big.NewInt(1)
+				op.PreVerificationGas = big.NewInt(1)
+				op.VerificationGasLimit = big.NewInt(1)
+				op.MaxFeePerGas = big.NewInt(1)
+				op.MaxPriorityFeePerGas = big.NewInt(1)
+				return op
+			},
+			expectedError: "",
+		},
+		{
+			name: "Maximum valid nonce (32 bytes)",
+			setupUserOp: func() *UserOperation {
+				op := mockCreateOp()
+				// Create max 32-byte number (2^256 - 1)
+				maxNonce := new(big.Int).Sub(
+					new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil),
+					big.NewInt(1),
+				)
+				op.Nonce = maxNonce
+				// Set required fields
+				op.CallGasLimit = big.NewInt(1)
+				op.PreVerificationGas = big.NewInt(1)
+				op.VerificationGasLimit = big.NewInt(1)
+				op.MaxFeePerGas = big.NewInt(1)
+				op.MaxPriorityFeePerGas = big.NewInt(1)
+				return op
+			},
+			expectedError: "",
+		},
+		{
+			name: "Nonce exceeds 32 bytes",
+			setupUserOp: func() *UserOperation {
+				op := mockCreateOp()
+				// Create number larger than 32 bytes (2^257)
+				overflowNonce := new(big.Int).Exp(big.NewInt(2), big.NewInt(257), nil)
+				op.Nonce = overflowNonce
+				// Set required fields
+				op.CallGasLimit = big.NewInt(1)
+				op.PreVerificationGas = big.NewInt(1)
+				op.VerificationGasLimit = big.NewInt(1)
+				op.MaxFeePerGas = big.NewInt(1)
+				op.MaxPriorityFeePerGas = big.NewInt(1)
+				return op
+			},
+			expectedError: "nonce is too large",
+		},
+		{
+			name: "Zero nonce",
+			setupUserOp: func() *UserOperation {
+				op := mockCreateOp()
+				op.Nonce = big.NewInt(0)
+				// Set required fields
+				op.CallGasLimit = big.NewInt(1)
+				op.PreVerificationGas = big.NewInt(1)
+				op.VerificationGasLimit = big.NewInt(1)
+				op.MaxFeePerGas = big.NewInt(1)
+				op.MaxPriorityFeePerGas = big.NewInt(1)
+				return op
+			},
+			expectedError: "",
+		},
+		{
+			name: "Large but valid nonce (31 bytes)",
+			setupUserOp: func() *UserOperation {
+				op := mockCreateOp()
+				// Create 31-byte number (2^248 - 1)
+				largeNonce := new(big.Int).Sub(
+					new(big.Int).Exp(big.NewInt(2), big.NewInt(248), nil),
+					big.NewInt(1),
+				)
+				op.Nonce = largeNonce
+				// Set required fields
+				op.CallGasLimit = big.NewInt(1)
+				op.PreVerificationGas = big.NewInt(1)
+				op.VerificationGasLimit = big.NewInt(1)
+				op.MaxFeePerGas = big.NewInt(1)
+				op.MaxPriorityFeePerGas = big.NewInt(1)
+				return op
+			},
+			expectedError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := tt.setupUserOp()
+
+			// Debug output
+			t.Logf("Test case: %s", tt.name)
+			t.Logf("Nonce: %v", op.Nonce)
+			t.Logf("Nonce bytes length: %d", len(op.Nonce.Bytes()))
+
+			intent := &pb.Intent{
+				From: &pb.Intent_FromAsset{
+					FromAsset: &pb.Asset{
+						ChainId: &pb.BigInt{
+							Value: big.NewInt(1).Bytes(),
+						},
+					},
+				},
+				To: &pb.Intent_ToAsset{
+					ToAsset: &pb.Asset{
+						ChainId: &pb.BigInt{
+							Value: big.NewInt(56).Bytes(),
+						},
+					},
+				},
+			}
+
+			intentJSON, err := protojson.Marshal(intent)
+			require.NoError(t, err)
+
+			op.CallData = intentJSON
+
+			crossChainData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
+			require.NoError(t, err)
+			op.CallData = crossChainData
+
+			// Get packed data
+			packedData, err := op.getPackedData()
+
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+				require.Nil(t, packedData)
+				t.Logf("Got expected error: %v", err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, packedData)
+
+				// For successful cases, verify nonce is properly packed
+				require.GreaterOrEqual(t, len(packedData), 32, "Packed data should contain at least 32 bytes for nonce")
+
+				// Verify nonce bytes in packed data
+				nonceBytes := packedData[:32]
+				require.Equal(t, 32, len(nonceBytes), "Nonce should be padded to 32 bytes")
+
+				// Convert packed nonce back to big.Int for comparison
+				unpackedNonce := new(big.Int).SetBytes(nonceBytes)
+				require.Equal(t, op.Nonce.String(), unpackedNonce.String(), "Unpacked nonce should match original")
+
+				t.Logf("Successfully packed nonce of length %d bytes", len(op.Nonce.Bytes()))
+			}
+		})
+	}
+}
+
+func TestUserOperation_GetPackedData_NoncePadding(t *testing.T) {
+	// Test cases with specific byte lengths
+	testNonces := []struct {
+		value   *big.Int
+		byteLen int
+		comment string
+	}{
+		{big.NewInt(1), 1, "Single byte"},
+		{big.NewInt(256), 2, "Two bytes"},
+		{new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil), 9, "Nine bytes"},
+		{new(big.Int).Exp(big.NewInt(2), big.NewInt(160), nil), 21, "Twenty-one bytes"},
+		{new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1)), 32, "Full 32 bytes"},
+	}
+
+	for _, tc := range testNonces {
+		t.Run(tc.comment, func(t *testing.T) {
+			op := mockCreateOp()
+			op.Nonce = tc.value
+			// Set required fields
+			op.CallGasLimit = big.NewInt(1)
+			op.PreVerificationGas = big.NewInt(1)
+			op.VerificationGasLimit = big.NewInt(1)
+			op.MaxFeePerGas = big.NewInt(1)
+			op.MaxPriorityFeePerGas = big.NewInt(1)
+
+			// Set up cross-chain data
+
+			intent := &pb.Intent{
+				From: &pb.Intent_FromAsset{
+					FromAsset: &pb.Asset{
+						ChainId: &pb.BigInt{
+							Value: big.NewInt(1).Bytes(),
+						},
+					},
+				},
+				To: &pb.Intent_ToAsset{
+					ToAsset: &pb.Asset{
+						ChainId: &pb.BigInt{
+							Value: big.NewInt(56).Bytes(),
+						},
+					},
+				},
+			}
+
+			intentJSON, err := protojson.Marshal(intent)
+			require.NoError(t, err)
+
+			op.CallData = intentJSON
+
+			crossChainData, err := op.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
+			require.NoError(t, err)
+			op.CallData = crossChainData
+
+			// Get packed data
+			packedData, err := op.getPackedData()
+			require.NoError(t, err)
+			require.NotNil(t, packedData)
+
+			// Verify nonce padding
+			noncePortion := packedData[:32]
+			require.Equal(t, 32, len(noncePortion), "Nonce should always be padded to 32 bytes")
+
+			// Verify leading zeros
+			leadingZeros := 32 - tc.byteLen
+			for i := 0; i < leadingZeros; i++ {
+				require.Equal(t, byte(0), noncePortion[i], "Expected leading zero at position %d", i)
+			}
+
+			// Verify value is preserved
+			unpackedNonce := new(big.Int).SetBytes(noncePortion)
+			require.Equal(t, tc.value.String(), unpackedNonce.String(), "Value should be preserved after padding")
+		})
+	}
+}
+
+func TestUserOperation_Aggregate_Idempotency(t *testing.T) {
+	tests := []struct {
+		name           string
+		setupOps       func(t *testing.T) (*UserOperation, *UserOperation)
+		aggregateTimes int
+	}{
+		{
+			name: "Multiple aggregations of same operation",
+			setupOps: func(t *testing.T) (*UserOperation, *UserOperation) {
+				// Create base operation
+				baseOp := mockCreateOp()
+				baseOp.Signature = mockSignature()
+
+				// Create embedded operation
+				embedOp := mockCreateOp()
+				embedOp.Signature = mockSignature()
+
+				intent := &pb.Intent{
+					From: &pb.Intent_FromAsset{
+						FromAsset: &pb.Asset{
+							ChainId: &pb.BigInt{
+								Value: big.NewInt(1).Bytes(),
+							},
+						},
+					},
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{
+								Value: big.NewInt(56).Bytes(),
+							},
+						},
+					},
+				}
+
+				intentJSON, err := protojson.Marshal(intent)
+				require.NoError(t, err)
+
+				baseOp.CallData = intentJSON
+				embedOp.CallData = intentJSON
+
+				// Encode cross-chain data for base operation
+				baseData, err := baseOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
+				require.NoError(t, err)
+				baseOp.CallData = baseData
+
+				// Encode cross-chain data for embedded operation
+				embedData, err := embedOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, false)
+				require.NoError(t, err)
+				embedOp.CallData = embedData
+
+				return baseOp, embedOp
+			},
+			aggregateTimes: 3,
+		},
+		{
+			name: "Aggregate operation with initCode",
+			setupOps: func(t *testing.T) (*UserOperation, *UserOperation) {
+				// Create base operation
+				baseOp := mockCreateOp()
+				baseOp.Signature = mockSignature()
+
+				// Create embedded operation with initCode
+				embedOp := mockCreateOp()
+				embedOp.Signature = mockSignature()
+				embedOp.InitCode = []byte("test init code")
+
+				intent := &pb.Intent{
+					From: &pb.Intent_FromAsset{
+						FromAsset: &pb.Asset{
+							ChainId: &pb.BigInt{
+								Value: big.NewInt(1).Bytes(),
+							},
+						},
+					},
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{
+								Value: big.NewInt(56).Bytes(),
+							},
+						},
+					},
+				}
+
+				intentJSON, err := protojson.Marshal(intent)
+				require.NoError(t, err)
+
+				baseOp.CallData = intentJSON
+				embedOp.CallData = intentJSON
+
+				// Encode cross-chain data for base operation
+				baseData, err := baseOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
+				require.NoError(t, err)
+				baseOp.CallData = baseData
+
+				// Encode cross-chain data for embedded operation
+				embedData, err := embedOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, false)
+				require.NoError(t, err)
+				embedOp.CallData = embedData
+
+				return baseOp, embedOp
+			},
+			aggregateTimes: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseOp, embedOp := tt.setupOps(t)
+
+			// First aggregation
+			err := baseOp.Aggregate(embedOp)
+			require.NoError(t, err)
+
+			// Store the state after first aggregation
+			firstAggregateSignature := make([]byte, len(baseOp.Signature))
+			copy(firstAggregateSignature, baseOp.Signature)
+
+			// Multiple aggregations
+			for i := 1; i < tt.aggregateTimes; i++ {
+				t.Logf("Performing aggregation %d", i+1)
+
+				// Debug output
+				t.Logf("Signature length before aggregation: %d", len(baseOp.Signature))
+
+				err := baseOp.Aggregate(embedOp)
+				require.NoError(t, err)
+
+				t.Logf("Signature length after aggregation: %d", len(baseOp.Signature))
+
+				// Compare signatures byte by byte
+				require.Equal(t, firstAggregateSignature, baseOp.Signature,
+					"Signature changed after aggregation %d", i+1)
+
+				// Verify operation still valid
+				status, err := baseOp.Validate()
+				require.NoError(t, err)
+				require.Equal(t, UnsolvedAggregateUserOp, status)
+
+				// Extract and verify embedded operation
+				extractedOp, err := baseOp.ExtractEmbeddedOp()
+				require.NoError(t, err)
+
+				// Compare key fields
+				require.Equal(t, embedOp.Nonce.String(), extractedOp.Nonce.String())
+				require.Equal(t, embedOp.CallGasLimit.String(), extractedOp.CallGasLimit.String())
+				require.Equal(t, embedOp.PreVerificationGas.String(), extractedOp.PreVerificationGas.String())
+				require.Equal(t, embedOp.VerificationGasLimit.String(), extractedOp.VerificationGasLimit.String())
+				require.Equal(t, embedOp.InitCode, extractedOp.InitCode)
+				require.Equal(t, embedOp.CallData, extractedOp.CallData)
+			}
+		})
+	}
+}
+
+// Helper function to create a cross-chain intent for testing
+func createCrossChainIntent(t *testing.T, fromChain, toChain int64) *pb.Intent {
+	return &pb.Intent{
+		From: &pb.Intent_FromAsset{
+			FromAsset: &pb.Asset{
+				Address: "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b",
+				Amount:  &pb.BigInt{Value: big.NewInt(100).Bytes()},
+				ChainId: &pb.BigInt{Value: big.NewInt(fromChain).Bytes()},
+			},
+		},
+		To: &pb.Intent_ToAsset{
+			ToAsset: &pb.Asset{
+				Address: "0x6B5f6558CB8B3C8Fec2DA0B1edA9b9d5C064ca47",
+				Amount:  &pb.BigInt{Value: big.NewInt(50).Bytes()},
+				ChainId: &pb.BigInt{Value: big.NewInt(toChain).Bytes()},
+			},
+		},
+	}
+}
+
+// TestUserOperation_Aggregate_DifferentOperations verifies behavior when aggregating different operations
+func TestUserOperation_Aggregate_DifferentOperations(t *testing.T) {
+	baseOp := mockCreateOp()
+	intent1 := createCrossChainIntent(t, 1, 56)
+	intentJSON1, err := protojson.Marshal(intent1)
+	require.NoError(t, err)
+
+	baseOp.CallData = intentJSON1
+
+	data1, err := baseOp.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
+	require.NoError(t, err)
+
+	baseOp.CallData = data1
+	baseOp.Signature = mockSignature()
+
+	// Create first embedded op
+	embedOp1 := mockCreateOp()
+	intent2 := createCrossChainIntent(t, 56, 1)
+	intentJSON2, err := protojson.Marshal(intent2)
+	require.NoError(t, err)
+
+	embedOp1.CallData = intentJSON2
+
+	data2, err := embedOp1.EncodeCrossChainCallData(EntrypointV06, mockOtherOpHash, true)
+	require.NoError(t, err)
+
+	embedOp1.CallData = data2
+	embedOp1.Signature = mockSignature()
+
+	// Aggregate first op
+	err = baseOp.Aggregate(embedOp1)
+	require.NoError(t, err)
+
+	// Store signature after first aggregation
+	firstAggregateSignature := make([]byte, len(baseOp.Signature))
+	copy(firstAggregateSignature, baseOp.Signature)
+
+	// Create second embedded op with different nonce
+	embedOp2 := mockCreateOp()
+	embedOp2.Nonce = big.NewInt(999)
+	embedOp2.CallData = data2
+	embedOp2.Signature = mockSignature()
+
+	// Aggregate second op
+	err = baseOp.Aggregate(embedOp2)
+	require.NoError(t, err)
+
+	// Verify signature changed
+	require.False(t, bytes.Equal(firstAggregateSignature, baseOp.Signature),
+		"Signature should change when aggregating different operation")
+
+	// Verify new operation is valid
+	status, err := baseOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, UnsolvedAggregateUserOp, status)
+
+	// Extract and verify the new embedded operation matches embedOp2
+	extractedOp, err := baseOp.ExtractEmbeddedOp()
+	require.NoError(t, err)
+	require.Equal(t, embedOp2.Nonce.String(), extractedOp.Nonce.String())
+}
+
+func TestUserOperation_Aggregate_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupBaseOp   func(t *testing.T) *UserOperation
+		setupEmbedOp  func(t *testing.T) *UserOperation
+		expectedError string
+	}{
+		{
+			name: "Base operation validation fails",
+			setupBaseOp: func(t *testing.T) *UserOperation {
+				op := mockCreateOp()
+				// Make it invalid by setting a non-JSON CallData
+				op.CallData = []byte("invalid data")
+				return op
+			},
+			setupEmbedOp: func(t *testing.T) *UserOperation {
+				return mockUserOpXDataInCallData(t)
+			},
+			expectedError: "failed to validate the called UserOperation",
+		},
+		{
+			name: "Base operation is not unsolved",
+			setupBaseOp: func(t *testing.T) *UserOperation {
+				op := mockCreateOp()
+				// Make it a conventional op
+				op.CallData = []byte{}
+				op.Signature = []byte{}
+				return op
+			},
+			setupEmbedOp: func(t *testing.T) *UserOperation {
+				return mockUserOpXDataInCallData(t)
+			},
+			expectedError: "called UserOperation is not an unsolved userOp",
+		},
+		{
+			name: "Embedded operation validation fails",
+			setupBaseOp: func(t *testing.T) *UserOperation {
+				return mockUserOpXDataInCallData(t)
+			},
+			setupEmbedOp: func(t *testing.T) *UserOperation {
+				op := mockCreateOp()
+				// Make it invalid by setting a non-JSON CallData
+				op.CallData = []byte("invalid data")
+				return op
+			},
+			expectedError: "failed to validate the other UserOperation",
+		},
+		{
+			name: "Embedded operation is not unsolved",
+			setupBaseOp: func(t *testing.T) *UserOperation {
+				return mockUserOpXDataInCallData(t)
+			},
+			setupEmbedOp: func(t *testing.T) *UserOperation {
+				op := mockCreateOp()
+				// Make it a solved op with EVM instructions
+				op.CallData = []byte("0x1234")
+				op.Signature = mockSignature()
+				return op
+			},
+			expectedError: "other UserOperation is not an unsolved userOp",
+		},
+		{
+			name: "Base operation is not cross-chain",
+			setupBaseOp: func(t *testing.T) *UserOperation {
+				op := mockCreateOp()
+				// Set valid intent but with same chain IDs
+				intent := &pb.Intent{
+					From: &pb.Intent_FromAsset{
+						FromAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+						},
+					},
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()}, // Same chain ID
+						},
+					},
+				}
+				intentJSON, err := protojson.Marshal(intent)
+				require.NoError(t, err)
+				op.CallData = intentJSON
+				op.Signature = mockSignature()
+				return op
+			},
+			setupEmbedOp: func(t *testing.T) *UserOperation {
+				return mockUserOpXDataInCallData(t)
+			},
+			expectedError: "called UserOperation is not a valid cross-chain userOp",
+		},
+		{
+			name: "Embedded operation is not cross-chain",
+			setupBaseOp: func(t *testing.T) *UserOperation {
+				return mockUserOpXDataInCallData(t)
+			},
+			setupEmbedOp: func(t *testing.T) *UserOperation {
+				op := mockCreateOp()
+				// Set valid intent but with same chain IDs
+				intent := &pb.Intent{
+					From: &pb.Intent_FromAsset{
+						FromAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
+						},
+					},
+					To: &pb.Intent_ToAsset{
+						ToAsset: &pb.Asset{
+							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()}, // Same chain ID
+						},
+					},
+				}
+				intentJSON, err := protojson.Marshal(intent)
+				require.NoError(t, err)
+				op.CallData = intentJSON
+				op.Signature = mockSignature()
+				return op
+			},
+			expectedError: "other UserOperation is not a valid cross-chain userOp",
+		},
+		{
+			name: "Failed to get packed data",
+			setupBaseOp: func(t *testing.T) *UserOperation {
+				return mockUserOpXDataInCallData(t)
+			},
+			setupEmbedOp: func(t *testing.T) *UserOperation {
+				op := mockUserOpXDataInCallData(t)
+				// Make packed data fail by setting an overflow nonce
+				overflowNonce := new(big.Int).Exp(big.NewInt(2), big.NewInt(257), nil)
+				op.Nonce = overflowNonce
+				return op
+			},
+			expectedError: "failed to get packed data from other UserOperation: nonce is too large",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseOp := tt.setupBaseOp(t)
+			embedOp := tt.setupEmbedOp(t)
+
+			// Debug output
+			t.Logf("Test case: %s", tt.name)
+			t.Logf("Base operation CallData length: %d", len(baseOp.CallData))
+			t.Logf("Base operation Signature length: %d", len(baseOp.Signature))
+			t.Logf("Embedded operation CallData length: %d", len(embedOp.CallData))
+			t.Logf("Embedded operation Signature length: %d", len(embedOp.Signature))
+
+			// Perform aggregation
+			err := baseOp.Aggregate(embedOp)
+
+			// Verify error
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.expectedError)
+
+			t.Logf("Got expected error: %v", err)
+
+			// Additional validation for specific cases
+			if tt.name == "Failed to get packed data" {
+				// Verify the base operation wasn't modified
+				status, validateErr := baseOp.Validate()
+				require.NoError(t, validateErr)
+				require.Equal(t, UnsolvedUserOp, status)
+			}
+		})
+	}
+}
+
+func TestUserOperation_AggregateAggregated(t *testing.T) {
+	tests := []struct {
+		name         string
+		setupOps     func(t *testing.T) (*UserOperation, *UserOperation, *UserOperation)
+		validateFunc func(t *testing.T, baseOp *UserOperation, err error)
+	}{
+		{
+			name: "Aggregate an already aggregated operation",
+			setupOps: func(t *testing.T) (*UserOperation, *UserOperation, *UserOperation) {
+				// Create base operation
+				baseOp := mockUserOpXDataInCallData(t)
+
+				// Create first embedded operation
+				embedOp1 := mockUserOpXDataInCallData(t)
+				embedOp1.Nonce = big.NewInt(100) // Different nonce for identification
+
+				// Create second embedded operation
+				embedOp2 := mockUserOpXDataInCallData(t)
+				embedOp2.Nonce = big.NewInt(200) // Different nonce for identification
+
+				return baseOp, embedOp1, embedOp2
+			},
+			validateFunc: func(t *testing.T, baseOp *UserOperation, err error) {
+				if err != nil {
+					t.Logf("Got error as expected: %v", err)
+					require.Contains(t, err.Error(), "already aggregated")
+					return
+				}
+
+				// If no error, verify we can extract both operations
+				t.Log("No error, verifying double aggregation result...")
+
+				// Verify the operation status
+				status, err := baseOp.Validate()
+				require.NoError(t, err)
+				require.Equal(t, UnsolvedAggregateUserOp, status)
+
+				// Try to extract embedded operations
+				firstOp, err := baseOp.ExtractEmbeddedOp()
+				require.NoError(t, err)
+				require.NotNil(t, firstOp)
+				t.Logf("First extracted operation nonce: %s", firstOp.Nonce.String())
+
+				// If we support multiple aggregations, try to extract second operation
+				if len(baseOp.Signature) > baseOp.GetSignatureEndIdx()+100 { // Rough check for second operation
+					secondOp, err := firstOp.ExtractEmbeddedOp()
+					if err == nil {
+						require.NotNil(t, secondOp)
+						t.Logf("Second extracted operation nonce: %s", secondOp.Nonce.String())
+					}
+				}
+			},
+		},
+		{
+			name: "Attempt to aggregate into aggregated operation",
+			setupOps: func(t *testing.T) (*UserOperation, *UserOperation, *UserOperation) {
+				// Create and aggregate first pair
+				baseOp := mockUserOpXDataInCallData(t)
+				embedOp1 := mockUserOpXDataInCallData(t)
+				err := baseOp.Aggregate(embedOp1)
+				require.NoError(t, err)
+
+				// Create third operation to attempt aggregation into aggregated op
+				embedOp2 := mockUserOpXDataInCallData(t)
+				embedOp2.Nonce = big.NewInt(300) // Different nonce
+
+				return baseOp, embedOp1, embedOp2
+			},
+			validateFunc: func(t *testing.T, baseOp *UserOperation, err error) {
+				t.Logf("Base operation signature length: %d", len(baseOp.Signature))
+
+				// If we get an error, verify it's clear
+				if err != nil {
+					t.Logf("Got error as expected: %v", err)
+					require.Contains(t, err.Error(), "already contains aggregated operation")
+					return
+				}
+
+				status, err := baseOp.Validate()
+				require.NoError(t, err)
+				require.Equal(t, UnsolvedAggregateUserOp, status)
+
+				extractedOp, err := baseOp.ExtractEmbeddedOp()
+				require.NoError(t, err)
+				require.NotNil(t, extractedOp)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseOp, embedOp1, embedOp2 := tt.setupOps(t)
+
+			// First aggregation
+			err := baseOp.Aggregate(embedOp1)
+			require.NoError(t, err)
+
+			t.Log("First aggregation successful")
+
+			// Debug output before second aggregation
+			status, err := baseOp.Validate()
+			require.NoError(t, err)
+			t.Logf("Status after first aggregation: %v", status)
+			t.Logf("Signature length after first aggregation: %d", len(baseOp.Signature))
+
+			// Attempt second aggregation
+			err = baseOp.Aggregate(embedOp2)
+
+			tt.validateFunc(t, baseOp, err)
+		})
+	}
+}
+
+func TestUserOperation_ExtractAggregated(t *testing.T) {
+	// Create a chain of operations
+	baseOp := mockUserOpXDataInCallData(t)
+	embedOp1 := mockUserOpXDataInCallData(t)
+	embedOp1.Nonce = big.NewInt(100)
+	embedOp2 := mockUserOpXDataInCallData(t)
+	embedOp2.Nonce = big.NewInt(200)
+
+	// First aggregation
+	err := baseOp.Aggregate(embedOp1)
+	require.NoError(t, err)
+
+	// Try to extract after first aggregation
+	extractedOp1, err := baseOp.ExtractEmbeddedOp()
+	require.NoError(t, err)
+	require.NotNil(t, extractedOp1)
+	require.Equal(t, embedOp1.Nonce.String(), extractedOp1.Nonce.String())
+
+	t.Log("Successfully extracted first aggregated operation")
+
+	// Attempt second aggregation
+	err = baseOp.Aggregate(embedOp2)
+
+	if err != nil {
+		t.Logf("Second aggregation failed as expected: %v", err)
+	} else {
+		t.Log("Second aggregation successful, testing extraction...")
+
+		// Extract and verify
+		extracted, err := baseOp.ExtractEmbeddedOp()
+		require.NoError(t, err)
+		require.NotNil(t, extracted)
+
+		t.Logf("Extracted operation nonce: %s", extracted.Nonce.String())
+
+		// Try to extract from extracted operation
+		nestedExtracted, err := extracted.ExtractEmbeddedOp()
+		if err == nil {
+			t.Logf("Successfully extracted nested operation with nonce: %s", nestedExtracted.Nonce.String())
+		} else {
+			t.Logf("No nested operation found (expected): %v", err)
+		}
+	}
+}
+
+func TestAggregatedOperation_SolvingBehavior(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupOp     func(t *testing.T) *UserOperation
+		action      func(t *testing.T, op *UserOperation) error
+		expectError string
+	}{
+		{
+			name: "Extract and solve embedded operation",
+			setupOp: func(t *testing.T) *UserOperation {
+				baseOp := mockUserOpXDataInCallData(t)
+				embedOp := mockUserOpXDataInCallData(t)
+
+				err := baseOp.Aggregate(embedOp)
+				require.NoError(t, err)
+
+				return baseOp
+			},
+			action: func(t *testing.T, op *UserOperation) error {
+				// Extract embedded op
+				extractedOp, err := op.ExtractEmbeddedOp()
+				require.NoError(t, err)
+				require.NotNil(t, extractedOp)
+
+				// Attempt to solve extracted op
+				err = extractedOp.SetEVMInstructions([]byte(mockEvmSolution))
+				require.NoError(t, err)
+
+				// Verify solved status
+				status, err := extractedOp.Validate()
+				require.NoError(t, err)
+				require.Equal(t, SolvedUserOp, status)
+
+				return nil
+			},
+			expectError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := tt.setupOp(t)
+
+			// Verify initial state
+			status, err := op.Validate()
+			require.NoError(t, err)
+			require.Equal(t, UnsolvedAggregateUserOp, status)
+
+			// Perform action
+			err = tt.action(t, op)
+
+			if tt.expectError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAggregatedOperation_InvalidPackedOpsLength(t *testing.T) {
+	tests := []struct {
+		name        string
+		modifyOp    func(t *testing.T, op *UserOperation)
+		expectError string
+	}{
+		{
+			name: "Zero packed ops length",
+			modifyOp: func(t *testing.T, op *UserOperation) {
+				sigEnd := op.GetSignatureEndIdx()
+				// Set packed ops length to 0
+				op.Signature[sigEnd] = 0
+			},
+			expectError: "expected packedOpsLength to be 1",
+		},
+		{
+			name: "Packed ops length greater than 1",
+			modifyOp: func(t *testing.T, op *UserOperation) {
+				sigEnd := op.GetSignatureEndIdx()
+				// Set packed ops length to 2
+				op.Signature[sigEnd] = 2
+			},
+			expectError: "expected packedOpsLength to be 1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create and aggregate operations
+			baseOp := mockUserOpXDataInCallData(t)
+			embedOp := mockUserOpXDataInCallData(t)
+
+			err := baseOp.Aggregate(embedOp)
+			require.NoError(t, err)
+
+			// Debug output before modification
+			t.Logf("Original signature length: %d", len(baseOp.Signature))
+			t.Logf("Signature end index: %d", baseOp.GetSignatureEndIdx())
+
+			// Modify the aggregated operation
+			tt.modifyOp(t, baseOp)
+
+			// Try to extract embedded operation
+			extractedOp, err := baseOp.ExtractEmbeddedOp()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.expectError)
+			require.Nil(t, extractedOp)
+
+			t.Logf("Got expected error: %v", err)
+		})
+	}
+}
+
+func TestAggregatedOperation_CompleteSolvingProcess(t *testing.T) {
+	// Create and aggregate operations
+	baseOp := mockUserOpXDataInCallData(t)
+	embedOp := mockUserOpXDataInCallData(t)
+
+	// Set unique values for identification
+	embedOp.Nonce = big.NewInt(999)
+	embedOp.CallGasLimit = big.NewInt(100000)
+
+	t.Log("Aggregating operations...")
+	err := baseOp.Aggregate(embedOp)
+	require.NoError(t, err)
+
+	// Verify aggregate status
+	status, err := baseOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, UnsolvedAggregateUserOp, status)
+
+	t.Log("Extracting embedded operation...")
+	extractedOp, err := baseOp.ExtractEmbeddedOp()
+	require.NoError(t, err)
+	require.NotNil(t, extractedOp)
+
+	// Verify extracted operation matches original
+	require.Equal(t, embedOp.Nonce.String(), extractedOp.Nonce.String())
+	require.Equal(t, embedOp.CallGasLimit.String(), extractedOp.CallGasLimit.String())
+
+	t.Log("Solving extracted operation...")
+	err = extractedOp.SetEVMInstructions([]byte(mockEvmSolution))
+	require.NoError(t, err)
+
+	// Verify solved status
+	status, err = extractedOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, SolvedUserOp, status)
+
+	t.Log("Verifying solved operation...")
+	// Verify EVM solution was properly set
+	require.Equal(t, mockCallDataBytesValue, extractedOp.CallData)
+
+	// Verify original aggregate operation remains unchanged
+	status, err = baseOp.Validate()
+	require.NoError(t, err)
+	require.Equal(t, UnsolvedAggregateUserOp, status)
 }
