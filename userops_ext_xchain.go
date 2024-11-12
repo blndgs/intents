@@ -41,6 +41,7 @@ var (
 	ErrHashListInvalidValue  = errors.New("invalid hash list hash value")
 	ErrMissingCrossChainData = errors.New("missing cross-chain data")
 	ErrCrossChainSameChain   = errors.New("destination and source chain cannot be the same")
+	ErrNoIntent              = errors.New("no intent found")
 )
 
 // CrossChainData represents the parsed components of cross-chain data.
@@ -609,6 +610,10 @@ func BuildCrossChainData(intentJSON []byte, hashList []CrossChainHashListEntry) 
 // **Related Functions:**
 // - `BuildCrossChainData`: Used internally to construct the cross-chain data payload.
 func (op *UserOperation) EncodeCrossChainCallData(entrypoint common.Address, otherOpHash common.Hash, isSourceOp bool) ([]byte, error) {
+	if !op.HasIntent() {
+		return nil, ErrNoIntent
+	}
+
 	intent, err := op.GetIntent()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get userOp intent: %w", err)

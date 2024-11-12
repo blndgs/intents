@@ -1605,14 +1605,12 @@ func TestValidateUserOperation_CrossChain_Validate(t *testing.T) {
 func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 	tests := []struct {
 		name          string
-		callData      []byte
 		setupIntent   func() *pb.Intent
 		expectedError string
 		validate      func(t *testing.T, result []byte, intent *pb.Intent)
 	}{
 		{
-			name:     "Successful encoding",
-			callData: []byte("test call data"),
+			name: "Successful encoding",
 			setupIntent: func() *pb.Intent {
 				return &pb.Intent{
 					From: &pb.Intent_FromAsset{
@@ -1639,7 +1637,7 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 				intentJSON, err := protojson.Marshal(intent)
 				require.NoError(t, err)
 				lenJSON := len(intentJSON)
-				// Verify content length
+				// Verify Intent JSON length
 				require.Equal(t, uint16(lenJSON), dataLen)
 
 				offset += IntentJSONLengthSize
@@ -1660,61 +1658,20 @@ func TestUserOperation_encodeCrossChainCallData(t *testing.T) {
 				require.Equal(t, len(result), offset)
 			},
 		},
+
 		{
-			name:     "Empty call data",
-			callData: []byte{},
+			name: "Empty Intent",
 			setupIntent: func() *pb.Intent {
-				return &pb.Intent{
-					From: &pb.Intent_FromAsset{
-						FromAsset: &pb.Asset{
-							ChainId: &pb.BigInt{Value: big.NewInt(1).Bytes()},
-						},
-					},
-					To: &pb.Intent_ToAsset{
-						ToAsset: &pb.Asset{
-							ChainId: &pb.BigInt{Value: big.NewInt(56).Bytes()},
-						},
-					},
-				}
+				return &pb.Intent{}
 			},
-			expectedError: "",
-			validate: func(t *testing.T, result []byte, intent *pb.Intent) {
-				t.Helper()
-
-				// Marshal intent to get expected length
-				intentJSON, err := protojson.Marshal(intent)
-				require.NoError(t, err)
-				expectedLen := len(intentJSON)
-
-				// Cross-chain marker
-				require.Equal(t, CrossChainMarker, binary.BigEndian.Uint16(result[:OpTypeLength]))
-				offset := OpTypeLength
-
-				// Verify intent JSON length
-				dataLen := binary.BigEndian.Uint16(result[offset : offset+IntentJSONLengthSize])
-				require.Equal(t, uint16(expectedLen), dataLen)
-				offset += IntentJSONLengthSize
-
-				// Verify intent JSON content
-				require.Equal(t, intentJSON, result[offset:offset+int(dataLen)])
-				offset += int(dataLen)
-
-				// Verify hash list
-				require.Equal(t, byte(2), result[offset])
-				offset++
-
-				// Skip first hash
-				offset += HashLength
-
-				// Verify placeholder
-				require.Equal(t, uint16(HashPlaceholder), binary.BigEndian.Uint16(result[offset:offset+2]))
-				offset += 2
-
-				// Verify we used all bytes
-				require.Equal(t, len(result), offset)
-
-				t.Logf("Successfully validated empty call data case with intent JSON length: %d", expectedLen)
+			expectedError: ErrNoIntent.Error(),
+		},
+		{
+			name: "Nil Intent",
+			setupIntent: func() *pb.Intent {
+				return nil
 			},
+			expectedError: ErrNoIntent.Error(),
 		},
 	}
 

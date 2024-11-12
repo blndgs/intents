@@ -244,6 +244,11 @@ func ExtractJSONFromField(fieldData string) (string, bool) {
 		if err != nil {
 			return "", false
 		}
+
+		if intent.String() == "" {
+			// intent is empty
+			return "", false
+		}
 		return fieldData, true
 	}
 	return "", false
