@@ -77,6 +77,288 @@ func mockSignature() []byte {
 	}
 }
 
+func TestHashListManipulation(t *testing.T) {
+	tests := []struct {
+		name           string
+		hashList       []CrossChainHashListEntry
+		expectedError  string
+		validateOutput func(t *testing.T, output []byte)
+	}{
+		{
+			name: "Valid hash list with one placeholder and one operation hash",
+			hashList: []CrossChainHashListEntry{
+				{IsPlaceholder: true},
+				{IsPlaceholder: false, OperationHash: common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef").Bytes()},
+			},
+			expectedError: "",
+			validateOutput: func(t *testing.T, output []byte) {
+				require.Equal(t, byte(2), output[0], "Hash list length should be 2")
+				require.Equal(t, uint16(HashPlaceholder), binary.BigEndian.Uint16(output[1:3]))
+				require.Equal(t, 32+2+1, len(output), "Output length should be 35 bytes (1 length + 2 placeholder + 32 hash)")
+			},
+		},
+		{
+			name: "Invalid hash list with multiple placeholders",
+			hashList: []CrossChainHashListEntry{
+				{IsPlaceholder: true},
+				{IsPlaceholder: true},
+			},
+			expectedError: "invalid hash list with multiple placeholders",
+		},
+		{
+			name: "Invalid hash list with no placeholder",
+			hashList: []CrossChainHashListEntry{
+				{IsPlaceholder: false, OperationHash: common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef").Bytes()},
+				{IsPlaceholder: false, OperationHash: common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890").Bytes()},
+			},
+			expectedError: "invalid hash list with missing placeholder", // Corrected error message
+		},
+		{
+			name: "Invalid operation hash length",
+			hashList: []CrossChainHashListEntry{
+				{IsPlaceholder: true},
+				{IsPlaceholder: false, OperationHash: []byte{1, 2, 3}}, // Invalid length
+			},
+			expectedError: "invalid operation hash length: expected 32 bytes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, err := serializeHashListEntries(tt.hashList)
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+			} else {
+				require.NoError(t, err)
+				tt.validateOutput(t, output)
+			}
+		})
+	}
+}
+
+func TestBuildSortedHashList(t *testing.T) {
+	tests := []struct {
+		name          string
+		thisOpHash    common.Hash
+		otherOpHashes []common.Hash
+		validateList  func(t *testing.T, list []CrossChainHashListEntry)
+	}{
+		{
+			name:       "Basic sorting test",
+			thisOpHash: common.HexToHash("0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+			otherOpHashes: []common.Hash{
+				common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+			},
+			validateList: func(t *testing.T, list []CrossChainHashListEntry) {
+				require.Len(t, list, 2)
+				// First entry should be the smaller hash (otherOpHash)
+				require.False(t, list[0].IsPlaceholder)
+				require.Equal(t, "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+					common.BytesToHash(list[0].OperationHash).Hex())
+				// Second entry should be placeholder (thisOpHash)
+				require.True(t, list[1].IsPlaceholder)
+			},
+		},
+		{
+			name:       "Multiple other hashes",
+			thisOpHash: common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+			otherOpHashes: []common.Hash{
+				common.HexToHash("0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+				common.HexToHash("0x0234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+			},
+			validateList: func(t *testing.T, list []CrossChainHashListEntry) {
+				require.Len(t, list, 3)
+				// Should be sorted in ascending order
+				require.False(t, list[0].IsPlaceholder)
+				require.Equal(t, "0x0234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+					common.BytesToHash(list[0].OperationHash).Hex())
+				require.True(t, list[1].IsPlaceholder) // thisOpHash
+				require.False(t, list[2].IsPlaceholder)
+				require.Equal(t, "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+					common.BytesToHash(list[2].OperationHash).Hex())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hashList, err := BuildSortedHashList(tt.thisOpHash, tt.otherOpHashes)
+			require.NoError(t, err)
+			tt.validateList(t, hashList)
+		})
+	}
+}
+
+func TestValidateOperationHash(t *testing.T) {
+	tests := []struct {
+		name     string
+		hash     []byte
+		expected bool
+	}{
+		{
+			name:     "Valid non-zero hash",
+			hash:     common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef").Bytes(),
+			expected: true,
+		},
+		{
+			name:     "Zero hash",
+			hash:     make([]byte, 32),
+			expected: false,
+		},
+		{
+			name:     "Invalid length hash",
+			hash:     make([]byte, 31),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := validateOperationHash(tt.hash)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestSetUint64ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupReader   func() *bytes.Reader
+		expectedError string
+	}{
+		{
+			name: "Empty reader",
+			setupReader: func() *bytes.Reader {
+				return bytes.NewReader([]byte{})
+			},
+			expectedError: "failed to read uint64 (8 bytes) from the reader:",
+		},
+		{
+			name: "Partial read",
+			setupReader: func() *bytes.Reader {
+				return bytes.NewReader([]byte{0x01, 0x02, 0x03}) // Only 3 bytes
+			},
+			expectedError: "failed to read uint64 (8 bytes) from the reader:",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := tt.setupReader()
+			result, err := setUint64(reader)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.expectedError)
+			require.Nil(t, result)
+		})
+	}
+}
+
+func TestWriteUint64(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    uint64
+		validate func(t *testing.T, buffer *bytes.Buffer)
+	}{
+		{
+			name:  "Write zero value",
+			value: 0,
+			validate: func(t *testing.T, buffer *bytes.Buffer) {
+				require.Equal(t, make([]byte, 8), buffer.Bytes())
+			},
+		},
+		{
+			name:  "Write max value",
+			value: math.MaxUint64,
+			validate: func(t *testing.T, buffer *bytes.Buffer) {
+				expected := make([]byte, 8)
+				for i := range expected {
+					expected[i] = 0xFF
+				}
+				require.Equal(t, expected, buffer.Bytes())
+			},
+		},
+		{
+			name:  "Write specific value",
+			value: 0x1234567890ABCDEF,
+			validate: func(t *testing.T, buffer *bytes.Buffer) {
+				expected := []byte{0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF}
+				require.Equal(t, expected, buffer.Bytes())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buffer := new(bytes.Buffer)
+			err := writeUint64(buffer, tt.value)
+			require.NoError(t, err)
+			tt.validate(t, buffer)
+		})
+	}
+}
+
+func TestParseCrossChainData(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupData     func() []byte
+		expectedError string
+		validate      func(t *testing.T, data *CrossChainData)
+	}{
+		{
+			name: "Valid cross-chain data",
+			setupData: func() []byte {
+				intentJSON := []byte(`{"test": "data"}`)
+				hashList := []CrossChainHashListEntry{
+					{IsPlaceholder: true},
+					{IsPlaceholder: false, OperationHash: common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef").Bytes()},
+				}
+				data, err := BuildCrossChainData(intentJSON, hashList)
+				require.NoError(t, err)
+				return data
+			},
+			expectedError: "",
+			validate: func(t *testing.T, data *CrossChainData) {
+				require.Equal(t, `{"test": "data"}`, string(data.IntentJSON))
+				require.Len(t, data.HashList, 2)
+				require.True(t, data.HashList[0].IsPlaceholder)
+				require.False(t, data.HashList[1].IsPlaceholder)
+			},
+		},
+		{
+			name: "Invalid data length",
+			setupData: func() []byte {
+				return []byte{0xFF, 0xFF} // Too short
+			},
+			expectedError: "missing cross-chain data",
+		},
+		{
+			name: "Invalid marker",
+			setupData: func() []byte {
+				data := make([]byte, OpTypeLength+IntentJSONLengthSize)
+				binary.BigEndian.PutUint16(data[0:], 0x1234) // Wrong marker
+				return data
+			},
+			expectedError: "not a cross-chain operation",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := tt.setupData()
+			result, err := ParseCrossChainData(data)
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+				require.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				tt.validate(t, result)
+			}
+		})
+	}
+}
+
 func TestUserOperation_AggregateAndExtract(t *testing.T) {
 	baseOp := mockUserOpXDataInCallData(t)
 	embeddedOp := mockUserOpXDataInCallData(t)
@@ -1894,7 +2176,7 @@ func TestSetUint64_ErrorHandling(t *testing.T) {
 		{
 			name:          "Empty reader",
 			inputBytes:    []byte{},
-			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+			expectedError: "failed to read uint64 (8 bytes) from the reader",
 		},
 		{
 			name:          "Valid input - zero",
@@ -1976,7 +2258,7 @@ func TestUnpackUserOpData(t *testing.T) {
 				data = append(data, make([]byte, 32)...) // Complete nonce
 				return data
 			},
-			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+			expectedError: "failed to read uint64 (8 bytes) from the reader",
 		},
 		{
 			name:       "Partial callGasLimit",
@@ -1987,7 +2269,7 @@ func TestUnpackUserOpData(t *testing.T) {
 				data = append(data, make([]byte, 4)...)  // Only 4 bytes of callGasLimit
 				return data
 			},
-			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+			expectedError: "failed to read uint64 (8 bytes) from the reader",
 		},
 		{
 			name:       "Complete callGasLimit but missing preVerificationGas",
@@ -1998,7 +2280,7 @@ func TestUnpackUserOpData(t *testing.T) {
 				data = append(data, make([]byte, 8)...)  // Complete callGasLimit
 				return data
 			},
-			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+			expectedError: "failed to read uint64 (8 bytes) from the reader",
 		},
 		{
 			name:       "Partial preVerificationGas",
@@ -2010,7 +2292,7 @@ func TestUnpackUserOpData(t *testing.T) {
 				data = append(data, make([]byte, 4)...)  // Only 4 bytes of preVerificationGas
 				return data
 			},
-			expectedError: "failed to read uint64 (8) bytes from the reader: EOF",
+			expectedError: "failed to read uint64 (8 bytes) from the reader",
 		},
 		{
 			name:       "Invalid hash list length",

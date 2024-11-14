@@ -227,6 +227,10 @@ func serializeHashListEntries(hashList []CrossChainHashListEntry) ([]byte, error
 		}
 	}
 
+	if !wrotePlaceHolder {
+		return nil, ErrPlaceholderNotFound
+	}
+
 	return buffer.Bytes(), nil
 }
 
@@ -886,12 +890,11 @@ func unpackUserOpData(intentJSON string, data []byte) (*UserOperation, error) {
 }
 
 // setUint64 reads 8 bytes from the reader and sets it as a big.Int.
-func setUint64(uint64Reader *bytes.Reader) (*big.Int, error) {
+func setUint64(uint64Reader io.Reader) (*big.Int, error) {
 	uint64Buffer := make([]byte, 8)
-	if _, err := uint64Reader.Read(uint64Buffer); err != nil {
-		return nil, fmt.Errorf("failed to read uint64 (8) bytes from the reader: %w", err)
+	if _, err := io.ReadFull(uint64Reader, uint64Buffer); err != nil {
+		return nil, fmt.Errorf("failed to read uint64 (8 bytes) from the reader: %w", err)
 	}
-
 	return new(big.Int).SetBytes(uint64Buffer), nil
 }
 
