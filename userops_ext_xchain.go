@@ -686,7 +686,7 @@ func IsCrossChainIntent(intent *pb.Intent) (bool, error) {
 	return true, nil
 }
 
-// isCrossChainData checks if the provided data represents cross-chain data.
+// IsCrossChainData checks if the provided data represents cross-chain data.
 //
 // Parameters:
 //   - data: The data to check.
@@ -695,7 +695,7 @@ func IsCrossChainIntent(intent *pb.Intent) (bool, error) {
 //
 // Returns:
 //   - bool: True if it's cross-chain data, false otherwise.
-func isCrossChainData(data []byte, minHashListLength int, maxHashListLength int) bool {
+func IsCrossChainData(data []byte, minHashListLength int, maxHashListLength int) bool {
 	crossChainData, err := ParseCrossChainData(data)
 	if err != nil {
 		return false
@@ -711,8 +711,8 @@ func isCrossChainData(data []byte, minHashListLength int, maxHashListLength int)
 
 // IsCrossChainOperation checks if the UserOperation is a cross-chain operation.
 func (op *UserOperation) IsCrossChainOperation() bool {
-	return isCrossChainData(op.CallData, MinOpCount, MaxOpCount) ||
-		(op.HasSignature() && isCrossChainData(op.Signature[op.GetSignatureEndIdx():], 1, MaxOpCount))
+	return IsCrossChainData(op.CallData, MinOpCount, MaxOpCount) ||
+		(op.HasSignature() && IsCrossChainData(op.Signature[op.GetSignatureEndIdx():], 1, MaxOpCount))
 }
 
 // validateCrossChainOp validates a cross-chain operation.
@@ -721,9 +721,16 @@ func (op *UserOperation) IsCrossChainOperation() bool {
 //   - UserOpSolvedStatus: The solved status of the UserOperation.
 //   - error: An error if validation fails.
 func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
+	// Detect cross-chain data in the CallData field
 	xCallDataField, err := ParseCrossChainData(op.CallData)
-	if err != nil {
-		return UnknownUserOp, err
+	if err != nil && op.HasSignature() && len(op.Signature) > KernelSignatureLength {
+		// Detect cross-chain data in the Signature field
+		xCallDataField, err = ParseCrossChainData(op.Signature[op.GetSignatureEndIdx():])
+		if err != nil {
+			return UnknownUserOp, err
+		}
+	} else if err != nil {
+		return UnsolvedUserOp, nil
 	}
 
 	hashListLength := len(xCallDataField.HashList)
@@ -757,14 +764,22 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 		// Contains additional data past the signature
 		extraData := op.Signature[signatureEndIdx:]
 
-		// Try to parse extraData as Intent JSON
-		if _, isValidJSON := ExtractJSONFromField(string(extraData)); isValidJSON {
+		if IsCrossChainData(extraData, MinOpCount, MaxOpCount) {
+			// Solved xChain Op
 			return SolvedUserOp, nil
 		}
 
-		// Assume it's packed data
-		// TODO: Validate packed data at least with a heuristic check of hashList length < MaxOpCount
-		return UnsolvedAggregateUserOp, nil
+		// Try to parse extraData as Intent JSON
+		if _, isValidJSON := ExtractJSONFromField(string(extraData)); isValidJSON {
+			// Solved Intent Op
+			return SolvedUserOp, nil
+		}
+
+		// clone op because ExtractEmbeddedOp has side effects
+		cpOp := *op
+		if _, err := cpOp.ExtractEmbeddedOp(); err == nil {
+			return UnsolvedAggregateUserOp, nil
+		}
 	}
 
 	return UnsolvedUserOp, nil
