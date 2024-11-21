@@ -686,7 +686,7 @@ func IsCrossChainIntent(intent *pb.Intent) (bool, error) {
 	return true, nil
 }
 
-// isCrossChainData checks if the provided data represents cross-chain data.
+// IsCrossChainData checks if the provided data represents cross-chain data.
 //
 // Parameters:
 //   - data: The data to check.
@@ -695,7 +695,7 @@ func IsCrossChainIntent(intent *pb.Intent) (bool, error) {
 //
 // Returns:
 //   - bool: True if it's cross-chain data, false otherwise.
-func isCrossChainData(data []byte, minHashListLength int, maxHashListLength int) bool {
+func IsCrossChainData(data []byte, minHashListLength int, maxHashListLength int) bool {
 	crossChainData, err := ParseCrossChainData(data)
 	if err != nil {
 		return false
@@ -711,8 +711,8 @@ func isCrossChainData(data []byte, minHashListLength int, maxHashListLength int)
 
 // IsCrossChainOperation checks if the UserOperation is a cross-chain operation.
 func (op *UserOperation) IsCrossChainOperation() bool {
-	return isCrossChainData(op.CallData, MinOpCount, MaxOpCount) ||
-		(op.HasSignature() && isCrossChainData(op.Signature[op.GetSignatureEndIdx():], 1, MaxOpCount))
+	return IsCrossChainData(op.CallData, MinOpCount, MaxOpCount) ||
+		(op.HasSignature() && IsCrossChainData(op.Signature[op.GetSignatureEndIdx():], 1, MaxOpCount))
 }
 
 // validateCrossChainOp validates a cross-chain operation.
