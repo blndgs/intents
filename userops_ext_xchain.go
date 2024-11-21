@@ -776,8 +776,7 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 		}
 
 		// clone op because ExtractEmbeddedOp has side effects
-		cpOp := UserOperation{}
-		cpOp = *op
+		cpOp := *op
 		if _, err := cpOp.ExtractEmbeddedOp(); err == nil {
 			return UnsolvedAggregateUserOp, nil
 		}
