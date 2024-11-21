@@ -810,6 +810,9 @@ func (op *UserOperation) ExtractEmbeddedOp() (*UserOperation, error) {
 		return nil, fmt.Errorf("failed to unpack user operation data: %w", err)
 	}
 
+	// Copy sender address from original operation
+	extractedOp.Sender = op.Sender
+
 	// Since Intent ops are sponsored (0 value), it's ok to share the same reference
 	extractedOp.MaxPriorityFeePerGas = op.MaxPriorityFeePerGas
 	extractedOp.MaxFeePerGas = op.MaxFeePerGas
