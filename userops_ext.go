@@ -483,10 +483,14 @@ func (op *UserOperation) SetEVMInstructions(callDataValue []byte) error {
 		return ErrNoSignatureValue
 	}
 
-	// Move Intent JSON to Signature if necessary
-	intentJSON, hasIntent := op.extractIntentJSON()
-	if hasIntent {
-		op.Signature = append(op.GetSignatureValue(), []byte(intentJSON)...)
+	// Append xData or Intent JSON to the Signature value if exists
+	if op.HasIntent() && IsCrossChainData(op.CallData, MinOpCount, MaxOpCount) {
+		op.Signature = append(op.GetSignatureValue(), op.CallData...)
+	} else if op.HasIntent() {
+		if _, ok := ExtractJSONFromField(string(op.CallData)); ok {
+			// Same chain Intent JSON in CallData, move JSON to Signature
+			op.Signature = append(op.GetSignatureValue(), []byte(op.CallData)...)
+		}
 	}
 
 	// Assign byte-level representation
