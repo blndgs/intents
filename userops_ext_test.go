@@ -655,6 +655,7 @@ func mockCreateOp() *UserOperation {
 	// set enough values to allow creating its hash value
 	userOp := new(UserOperation)
 	userOp.Nonce = big.NewInt(1)
+	userOp.Sender = common.HexToAddress("0A7199a96fdf0252E09F76545c1eF2be3692F46b")
 	userOp.CallGasLimit = big.NewInt(65536)
 	userOp.VerificationGasLimit = big.NewInt(65536)
 	userOp.PreVerificationGas = big.NewInt(70000)
@@ -3693,6 +3694,10 @@ func TestAggregatedOperation_CompleteSolvingProcess(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, extractedOp)
 
+	// Verify the sender address
+	require.Equal(t, embedOp.Sender.String(), extractedOp.Sender.String())
+	// expected: "0x0A7199a96fdf0252E09F76545c1eF2be3692F46b"
+	// actual  : "0x0000000000000000000000000000000000000000"
 	// Verify extracted operation matches original
 	require.Equal(t, embedOp.Nonce.String(), extractedOp.Nonce.String())
 	require.Equal(t, embedOp.CallGasLimit.String(), extractedOp.CallGasLimit.String())
