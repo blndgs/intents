@@ -784,8 +784,9 @@ func (op *UserOperation) validateCrossChainOp() (UserOpSolvedStatus, error) {
 	return UnsolvedUserOp, nil
 }
 
-// ExtractEmbeddedOp reverses the Aggregate operation and extracts the packed
-// other UserOperation from the signature field.
+// ExtractEmbeddedOp reverses the Aggregate operation and extracts the embedded
+// UserOperation from the signature field.
+// Side-effect: restores the aggregate op into unsolved cross-chain op.
 //
 // Returns:
 //   - *UserOperation: The extracted UserOperation.
@@ -818,6 +819,10 @@ func (op *UserOperation) ExtractEmbeddedOp() (*UserOperation, error) {
 
 	// set the extracted operation's signature to outer operation's signature
 	extractedOp.Signature = op.Signature[:signatureEndIdx]
+
+	// remove embedded op bits:
+	// restore the aggregate op to unsolved XChain state
+	op.Signature = op.Signature[:signatureEndIdx]
 
 	return extractedOp, nil
 }

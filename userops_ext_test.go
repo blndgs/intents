@@ -3716,5 +3716,5 @@ func TestAggregatedOperation_CompleteSolvingProcess(t *testing.T) {
 	// Verify original aggregate operation remains unchanged
 	status, err = baseOp.Validate()
 	require.NoError(t, err)
-	require.Equal(t, UnsolvedAggregateUserOp, status)
+	require.Equal(t, UnsolvedUserOp, status)
 }
