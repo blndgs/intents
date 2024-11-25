@@ -834,10 +834,6 @@ func (op *UserOperation) ExtractEmbeddedOp() (*UserOperation, error) {
 	// Copy sender address from original operation
 	extractedOp.Sender = op.Sender
 
-	// Since Intent ops are sponsored (0 value), it's ok to share the same reference
-	extractedOp.MaxPriorityFeePerGas = op.MaxPriorityFeePerGas
-	extractedOp.MaxFeePerGas = op.MaxFeePerGas
-
 	// set the extracted operation's signature to outer operation's signature
 	extractedOp.Signature = op.Signature[:signatureEndIdx]
 
