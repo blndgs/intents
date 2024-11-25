@@ -2304,6 +2304,8 @@ func TestUnpackUserOpData(t *testing.T) {
 				data = append(data, make([]byte, 8)...)  // CallGasLimit
 				data = append(data, make([]byte, 8)...)  // PreVerificationGas
 				data = append(data, make([]byte, 8)...)  // VerificationGasLimit
+				data = append(data, make([]byte, 32)...) // MaxFeePerGas
+				data = append(data, make([]byte, 32)...) // MaxPriorityFeePerGas
 				data = append(data, byte(MaxOpCount+1))  // Invalid hash list length
 				return data
 			},
@@ -2328,6 +2330,17 @@ func TestUnpackUserOpData(t *testing.T) {
 				data = append(data, maxUint64Bytes...) // CallGasLimit
 				data = append(data, maxUint64Bytes...) // PreVerificationGas
 				data = append(data, maxUint64Bytes...) // VerificationGasLimit
+				// add max fee per gas, max priority fee per gas of 32 bytes each
+				maxFeePerGas := make([]byte, 32)
+				for i := range maxFeePerGas {
+					maxFeePerGas[i] = 0xFF
+				}
+				data = append(data, maxFeePerGas...)
+				maxPriorityFeePerGas := make([]byte, 32)
+				for i := range maxPriorityFeePerGas {
+					maxPriorityFeePerGas[i] = 0xFF
+				}
+				data = append(data, maxPriorityFeePerGas...)
 
 				// Valid hash list
 				data = append(data, byte(2)) // Hash list length

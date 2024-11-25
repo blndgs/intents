@@ -137,7 +137,6 @@ func (op *UserOperation) getPackedData() ([]byte, error) {
 
 	// Write nonce (32 bytes)
 	nonceBytes := op.Nonce.Bytes()
-	// defensive check if nonce cannot fit in uint256
 	if len(nonceBytes) > 32 {
 		return nil, fmt.Errorf("nonce is too large")
 	}
@@ -160,6 +159,28 @@ func (op *UserOperation) getPackedData() ([]byte, error) {
 	// Write verificationGasLimit (8 bytes)
 	if err := writeUint64(buffer, op.VerificationGasLimit.Uint64()); err != nil {
 		return nil, err
+	}
+
+	// Write maxFeePerGas (32 bytes)
+	maxFeePerGasBytes := op.MaxFeePerGas.Bytes()
+	if len(maxFeePerGasBytes) > 32 {
+		return nil, fmt.Errorf("maxFeePerGas is too large")
+	}
+	maxFeePerGasPadded := make([]byte, 32)
+	copy(maxFeePerGasPadded[32-len(maxFeePerGasBytes):], maxFeePerGasBytes)
+	if _, err := buffer.Write(maxFeePerGasPadded); err != nil {
+		return nil, fmt.Errorf("failed to write maxFeePerGas: %w", err)
+	}
+
+	// Write maxPriorityFeePerGas (32 bytes)
+	maxPriorityFeePerGasBytes := op.MaxPriorityFeePerGas.Bytes()
+	if len(maxPriorityFeePerGasBytes) > 32 {
+		return nil, fmt.Errorf("maxPriorityFeePerGas is too large")
+	}
+	maxPriorityFeePerGasPadded := make([]byte, 32)
+	copy(maxPriorityFeePerGasPadded[32-len(maxPriorityFeePerGasBytes):], maxPriorityFeePerGasBytes)
+	if _, err := buffer.Write(maxPriorityFeePerGasPadded); err != nil {
+		return nil, fmt.Errorf("failed to write maxPriorityFeePerGas: %w", err)
 	}
 
 	// Extract and write hash list from the callData
@@ -881,6 +902,20 @@ func unpackUserOpData(intentJSON string, data []byte) (*UserOperation, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Read maxFeePerGas (32 bytes)
+	maxFeePerGasBytes := make([]byte, 32)
+	if _, err := buffer.Read(maxFeePerGasBytes); err != nil {
+		return nil, fmt.Errorf("failed to read maxFeePerGas: %w", err)
+	}
+	op.MaxFeePerGas = new(big.Int).SetBytes(maxFeePerGasBytes)
+
+	// Read maxPriorityFeePerGas (32 bytes)
+	maxPriorityFeePerGasBytes := make([]byte, 32)
+	if _, err := buffer.Read(maxPriorityFeePerGasBytes); err != nil {
+		return nil, fmt.Errorf("failed to read maxPriorityFeePerGas: %w", err)
+	}
+	op.MaxPriorityFeePerGas = new(big.Int).SetBytes(maxPriorityFeePerGasBytes)
 
 	// Read hash list
 	hashList, err := readHashListEntries(buffer)
