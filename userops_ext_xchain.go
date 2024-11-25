@@ -233,7 +233,7 @@ func serializeHashListEntries(hashList []CrossChainHashListEntry) ([]byte, error
 	return buffer.Bytes(), nil
 }
 
-// parseHashListEntries is a shared function that parses a byte slice or reader into hash list entries.
+// ParseHashListEntries is a shared function that parses a byte slice or reader into hash list entries.
 // It handles both raw byte slices and readers to support both initial parsing and unpacking.
 //
 // Parameters:
@@ -244,7 +244,7 @@ func serializeHashListEntries(hashList []CrossChainHashListEntry) ([]byte, error
 //   - []CrossChainHashListEntry: Parsed hash list entries
 //   - int: Number of bytes read
 //   - error: Error if parsing fails
-func parseHashListEntries(reader io.Reader, hashListLength int) ([]CrossChainHashListEntry, int, error) {
+func ParseHashListEntries(reader io.Reader, hashListLength int) ([]CrossChainHashListEntry, int, error) {
 	if hashListLength < MinOpCount || hashListLength > MaxOpCount {
 		return nil, 0, ErrInvalidHashListLength
 	}
@@ -353,7 +353,7 @@ func ParseCrossChainData(data []byte) (*CrossChainData, error) {
 	reader := bytes.NewReader(data[offset:])
 
 	// Use shared parsing function
-	hashList, _, err := parseHashListEntries(reader, hashListLength)
+	hashList, _, err := ParseHashListEntries(reader, hashListLength)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse hash list: %w", err)
 	}
@@ -372,7 +372,7 @@ func readHashListEntries(buffer *bytes.Reader) ([]CrossChainHashListEntry, error
 		return nil, fmt.Errorf("failed to read hash list length: %w", err)
 	}
 
-	hashList, _, err := parseHashListEntries(buffer, int(hashListLength))
+	hashList, _, err := ParseHashListEntries(buffer, int(hashListLength))
 	if err != nil {
 		return nil, err
 	}
