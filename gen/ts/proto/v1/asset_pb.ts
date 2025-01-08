@@ -67,6 +67,13 @@ export enum ProcessingStatus {
    * @generated from enum value: PROCESSING_STATUS_INVALID = 7;
    */
   INVALID = 7,
+
+  /**
+   * Intent is onchain but reverted
+   *
+   * @generated from enum value: PROCESSING_STATUS_ON_CHAIN_REVERT = 8;
+   */
+  ON_CHAIN_REVERT = 8,
 }
 // Retrieve enum metadata with: proto3.getEnumType(ProcessingStatus)
 proto3.util.setEnumType(ProcessingStatus, "proto.v1.ProcessingStatus", [
@@ -78,6 +85,7 @@ proto3.util.setEnumType(ProcessingStatus, "proto.v1.ProcessingStatus", [
   { no: 5, name: "PROCESSING_STATUS_EXPIRED" },
   { no: 6, name: "PROCESSING_STATUS_ON_CHAIN" },
   { no: 7, name: "PROCESSING_STATUS_INVALID" },
+  { no: 8, name: "PROCESSING_STATUS_ON_CHAIN_REVERT" },
 ]);
 
 /**

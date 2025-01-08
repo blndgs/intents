@@ -18,6 +18,7 @@ enum ProcessingStatus {
   PROCESSING_STATUS_EXPIRED = 5; // Intent has expired.
   PROCESSING_STATUS_ON_CHAIN = 6; // Intent is on the blockchain.
   PROCESSING_STATUS_INVALID = 7; // Intent is invalid.
+  PROCESSING_STATUS_ON_CHAIN_REVERT = 8; // Intent is onchain but reverted
 }
 
 // BigInt represents a large number
