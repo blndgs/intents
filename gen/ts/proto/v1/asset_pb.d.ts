@@ -67,6 +67,13 @@ export declare enum ProcessingStatus {
    * @generated from enum value: PROCESSING_STATUS_INVALID = 7;
    */
   INVALID = 7,
+
+  /**
+   * Intent is onchain but reverted
+   *
+   * @generated from enum value: PROCESSING_STATUS_ON_CHAIN_REVERT = 8;
+   */
+  ON_CHAIN_REVERT = 8,
 }
 
 /**
